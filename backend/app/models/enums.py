@@ -14,3 +14,10 @@ class TaskStatus(enum.StrEnum):
     READY = "ready"
     TRAINING = "training"
     COMPLETED = "completed"
+
+
+class AnnotationType(enum.StrEnum):
+    CLASSIFICATION = "classification"
+    BBOX = "bbox"
+    POLYGON = "polygon"
+    KEYPOINT = "keypoint"

@@ -22,3 +22,4 @@ class TaskImage(Base):
     # relationships
     task: Mapped["Task"] = relationship(back_populates="task_images")
     image: Mapped["Image"] = relationship()
+    annotations: Mapped[list["Annotation"]] = relationship(back_populates="task_image", cascade="all, delete-orphan")

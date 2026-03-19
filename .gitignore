@@ -1,0 +1,62 @@
+# OMC state
+.omc/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Storage / uploaded data
+backend/data/
+ai-worker/data/
+
+# Image files (except frontend assets)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+!frontend/src/assets/**
+!frontend/public/**
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+*.weights
+
+# Playwright
+.playwright-mcp/
+
+# Large files
+*.zip
+*.tar
+*.tar.gz
+*.h5
+*.hdf5
+
+# TFLite / CoreML
+*.tflite
+*.mlmodel

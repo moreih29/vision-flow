@@ -13,6 +13,8 @@
 | 003 | add_image_folder_path | images 테이블에 folder_path 컬럼 추가 |
 | 004 | remove_storage_key_unique | images.storage_key의 UNIQUE 제약조건 제거 (해시 중복 제거 허용) |
 | 005 | create_subsets_and_classes | subsets, subset_images, label_classes, folder_meta 테이블 생성 |
+| 006 | dataset_to_datastore_rename | Dataset→DataStore, Subset→Task 리네이밍 + task status 컬럼 |
+| 007 | add_annotations_table | annotations 테이블 생성 (JSONB data, FK task_images + label_classes) |
 
 ## 마이그레이션 실행
 

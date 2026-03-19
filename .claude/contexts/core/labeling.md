@@ -1,99 +1,109 @@
 # Labeling System
 
-## 현재 상태: 설계 완료, 구현 미시작
+## 현재 상태: MVP 구현 완료 (Classification + BBox)
 
-라벨링 도구의 핵심 라이브러리(react-konva)는 설치되어 있으나,
-라벨링 UI 자체는 아직 구현되지 않았다.
+Konva.js 기반 라벨링 에디터가 구현되어 있으며, Classification과 Object Detection(BBox) 도구가 동작한다.
 
-## 기술 선택: Konva.js (D003)
+## 기술 스택
 
-### 선택 이유
-- **Label Studio 미사용**: 외부 라벨링 도구와 통합하면 데이터 흐름이 복잡해지고, 커스터마이징이 어려움
-- **자체 구현 장점**:
-  - 데이터 파이프라인과 완전 통합
-  - 실시간 AI 보조 라벨링 구현 용이
-  - UI/UX를 Vision Flow 디자인에 맞게 최적화
-  - 사용자 데이터가 외부로 유출되지 않음
+- **konva** + **react-konva**: HTML5 Canvas 기반 2D 그래픽
+- **Zustand**: 라벨링 캔버스 상태 관리 (`labeling-store.ts`)
+- **Annotation API**: Backend CRUD + Bulk Save
 
-### Konva.js 특성
-- HTML5 Canvas 기반 2D 그래픽 라이브러리
-- React 바인딩 (react-konva) 제공
-- 고성능 렌더링: 수천 개의 도형도 부드럽게 렌더링
-- 이벤트 시스템: 마우스, 터치, 키보드 이벤트 지원
-- 변환(Transform): 이동, 회전, 크기 조정 내장
+## 아키텍처
 
-## 설계된 라벨링 기능
+### 라우트
+- `/projects/:id/tasks/:taskId/label` — 전체화면 라벨링 에디터 (AppLayout 미적용)
 
-### Task Type별 도구
-
-#### Classification
-- 이미지 전체에 클래스 레이블 지정
-- 캔버스 불필요 — 드롭다운 또는 버튼으로 클래스 선택
-
-#### Object Detection (Bounding Box)
-- 마우스 드래그로 사각형 영역 지정
-- 꼭짓점 드래그로 크기 조정
-- 클래스 레이블 선택
-- 여러 박스 동시 표시/편집
-
-#### Instance Segmentation (Polygon)
-- 다각형 포인트 순차 클릭
-- 포인트 드래그로 형태 수정
-- 폴리곤 닫기(완성)
-- 클래스 레이블 선택
-
-#### Pose Estimation (Keypoint)
-- 정의된 키포인트 위치에 점 배치
-- 키포인트 간 연결선 표시
-- 키포인트 드래그로 위치 조정
-- 키포인트 가시성 토글 (보임/가림/없음)
-
-### 공통 기능
-- **줌 인/아웃**: 마우스 휠 또는 단축키
-- **팬(이동)**: 마우스 드래그 (Space + 클릭)
-- **실행 취소/다시 실행**: Ctrl+Z / Ctrl+Shift+Z
-- **라벨 복사/붙여넣기**: 반복 라벨링 효율화
-- **이미지 네비게이션**: 이전/다음 이미지 전환 (화살표 키)
-
-## AI 보조 라벨링 (예정)
-
-### SAM (Segment Anything Model)
-- **클릭 기반**: 객체 내부 점 클릭 → 자동 마스크 생성
-- **박스 기반**: 대략적 박스 그리기 → 정밀 마스크 생성
-- 사용자 클릭/박스를 프롬프트로 받아 실시간으로 세그멘테이션 결과 제공
-- 결과를 사용자가 수정하여 최종 라벨로 확정
-
-### Grounding DINO
-- **텍스트 기반**: "자동차"라고 입력 → 모든 자동차 영역 자동 감지
-- Zero-shot 객체 탐지
-- 감지된 영역에 자동으로 bounding box 생성
-- 사용자가 검증/수정 후 라벨로 확정
-
-### AI 보조 워크플로
+### 프론트엔드 컴포넌트 구조
 ```
-1. 사용자: 이미지 열기
-2. AI: SAM/Grounding DINO로 자동 라벨 제안
-3. 사용자: 제안된 라벨 검토 → 수정/승인
-4. 반복: 다음 이미지로 이동
+pages/LabelingPage.tsx          — 메인 페이지 (데이터 로딩, 키보드, 자동저장)
+  ├── components/labeling/ToolPanel.tsx      — 도구 선택 (task_type 기반)
+  ├── components/labeling/ClassPanel.tsx     — 라벨 클래스 목록 + 숫자키 단축키
+  ├── components/labeling/LabelingCanvas.tsx — Konva Stage + 이미지 렌더링
+  │     ├── AnnotationLayer.tsx             — 어노테이션 오버레이 (bbox rect, classification badge)
+  │     ├── tools/BBoxDrawTool.tsx          — 마우스 드래그로 bbox 생성
+  │     └── tools/BBoxSelectTool.tsx        — bbox 선택/이동/리사이즈/삭제
+  ├── components/labeling/ImageNavigator.tsx — 이전/다음 이미지 네비게이션
+  └── components/labeling/coord-utils.ts    — 좌표 변환 유틸리티
 ```
 
-## 라벨 데이터 구조 (예정)
+### 백엔드 API
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `GET /tasks/{task_id}/images/{image_id}/labels` | 이미지별 어노테이션 조회 |
+| `POST /tasks/{task_id}/images/{image_id}/labels` | 단일 어노테이션 생성 |
+| `PUT /tasks/{task_id}/images/{image_id}/labels` | Bulk 저장 (전체 교체) |
+| `PUT /labels/{id}` | 단일 어노테이션 수정 |
+| `DELETE /labels/{id}` | 단일 어노테이션 삭제 |
 
-### 라벨 저장 방식
-- Subset에 속한 각 이미지마다 라벨 데이터 저장
-- Task Type에 따라 라벨 형식이 다름
-- 라벨 데이터는 DB에 JSON 형태로 저장 예정
+모든 엔드포인트에서 프로젝트 소유권 검증 (`task_service.check_ownership`).
 
-### YOLO 형식 내보내기
-- 학습 시 YOLO 형식으로 자동 변환
-- Classification: `{class_id}`
-- Detection: `{class_id} {cx} {cy} {w} {h}` (정규화 좌표)
-- Segmentation: `{class_id} {x1} {y1} {x2} {y2} ...` (정규화 좌표)
+### 상태 관리 (Zustand)
+`labeling-store.ts`:
+- `currentImageIndex` — 현재 이미지 인덱스
+- `tool` — 활성 도구 ('select' | 'classification' | 'bbox')
+- `selectedClassId` — 선택된 라벨 클래스
+- `selectedAnnotationId` — 선택된 어노테이션
+- `annotations` — 현재 이미지의 어노테이션 배열
+- `isDirty` — 변경사항 존재 여부
+- `past` / `future` — Undo/Redo 스택 (스냅샷 기반, 최대 50)
 
-## 구현 시 고려사항
+## 구현된 기능
 
-1. **성능**: 고해상도 이미지(4K+)에서도 부드러운 렌더링
-2. **좌표 정확성**: 줌/팬 변환 시 좌표 역변환 정확도
-3. **실행 취소 스택**: 메모리 제한 있는 실행 취소 히스토리
-4. **키보드 단축키**: 라벨링 효율을 위한 포괄적 단축키 시스템
-5. **자동 저장**: 일정 간격 또는 이미지 전환 시 자동 저장
+### Classification 도구
+- 좌측 ClassPanel에서 클래스 클릭 → 즉시 classification annotation 생성/변경
+- 이미지당 classification 1개 제한 (기존 있으면 교체)
+- 캔버스에 클래스명+색상 배지 표시
+
+### BBox 도구 (Object Detection)
+- **그리기**: 마우스 드래그로 사각형 생성 (최소 5x5 픽셀)
+- **선택**: 클릭으로 기존 bbox 선택
+- **이동**: 선택된 bbox 드래그로 위치 변경
+- **리사이즈**: Konva Transformer로 꼭짓점 드래그 리사이즈
+- **삭제**: Delete/Backspace 키
+- **시각화**: 클래스 색상 테두리, 호버 하이라이트, 선택 핸들
+
+### Zoom/Pan
+- **줌**: 마우스 휠 (커서 중심, 0.1x~10x)
+- **팬**: Space+드래그
+
+### 이미지 네비게이션
+- 이전/다음 버튼 + 좌/우 화살표 키
+- 현재 인덱스/총 개수 표시
+
+### Undo/Redo
+- Ctrl+Z (undo), Ctrl+Shift+Z (redo)
+- 스냅샷 기반 (annotations 전체 상태)
+- 이미지 전환 시 히스토리 초기화
+
+### 자동저장
+- 이미지 전환 시 isDirty 체크 → bulkSave API 호출
+- Ctrl+S 수동 저장
+- beforeunload 경고 (미저장 변경사항)
+- 저장 상태 표시: "저장됨" / "변경사항 있음" / "저장 중..."
+
+### labeled_count / label_count
+- `TaskResponse.labeled_count`: annotations가 1개 이상인 task_images 수 (실시간 계산)
+- `LabelClassResponse.label_count`: 해당 클래스의 annotation 수 (JOIN 쿼리)
+
+## 좌표 체계
+
+모든 annotation 좌표는 **normalized (0.0-1.0)** 로 저장:
+- 저장 시: 이미지 좌표 → normalized (`rectToNormalizedBBox`)
+- 렌더링 시: normalized → 이미지 좌표 → 스테이지 좌표 (`normalizedBBoxToRect`)
+- 줌/팬 상태와 무관하게 정확한 좌표 보장
+
+## 미구현 (Phase 3 잔여 / Phase 4+)
+
+- Instance Segmentation (polygon tool)
+- Pose Estimation (keypoint + skeleton)
+- AI 보조 라벨링 (SAM, Grounding DINO) — AI Worker 인프라 필요
+- YOLO 포맷 내보내기
+- 라벨 복사/붙여넣기
+
+## 알려진 제한사항
+
+1. **Image width/height nullable**: 라벨링 시 이미지 크기가 null이면 좌표 변환 불가. 업로드 시 Pillow로 추출하고 있으나 보장되지 않음.
+2. **동시 편집**: Last-write-wins (MVP). 다중 사용자/탭 충돌 미처리.
+3. **Konva+Playwright**: Konva canvas 이벤트는 자동화 도구(Playwright)로 시뮬레이션 어려움. BBox 그리기는 수동 테스트 필요.

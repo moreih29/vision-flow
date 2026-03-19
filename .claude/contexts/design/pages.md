@@ -26,36 +26,36 @@
 ### 4. ProjectDetailPage
 - **목적**: 프로젝트 내 데이터 관리
 - **구조**: 탭 기반 레이아웃
-  - **Data Pool 탭**: 데이터셋(들)의 이미지 관리
-  - **Subsets 탭**: Subset 목록 및 생성
+  - **Data Pool 탭**: DataStore의 이미지 관리
+  - **Tasks 탭**: Task 목록 및 생성
 
 #### Data Pool 탭 (DataPoolTab)
-- 프로젝트의 원본 이미지 저장소
+- 프로젝트의 원본 이미지 저장소 (DataStore)
 - 폴더 트리 사이드바 + 이미지 그리드/리스트 메인 영역
 - 이미지 업로드, 폴더 관리, 다중 선택, 배치 작업
 - 뷰 모드 전환 (그리드/리스트/트리)
 
-#### Subsets 탭 (SubsetsTab)
-- 현재 프로젝트의 Subset 카드 목록
-- Task Type별 색상 뱃지 (Classification=파랑, Detection=초록, Segmentation=보라, Pose=주황)
-- "새 Subset" 생성 다이얼로그
+#### Tasks 탭 (TasksTab)
+- 현재 프로젝트의 Task 카드 목록
+- Task Type별 색상 뱃지 (Classification=초록, Detection=파랑, Segmentation=보라, Pose=주황)
+- "새 Task" 생성 다이얼로그 (이름, Task Type 선택)
 
-### 5. DatasetDetailPage (Data Pool 상세)
-- **목적**: 특정 데이터셋의 폴더/이미지 탐색
+### 5. DataStoreDetailPage (DataStore 상세)
+- **목적**: 특정 DataStore의 폴더/이미지 탐색
 - **레이아웃**:
   - 상단: 브레드크럼 네비게이션
   - 좌측: 폴더 트리 뷰 (토글 가능)
   - 중앙: 이미지 그리드 또는 리스트
 - **기능**: 폴더 진입, 이미지 관리, 업로드
 
-### 6. SubsetDetailPage
-- **목적**: Subset의 이미지 및 라벨 클래스 관리
+### 6. TaskDetailPage
+- **목적**: Task의 이미지 및 라벨 클래스 관리
 - **레이아웃**:
-  - 상단: Subset 정보 (이름, Task Type, 이미지 수)
+  - 상단: Task 정보 (이름, Task Type, Status, 이미지 수)
   - 좌측: 라벨 클래스 관리 패널
-  - 중앙: Subset에 포함된 이미지 그리드
+  - 중앙: Task에 포함된 이미지 그리드
 - **기능**:
-  - 이미지 추가 (Data Pool에서 선택)
+  - 이미지 추가 (DataStore에서 선택)
   - 이미지 제거
   - 라벨 클래스 CRUD (이름 + 색상)
 - **미구현**: 라벨링 도구 (Konva.js 기반, 향후 구현 예정)
@@ -72,16 +72,16 @@ ProjectsPage
   ▼
 ProjectDetailPage
   ├── [Data Pool 탭]
-  │     │ 데이터셋 선택
+  │     │ DataStore 선택
   │     ▼
-  │   DatasetDetailPage
+  │   DataStoreDetailPage
   │     (이미지 업로드/관리)
   │
-  └── [Subsets 탭]
-        │ Subset 선택
+  └── [Tasks 탭]
+        │ Task 선택
         ▼
-      SubsetDetailPage
-        ├── 이미지 추가 (→ ImageSelectionModal → Data Pool 이미지 선택)
+      TaskDetailPage
+        ├── 이미지 추가 (→ ImageSelectionModal → DataStore 이미지 선택)
         └── 라벨 클래스 관리
 ```
 

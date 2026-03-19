@@ -22,18 +22,18 @@ frontend/src/
 ├── api/            # API 레이어 (axios 클라이언트 + 리소스별 모듈)
 │   ├── client.ts       # Axios 인스턴스 (baseURL, JWT 인터셉터, 401 리다이렉트)
 │   ├── projects.ts     # 프로젝트 API
-│   ├── datasets.ts     # 데이터셋 API
+│   ├── data-stores.ts  # DataStore API
 │   ├── images.ts       # 이미지 API (업로드, 폴더, 배치 작업)
-│   ├── subsets.ts      # Subset API
+│   ├── tasks.ts        # Task API
 │   └── label-classes.ts # 라벨 클래스 API
 ├── components/     # 비즈니스 컴포넌트
 │   ├── ui/             # shadcn 프리미티브 (Button, Card, Dialog 등)
-│   ├── DataPoolTab.tsx     # 데이터 풀 탭 (이미지 관리 핵심)
-│   ├── SubsetsTab.tsx      # Subset 목록/생성 탭
+│   ├── DataPoolTab.tsx     # 데이터 풀 탭 (DataStore 이미지 관리 핵심)
+│   ├── TasksTab.tsx        # Task 목록/생성 탭
 │   ├── FolderTreeView.tsx  # 폴더 트리 네비게이션
 │   ├── VirtualImageGrid.tsx # 가상화 이미지 그리드
 │   ├── VirtualImageList.tsx # 가상화 이미지 리스트
-│   ├── ImageSelectionModal.tsx # Subset용 이미지 선택 모달
+│   ├── ImageSelectionModal.tsx # Task용 이미지 선택 모달
 │   ├── ImageUploader.tsx   # 드래그앤드롭 이미지 업로더
 │   ├── FolderBreadcrumb.tsx # 경로 탐색
 │   ├── FolderCard.tsx      # 폴더 카드
@@ -47,12 +47,12 @@ frontend/src/
 │   ├── RegisterPage.tsx
 │   ├── ProjectsPage.tsx
 │   ├── ProjectDetailPage.tsx
-│   ├── DatasetDetailPage.tsx
-│   └── SubsetDetailPage.tsx
+│   ├── DataStoreDetailPage.tsx
+│   └── TaskDetailPage.tsx
 ├── stores/         # 전역 상태
 │   └── auth-store.ts  # Zustand 인증 스토어
 ├── types/          # TypeScript 인터페이스
-│   ├── project.ts, dataset.ts, image.ts, subset.ts, label-class.ts
+│   ├── project.ts, data-store.ts, image.ts, task.ts, label-class.ts
 ├── lib/            # 유틸리티 (cn() 등)
 └── assets/         # 정적 에셋
 ```
@@ -64,8 +64,8 @@ frontend/src/
 | `/login` | LoginPage | X |
 | `/register` | RegisterPage | X |
 | `/`, `/projects` | ProjectsPage | O |
-| `/projects/:id` | ProjectDetailPage (DataPool + Subsets 탭) | O |
-| `/projects/:id/subsets/:subsetId` | SubsetDetailPage | O |
+| `/projects/:id` | ProjectDetailPage (DataPool + Tasks 탭) | O |
+| `/projects/:id/tasks/:taskId` | TaskDetailPage | O |
 
 ## 상태 관리 전략
 

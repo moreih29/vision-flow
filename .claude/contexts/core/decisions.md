@@ -58,13 +58,14 @@
 - **이유**: 디스크 효율성(내부)과 직관적 UX(외부)의 양립
 - **유지**: O
 
-### D012: Data Pool + Subset 이원 구조
-- **결정**: 원본(Data Pool)과 큐레이션(Subset)을 분리
+### D012: DataStore + Task 이원 구조
+- **결정**: 원본(DataStore)과 라벨링/학습 작업(Task)을 분리
 - **이유**: 원본 데이터의 자유로운 관리와 학습용 데이터의 체계적 관리를 양립
+- **변경 이력**: 초기 "Data Pool + Subset" 구조에서 D025에 의해 리네이밍
 - **유지**: O (핵심 설계)
 
-### D013: Subset 생성 시 Task Type 필수, 변경 불가
-- **결정**: Subset의 Task Type은 생성 시 확정, 이후 변경 불가
+### D013: Task 생성 시 Task Type 필수, 변경 불가
+- **결정**: Task의 task_type은 생성 시 확정, 이후 변경 불가
 - **이유**: Task Type이 라벨 포맷을 결정. 변경 시 기존 라벨 호환성 깨짐.
 - **유지**: O
 
@@ -108,6 +109,18 @@
 - **이유**: 개발 편의성
 - **보안 검토**: 프로덕션에서는 반드시 특정 도메인만 허용
 - **유지**: △ (프로덕션 배포 시 반드시 수정)
+
+## 도메인 구조
+
+### D025: Dataset→DataStore, Subset→Task 리네이밍
+- **결정**: `Dataset`을 `DataStore`로, `Subset`을 `Task`로 이름 변경. Task에 `status` 컬럼 추가.
+- **이유**:
+  - "Subset"이라는 이름이 실제 역할(독립적 작업 단위)과 불일치
+  - "Task"가 ML 워크플로에서 보편적 용어 (classification task, detection task)
+  - "Database"는 RDBMS와 혼동되므로 "DataStore" 채택
+  - Phase 4(Training), Phase 5(Pipeline)에서 Task가 자연스럽게 학습/추론의 단위가 됨
+- **영향 범위**: Backend 모델/스키마/서비스/라우터 전체, Frontend 타입/API/페이지/컴포넌트 전체, Alembic 마이그레이션
+- **유지**: O
 
 ## 결정 기록 원칙
 

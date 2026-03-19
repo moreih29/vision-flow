@@ -23,19 +23,19 @@ backend/
 │   ├── dependencies.py     # FastAPI DI (인증, DB, 스토리지)
 │   ├── main.py             # FastAPI 앱 + CORS + 라우터 등록
 │   ├── models/             # SQLAlchemy ORM 모델 (8개)
-│   │   ├── user.py, project.py, dataset.py, image.py
-│   │   ├── subset.py, subset_image.py, label_class.py
+│   │   ├── user.py, project.py, data_store.py, image.py
+│   │   ├── task.py, task_image.py, label_class.py
 │   │   ├── folder_meta.py, enums.py
 │   │   └── __init__.py     # 모델 barrel export
 │   ├── schemas/            # Pydantic 요청/응답 DTO
-│   │   ├── user.py, project.py, dataset.py, image.py
-│   │   ├── subset.py, subset_image.py, label_class.py
+│   │   ├── user.py, project.py, data_store.py, image.py
+│   │   ├── task.py, task_image.py, label_class.py
 │   ├── routers/            # FastAPI 라우트 핸들러 (7개)
-│   │   ├── auth.py, projects.py, datasets.py, images.py
-│   │   ├── subsets.py, label_classes.py, folders.py (images.py 내 포함)
+│   │   ├── auth.py, projects.py, data_stores.py, images.py
+│   │   ├── tasks.py, label_classes.py, folders (images.py 내 포함)
 │   ├── services/           # 비즈니스 로직 레이어 (7개)
-│   │   ├── auth.py, project.py, dataset.py, image.py
-│   │   ├── subset.py, label_class.py, folder.py
+│   │   ├── auth.py, project.py, data_store.py, image.py
+│   │   ├── task.py, label_class.py
 │   └── storage/            # 파일 저장소 추상화
 │       ├── base.py         # StorageBackend ABC
 │       └── local.py        # LocalStorage 구현
@@ -90,11 +90,11 @@ get_storage()      → StorageBackend (현재 LocalStorage)
 |--------|----------------|
 | auth | `POST /register`, `POST /login`, `GET /me` |
 | projects | `CRUD /projects` |
-| datasets | `CRUD /projects/{id}/datasets` |
-| images | 업로드, 조회, 파일 다운로드, 배치 삭제/이동 |
-| folders | 트리 조회, 생성, 삭제, 이름변경, 배치 삭제/이동 |
-| subsets | `CRUD /projects/{id}/subsets` + 이미지 멤버십 관리 |
-| label_classes | `CRUD /subsets/{id}/classes` |
+| data-stores | `CRUD /projects/{id}/data-stores` |
+| images | 업로드, 조회, 파일 다운로드, 배치 삭제/이동 (`/data-stores/{id}/images`) |
+| folders | 트리 조회, 생성, 삭제, 이름변경, 배치 삭제/이동 (`/data-stores/{id}/folders`) |
+| tasks | `CRUD /projects/{id}/tasks` + 이미지 멤버십 관리 |
+| label_classes | `CRUD /tasks/{id}/classes` |
 
 ## 스토리지 추상화
 

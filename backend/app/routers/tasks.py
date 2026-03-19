@@ -20,9 +20,11 @@ router = APIRouter(tags=["tasks"])
 async def _build_response(db: AsyncSession, task: Task) -> TaskResponse:
     image_count = await task_service.get_image_count(db, task.id)
     class_count = await task_service.get_class_count(db, task.id)
+    labeled_count = await task_service.get_labeled_count(db, task.id)
     response = TaskResponse.model_validate(task)
     response.image_count = image_count
     response.class_count = class_count
+    response.labeled_count = labeled_count
     return response
 
 
@@ -42,6 +44,7 @@ async def create_task(
     response = TaskResponse.model_validate(task)
     response.image_count = 0
     response.class_count = 0
+    response.labeled_count = 0
     return response
 
 
@@ -55,10 +58,11 @@ async def list_tasks(
     await project_service.get_project_with_ownership(db, project_id, current_user.id)
     rows = await task_service.get_tasks_by_project(db, project_id)
     result = []
-    for task, image_count, class_count in rows:
+    for task, image_count, class_count, labeled_count in rows:
         response = TaskResponse.model_validate(task)
         response.image_count = image_count
         response.class_count = class_count
+        response.labeled_count = labeled_count
         result.append(response)
     return result
 

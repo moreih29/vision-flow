@@ -1,4 +1,5 @@
 import { ArrowLeft, Images, Tag } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Task } from '@/types/task'
@@ -11,6 +12,16 @@ interface TaskDetailHeaderProps {
 }
 
 export function TaskDetailHeader({ task, loading, onBack }: TaskDetailHeaderProps) {
+  const navigate = useNavigate()
+  const { id, taskId } = useParams<{ id: string; taskId: string }>()
+
+  const hasImages = (task?.image_count ?? 0) > 0
+
+  function handleLabelingClick() {
+    if (!id || !taskId) return
+    navigate(`/projects/${id}/tasks/${taskId}/label`)
+  }
+
   return (
     <>
       <header className="border-b">
@@ -50,7 +61,13 @@ export function TaskDetailHeader({ task, loading, onBack }: TaskDetailHeaderProp
           <Button variant="secondary" size="sm">
             목록
           </Button>
-          <Button variant="ghost" size="sm" disabled title="다음 단계에서 구현 예정">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!hasImages}
+            title={hasImages ? '라벨링 시작' : '이미지를 먼저 추가하세요'}
+            onClick={handleLabelingClick}
+          >
             라벨링
           </Button>
         </div>

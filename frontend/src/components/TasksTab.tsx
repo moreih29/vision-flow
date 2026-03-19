@@ -242,10 +242,12 @@ function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
       : 0
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+      className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold leading-tight">{task.name}</h3>
@@ -292,6 +294,6 @@ function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
-    </button>
+    </div>
   )
 }

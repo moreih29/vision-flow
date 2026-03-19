@@ -97,7 +97,7 @@ export default function LabelingPage() {
 
   // 현재 이미지의 파일 URL 구성
   const imageUrl = currentImage
-    ? `/api/v1/data-stores/${currentImage.data_store_id}/images/${currentImage.id}/file?token=${localStorage.getItem(TOKEN_KEY) ?? ''}`
+    ? `/api/v1/images/${currentImage.id}/file?token=${localStorage.getItem(TOKEN_KEY) ?? ''}`
     : null
 
   // 저장 함수 (ref 값 사용해 최신 상태 읽음)

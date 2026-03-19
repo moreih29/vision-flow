@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { FolderPlus, LayoutGrid, List, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import FolderBreadcrumb from '@/components/FolderBreadcrumb'
-import { processFiles, isImageFile } from '@/hooks/use-image-upload'
+import { processFiles } from '@/hooks/use-image-upload'
 
 interface DataPoolToolbarProps {
   currentPath: string

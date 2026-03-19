@@ -107,7 +107,7 @@ function SelectableBBox({
         fill={isSelected ? `${color}30` : `${color}10`}
         draggable={isSelected && !isPanning}
         onClick={handleClick}
-        onTap={handleClick}
+        onTap={handleClick as unknown as (evt: Konva.KonvaEventObject<TouchEvent>) => void}
         onDragEnd={handleDragEnd}
         onTransformEnd={handleTransformEnd}
         onMouseEnter={(e) => {

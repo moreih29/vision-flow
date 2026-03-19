@@ -36,9 +36,7 @@ async def upload_images(
     storage: StorageBackend = Depends(get_storage),
 ) -> list[ImageResponse]:
     """Upload one or more images to a data store."""
-    ALLOWED_EXTS = {
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".svg"
-    }
+    allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".svg"}
     # verify data store exists
     await data_store_service.get_data_store(db, data_store_id)
     parsed_paths = folder_paths.split(",") if folder_paths else []
@@ -47,19 +45,15 @@ async def upload_images(
         # Skip non-image files
         filename = file.filename or ""
         ext = filename[filename.rfind(".") :].lower() if "." in filename else ""
-        if ext not in ALLOWED_EXTS:
+        if ext not in allowed_exts:
             continue
         fp = parsed_paths[i] if i < len(parsed_paths) else ""
-        image = await image_service.upload_image(
-            db, data_store_id, current_user.id, file, storage, folder_path=fp
-        )
+        image = await image_service.upload_image(db, data_store_id, current_user.id, file, storage, folder_path=fp)
         results.append(ImageResponse.model_validate(image))
     return results
 
 
-@router.get(
-    "/data-stores/{data_store_id}/folders", response_model=FolderContentsResponse
-)
+@router.get("/data-stores/{data_store_id}/folders", response_model=FolderContentsResponse)
 async def get_folder_contents(
     data_store_id: int,
     path: str = Query(default=""),
@@ -70,14 +64,10 @@ async def get_folder_contents(
 ) -> FolderContentsResponse:
     """List folders and images at a given folder path within a data store."""
     await data_store_service.get_data_store(db, data_store_id)
-    return await image_service.get_folder_contents(
-        db, data_store_id, path, skip, limit
-    )
+    return await image_service.get_folder_contents(db, data_store_id, path, skip, limit)
 
 
-@router.get(
-    "/data-stores/{data_store_id}/images", response_model=ImageListResponse
-)
+@router.get("/data-stores/{data_store_id}/images", response_model=ImageListResponse)
 async def list_images(
     data_store_id: int,
     skip: int = Query(default=0, ge=0),
@@ -86,12 +76,12 @@ async def list_images(
     current_user: User = Depends(get_current_user),
 ) -> ImageListResponse:
     """List images in a data store with pagination."""
-    images, total = await image_service.get_images_by_data_store(
-        db, data_store_id, skip, limit
-    )
+    images, total = await image_service.get_images_by_data_store(db, data_store_id, skip, limit)
     return ImageListResponse(
         images=[ImageResponse.model_validate(img) for img in images],
         total=total,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -119,12 +109,12 @@ async def get_image_file(
     if token is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     token_data = auth_service.decode_token(token)
-    user = await auth_service.get_user_by_email(db, token_data.email)
+    user = await auth_service.get_user_by_email(db, token_data.email)  # type: ignore[arg-type]
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     image = await image_service.get_image(db, image_id)
-    file_path = storage._key_to_path(image.storage_key)
+    file_path = storage._key_to_path(image.storage_key)  # type: ignore[attr-defined]
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image file not found")
     return FileResponse(path=str(file_path), media_type=image.mime_type)
@@ -139,9 +129,7 @@ async def update_folder(
 ) -> dict:
     """Rename or move a folder (updates folder_path prefix for all images)."""
     await data_store_service.get_data_store(db, data_store_id)
-    count = await image_service.update_folder_path(
-        db, data_store_id, body.old_path, body.new_path
-    )
+    count = await image_service.update_folder_path(db, data_store_id, body.old_path, body.new_path)
     return {"updated_count": count}
 
 
@@ -158,9 +146,7 @@ async def create_folder(
     return {"path": path}
 
 
-@router.get(
-    "/data-stores/{data_store_id}/folders/tree", response_model=list[str]
-)
+@router.get("/data-stores/{data_store_id}/folders/tree", response_model=list[str])
 async def get_all_folders(
     data_store_id: int,
     db: AsyncSession = Depends(get_db),
@@ -181,9 +167,7 @@ async def delete_folder(
 ) -> dict:
     """Delete all images in a folder and its subfolders."""
     await data_store_service.get_data_store(db, data_store_id)
-    count = await image_service.delete_folder(
-        db, data_store_id, path, current_user.id, storage
-    )
+    count = await image_service.delete_folder(db, data_store_id, path, current_user.id, storage)
     return {"deleted_count": count}
 
 
@@ -217,15 +201,11 @@ async def batch_move_images(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Move multiple images to a target folder."""
-    count = await image_service.batch_move_images(
-        db, body.image_ids, body.target_folder
-    )
+    count = await image_service.batch_move_images(db, body.image_ids, body.target_folder)
     return {"updated_count": count}
 
 
-@router.post(
-    "/data-stores/{data_store_id}/folders/batch-delete", status_code=200
-)
+@router.post("/data-stores/{data_store_id}/folders/batch-delete", status_code=200)
 async def batch_delete_folders(
     data_store_id: int,
     body: BatchFolderDeleteRequest,
@@ -235,15 +215,11 @@ async def batch_delete_folders(
 ) -> dict:
     """Delete multiple folders and their contents."""
     await data_store_service.get_data_store(db, data_store_id)
-    count = await image_service.batch_delete_folders(
-        db, data_store_id, body.paths, current_user.id, storage
-    )
+    count = await image_service.batch_delete_folders(db, data_store_id, body.paths, current_user.id, storage)
     return {"deleted_count": count}
 
 
-@router.patch(
-    "/data-stores/{data_store_id}/folders/batch-move", status_code=200
-)
+@router.patch("/data-stores/{data_store_id}/folders/batch-move", status_code=200)
 async def batch_move_folders(
     data_store_id: int,
     body: BatchFolderMoveRequest,
@@ -252,7 +228,5 @@ async def batch_move_folders(
 ) -> dict:
     """Move multiple folders to a target folder."""
     await data_store_service.get_data_store(db, data_store_id)
-    count = await image_service.batch_move_folders(
-        db, data_store_id, body.paths, body.target_folder
-    )
+    count = await image_service.batch_move_folders(db, data_store_id, body.paths, body.target_folder)
     return {"updated_count": count}

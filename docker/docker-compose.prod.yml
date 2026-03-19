@@ -1,7 +1,7 @@
 services:
   nginx:
     image: nginx:alpine
-    container_name: vf2-nginx
+    container_name: vf-nginx
     ports:
       - "80:80"
     volumes:
@@ -16,7 +16,7 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: vf2-backend
+    container_name: vf-backend
     env_file: .env.prod
     volumes:
       - storage_data:/app/data/storage
@@ -40,7 +40,7 @@ services:
     build:
       context: ../ai-worker
       dockerfile: Dockerfile
-    container_name: vf2-worker
+    container_name: vf-worker
     env_file: .env.prod
     volumes:
       - storage_data:/app/data/storage
@@ -56,7 +56,7 @@ services:
 
   postgres:
     image: postgres:16
-    container_name: vf2-postgres
+    container_name: vf-postgres
     env_file: .env.prod
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -73,7 +73,7 @@ services:
 
   redis:
     image: redis:7
-    container_name: vf2-redis
+    container_name: vf-redis
     volumes:
       - redis_data:/var/lib/redis/data
     healthcheck:

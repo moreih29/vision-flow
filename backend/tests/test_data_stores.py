@@ -1,9 +1,7 @@
 import httpx
 
 
-async def _create_project(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-) -> int:
+async def _create_project(client: httpx.AsyncClient, auth_headers: dict[str, str]) -> int:
     """Helper: create a project and return its ID."""
     resp = await client.post(
         "/api/v1/projects",
@@ -14,9 +12,7 @@ async def _create_project(
     return resp.json()["id"]
 
 
-async def test_create_data_store(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_create_data_store(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     resp = await client.post(
@@ -33,9 +29,7 @@ async def test_create_data_store(
     assert "id" in data
 
 
-async def test_list_data_stores(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_list_data_stores(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     await client.post(
@@ -49,9 +43,7 @@ async def test_list_data_stores(
         headers=auth_headers,
     )
 
-    resp = await client.get(
-        f"/api/v1/projects/{project_id}/data-stores", headers=auth_headers
-    )
+    resp = await client.get(f"/api/v1/projects/{project_id}/data-stores", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
@@ -61,9 +53,7 @@ async def test_list_data_stores(
     assert "DS B" in names
 
 
-async def test_get_data_store(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_get_data_store(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     create_resp = await client.post(
@@ -73,9 +63,7 @@ async def test_get_data_store(
     )
     data_store_id = create_resp.json()["id"]
 
-    resp = await client.get(
-        f"/api/v1/data-stores/{data_store_id}", headers=auth_headers
-    )
+    resp = await client.get(f"/api/v1/data-stores/{data_store_id}", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "Get This DS"
@@ -83,9 +71,7 @@ async def test_get_data_store(
     assert data["project_id"] == project_id
 
 
-async def test_delete_data_store(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_delete_data_store(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     create_resp = await client.post(
@@ -95,13 +81,9 @@ async def test_delete_data_store(
     )
     data_store_id = create_resp.json()["id"]
 
-    resp = await client.delete(
-        f"/api/v1/data-stores/{data_store_id}", headers=auth_headers
-    )
+    resp = await client.delete(f"/api/v1/data-stores/{data_store_id}", headers=auth_headers)
     assert resp.status_code == 204
 
     # Verify it's gone
-    get_resp = await client.get(
-        f"/api/v1/data-stores/{data_store_id}", headers=auth_headers
-    )
+    get_resp = await client.get(f"/api/v1/data-stores/{data_store_id}", headers=auth_headers)
     assert get_resp.status_code == 404

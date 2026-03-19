@@ -14,9 +14,7 @@ class Task(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     task_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=TaskStatus.DRAFT, server_default="draft"
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=TaskStatus.DRAFT, server_default="draft")
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -32,9 +30,5 @@ class Task(Base):
 
     # relationships
     project: Mapped["Project"] = relationship(back_populates="tasks")
-    task_images: Mapped[list["TaskImage"]] = relationship(
-        back_populates="task", cascade="all, delete-orphan"
-    )
-    label_classes: Mapped[list["LabelClass"]] = relationship(
-        back_populates="task", cascade="all, delete-orphan"
-    )
+    task_images: Mapped[list["TaskImage"]] = relationship(back_populates="task", cascade="all, delete-orphan")
+    label_classes: Mapped[list["LabelClass"]] = relationship(back_populates="task", cascade="all, delete-orphan")

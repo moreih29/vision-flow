@@ -27,7 +27,7 @@ async def get_current_user(
     from app.services.auth import auth_service
 
     token_data = auth_service.decode_token(token)
-    user = await auth_service.get_user_by_email(db, token_data.email)
+    user = await auth_service.get_user_by_email(db, token_data.email)  # type: ignore[arg-type]
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

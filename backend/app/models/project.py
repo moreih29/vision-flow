@@ -27,9 +27,5 @@ class Project(Base):
 
     # relationships
     owner: Mapped["User"] = relationship(back_populates="projects")
-    data_stores: Mapped[list["DataStore"]] = relationship(
-        back_populates="project", cascade="all, delete-orphan"
-    )
-    tasks: Mapped[list["Task"]] = relationship(
-        back_populates="project", cascade="all, delete-orphan"
-    )
+    data_stores: Mapped[list["DataStore"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    tasks: Mapped[list["Task"]] = relationship(back_populates="project", cascade="all, delete-orphan")

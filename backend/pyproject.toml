@@ -23,6 +23,7 @@ dependencies = [
     "httpx>=0.28.0",
     "redis>=5.2.0",
     "pillow>=11.0.0",
+    "pydantic[email]>=2.12.5",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,7 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "httpx>=0.28.0",
     "ruff>=0.9.0",
+    "pyrefly>=0.19.0",
 ]
 
 [tool.ruff]
@@ -38,7 +40,19 @@ target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/models/*.py" = ["F821"]
+
+[tool.pyrefly]
+python-version = "3.11"
+project-includes = ["app"]
+project-excludes = ["tests", "alembic"]
+
+[tool.pyrefly.errors]
+unknown-name = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import aiofiles
+import aiofiles  # type: ignore[import-untyped]
 
 from app.storage.base import StorageBackend
 
@@ -32,7 +32,7 @@ class LocalStorage(StorageBackend):
         if not path.exists():
             raise FileNotFoundError(f"Storage key not found: {key}")
         async with aiofiles.open(path, "rb") as f:
-            return await f.read()
+            return await f.read()  # type: ignore[no-any-return]
 
     async def delete(self, key: str) -> None:
         path = self._key_to_path(key)

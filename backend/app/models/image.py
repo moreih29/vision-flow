@@ -17,9 +17,7 @@ class Image(Base):
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    folder_path: Mapped[str] = mapped_column(
-        String(1000), nullable=False, default="", server_default=""
-    )
+    folder_path: Mapped[str] = mapped_column(String(1000), nullable=False, default="", server_default="")
     data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id"), nullable=False)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Images, Tag } from 'lucide-react'
-import { tasksApi } from '@/api/tasks'
+import { Plus, Images, Tag, Trash2 } from 'lucide-react'
+import { useTasks, useCreateTask, useDeleteTask } from '@/hooks/use-tasks'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 import type { Task, TaskType } from '@/types/task'
 import { TASK_LABELS, TASK_COLORS } from '@/types/task'
@@ -40,43 +40,30 @@ const TASK_TYPES: TaskType[] = [
 
 export default function TasksTab({ projectId }: TasksTabProps) {
   const navigate = useNavigate()
-  const { confirmDialog, showAlert } = useConfirmDialog()
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { confirmDialog, confirm, showAlert } = useConfirmDialog()
+
+  const { data: tasks = [], isLoading, isError } = useTasks(projectId)
+  const createTask = useCreateTask(projectId)
+  const deleteTask = useDeleteTask(projectId)
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newTaskType, setNewTaskType] = useState<TaskType>('classification')
   const [creating, setCreating] = useState(false)
-
-  useEffect(() => {
-    fetchTasks()
-  }, [projectId])
-
-  async function fetchTasks() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await tasksApi.list(projectId)
-      setTasks(res.data)
-    } catch {
-      setError('태스크를 불러오지 못했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const creatingRef = useRef(false)
+  const deletingRef = useRef<number | null>(null)
 
   async function handleCreate() {
-    if (!newName.trim()) return
+    if (!newName.trim() || creatingRef.current) return
+    creatingRef.current = true
     setCreating(true)
     try {
-      const res = await tasksApi.create(projectId, {
+      await createTask.mutateAsync({
         name: newName.trim(),
         description: newDesc.trim() || undefined,
         task_type: newTaskType,
       })
-      setTasks((prev) => [res.data, ...prev])
       setDialogOpen(false)
       setNewName('')
       setNewDesc('')
@@ -84,7 +71,27 @@ export default function TasksTab({ projectId }: TasksTabProps) {
     } catch {
       await showAlert({ title: '태스크 생성에 실패했습니다.' })
     } finally {
+      creatingRef.current = false
       setCreating(false)
+    }
+  }
+
+  async function handleDelete(task: Task) {
+    if (deletingRef.current === task.id) return
+    const confirmed = await confirm({
+      title: `"${task.name}" 태스크를 삭제하시겠습니까?`,
+      description: '태스크에 포함된 라벨링 데이터가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
+      confirmLabel: '삭제',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+    deletingRef.current = task.id
+    try {
+      await deleteTask.mutateAsync(task.id)
+    } catch {
+      await showAlert({ title: '태스크 삭제에 실패했습니다.' })
+    } finally {
+      deletingRef.current = null
     }
   }
 
@@ -106,13 +113,13 @@ export default function TasksTab({ projectId }: TasksTabProps) {
         </Button>
       </div>
 
-      {error && (
+      {isError && (
         <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
+          태스크를 불러오지 못했습니다.
         </div>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-40 w-full rounded-lg" />
@@ -139,6 +146,7 @@ export default function TasksTab({ projectId }: TasksTabProps) {
               onClick={() =>
                 navigate(`/projects/${projectId}/tasks/${task.id}`)
               }
+              onDelete={() => handleDelete(task)}
             />
           ))}
         </div>
@@ -224,9 +232,10 @@ export default function TasksTab({ projectId }: TasksTabProps) {
 interface TaskCardProps {
   task: Task
   onClick: () => void
+  onDelete: () => void
 }
 
-function TaskCard({ task, onClick }: TaskCardProps) {
+function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
   const labelingProgress =
     task.image_count > 0
       ? Math.round((task.labeled_count / task.image_count) * 100)
@@ -264,12 +273,24 @@ function TaskCard({ task, onClick }: TaskCardProps) {
         </span>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>라벨링 진행률</span>
-          <span>{labelingProgress}%</span>
+      <div className="flex items-center gap-2">
+        <div className="flex flex-1 flex-col gap-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>라벨링 진행률</span>
+            <span>{labelingProgress}%</span>
+          </div>
+          <Progress value={labelingProgress} className="h-1.5" />
         </div>
-        <Progress value={labelingProgress} className="h-1.5" />
+        <button
+          type="button"
+          className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </div>
     </button>
   )

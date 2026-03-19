@@ -29,7 +29,7 @@ class AuthService:
         else:
             expire = datetime.now(UTC) + timedelta(days=settings.access_token_expire_days)
         to_encode["exp"] = expire
-        return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)  # type: ignore[no-any-return]
 
     def decode_token(self, token: str) -> TokenData:
         credentials_exception = HTTPException(
@@ -38,15 +38,13 @@ class AuthService:
             headers={"WWW-Authenticate": "Bearer"},
         )
         try:
-            payload = jwt.decode(
-                token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-            )
+            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
             email: str | None = payload.get("sub")
             if email is None:
                 raise credentials_exception
             return TokenData(email=email)
-        except JWTError:
-            raise credentials_exception
+        except JWTError as err:
+            raise credentials_exception from err
 
     async def get_user_by_email(self, db: AsyncSession, email: str) -> User | None:
         result = await db.execute(select(User).where(User.email == email))
@@ -69,9 +67,7 @@ class AuthService:
         await db.refresh(user)
         return user
 
-    async def authenticate_user(
-        self, db: AsyncSession, email: str, password: str
-    ) -> User:
+    async def authenticate_user(self, db: AsyncSession, email: str, password: str) -> User:
         user = await self.get_user_by_email(db, email)
         if user is None or not self.verify_password(password, user.hashed_password):
             raise HTTPException(

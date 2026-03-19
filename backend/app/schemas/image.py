@@ -23,6 +23,8 @@ class ImageResponse(BaseModel):
 class ImageListResponse(BaseModel):
     images: list[ImageResponse]
     total: int
+    skip: int
+    limit: int
 
 
 class FolderInfo(BaseModel):

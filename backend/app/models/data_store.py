@@ -27,6 +27,4 @@ class DataStore(Base):
 
     # relationships
     project: Mapped["Project"] = relationship(back_populates="data_stores")
-    images: Mapped[list["Image"]] = relationship(
-        back_populates="data_store", cascade="all, delete-orphan"
-    )
+    images: Mapped[list["Image"]] = relationship(back_populates="data_store", cascade="all, delete-orphan")

@@ -25,9 +25,7 @@ class UserCreate(BaseModel):
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>\[\]\\/'`~\-_=+;]", v):
             errors.append("특수문자 1개 이상")
         if errors:
-            raise ValueError(
-                f"비밀번호는 {', '.join(errors)}을(를) 포함해야 합니다."
-            )
+            raise ValueError(f"비밀번호는 {', '.join(errors)}을(를) 포함해야 합니다.")
         return v
 
 

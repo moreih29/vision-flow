@@ -28,9 +28,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ) -> Token:
     """Authenticate a user and return a JWT token."""
-    user = await auth_service.authenticate_user(
-        db, credentials.email, credentials.password
-    )
+    user = await auth_service.authenticate_user(db, credentials.email, credentials.password)
     access_token = auth_service.create_access_token(
         data={"sub": user.email},
         expires_delta=timedelta(days=settings.access_token_expire_days),

@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    container_name: vf2-postgres
+    container_name: vf-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -18,7 +18,7 @@ services:
 
   redis:
     image: redis:7
-    container_name: vf2-redis
+    container_name: vf-redis
     ports:
       - "6379:6379"
     volumes:

@@ -23,18 +23,12 @@ class LabelClassService:
         await db.refresh(label_class)
         return label_class
 
-    async def get_classes(
-        self, db: AsyncSession, task_id: int
-    ) -> list[LabelClass]:
-        result = await db.execute(
-            select(LabelClass).where(LabelClass.task_id == task_id)
-        )
+    async def get_classes(self, db: AsyncSession, task_id: int) -> list[LabelClass]:
+        result = await db.execute(select(LabelClass).where(LabelClass.task_id == task_id))
         return list(result.scalars().all())
 
     async def get_class(self, db: AsyncSession, class_id: int) -> LabelClass:
-        result = await db.execute(
-            select(LabelClass).where(LabelClass.id == class_id)
-        )
+        result = await db.execute(select(LabelClass).where(LabelClass.id == class_id))
         label_class = result.scalar_one_or_none()
         if label_class is None:
             raise HTTPException(

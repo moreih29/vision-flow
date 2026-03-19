@@ -45,9 +45,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     )
 
 
-async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """RequestValidationError(422)를 필드별 에러 상세 정보와 함께 반환합니다."""
     details = []
     for error in exc.errors():
@@ -100,6 +98,6 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 def register_error_handlers(app: FastAPI) -> None:
     """FastAPI 앱에 공통 에러 핸들러를 등록합니다."""
-    app.add_exception_handler(HTTPException, http_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, generic_exception_handler)

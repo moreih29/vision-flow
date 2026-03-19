@@ -69,9 +69,7 @@ async def test_login_wrong_password(client: httpx.AsyncClient):
     assert resp.status_code == 401
 
 
-async def test_get_me_authenticated(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_get_me_authenticated(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     resp = await client.get("/api/v1/auth/me", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()

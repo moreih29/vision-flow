@@ -29,17 +29,13 @@ async def create_data_store(
     current_user: User = Depends(get_current_user),
 ) -> DataStoreResponse:
     """프로젝트에 새 DataStore를 생성합니다."""
-    data_store = await data_store_service.create_data_store(
-        db, project_id, current_user.id, data_store_in
-    )
+    data_store = await data_store_service.create_data_store(db, project_id, current_user.id, data_store_in)
     response = DataStoreResponse.model_validate(data_store)
     response.image_count = 0
     return response
 
 
-@router.get(
-    "/projects/{project_id}/data-stores", response_model=list[DataStoreResponse]
-)
+@router.get("/projects/{project_id}/data-stores", response_model=list[DataStoreResponse])
 async def list_data_stores(
     project_id: int,
     db: AsyncSession = Depends(get_db),
@@ -76,9 +72,7 @@ async def update_data_store(
     current_user: User = Depends(get_current_user),
 ) -> DataStoreResponse:
     """DataStore를 수정합니다."""
-    data_store = await data_store_service.update_data_store(
-        db, data_store_id, current_user.id, data_store_in
-    )
+    data_store = await data_store_service.update_data_store(db, data_store_id, current_user.id, data_store_in)
     return await _build_response(db, data_store)
 
 

@@ -9,9 +9,7 @@ from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
 class ProjectService:
-    async def create_project(
-        self, db: AsyncSession, user: User, project_in: ProjectCreate
-    ) -> Project:
+    async def create_project(self, db: AsyncSession, user: User, project_in: ProjectCreate) -> Project:
         project = Project(
             name=project_in.name,
             description=project_in.description,
@@ -22,9 +20,7 @@ class ProjectService:
         await db.refresh(project)
         return project
 
-    async def get_projects_by_user(
-        self, db: AsyncSession, user_id: int
-    ) -> list[tuple[Project, int]]:
+    async def get_projects_by_user(self, db: AsyncSession, user_id: int) -> list[tuple[Project, int]]:
         """프로젝트 목록과 data_store_count를 한 번의 쿼리로 조회."""
         stmt = (
             select(Project, func.count(DataStore.id).label("data_store_count"))
@@ -33,7 +29,7 @@ class ProjectService:
             .group_by(Project.id)
         )
         result = await db.execute(stmt)
-        return list(result.all())
+        return list(result.all())  # type: ignore[arg-type]
 
     async def get_project(self, db: AsyncSession, project_id: int) -> Project:
         result = await db.execute(select(Project).where(Project.id == project_id))
@@ -52,9 +48,7 @@ class ProjectService:
                 detail="Not enough permissions",
             )
 
-    async def get_project_with_ownership(
-        self, db: AsyncSession, project_id: int, user_id: int
-    ) -> Project:
+    async def get_project_with_ownership(self, db: AsyncSession, project_id: int, user_id: int) -> Project:
         project = await self.get_project(db, project_id)
         await self.check_ownership(project, user_id)
         return project
@@ -75,17 +69,13 @@ class ProjectService:
         await db.refresh(project)
         return project
 
-    async def delete_project(
-        self, db: AsyncSession, project_id: int, user_id: int
-    ) -> None:
+    async def delete_project(self, db: AsyncSession, project_id: int, user_id: int) -> None:
         project = await self.get_project_with_ownership(db, project_id, user_id)
         await db.delete(project)
         await db.commit()
 
     async def get_data_store_count(self, db: AsyncSession, project_id: int) -> int:
-        result = await db.execute(
-            select(func.count()).where(DataStore.project_id == project_id)
-        )
+        result = await db.execute(select(func.count()).where(DataStore.project_id == project_id))
         return result.scalar_one()
 
 

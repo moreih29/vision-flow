@@ -1,9 +1,7 @@
 import httpx
 
 
-async def _create_project(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-) -> int:
+async def _create_project(client: httpx.AsyncClient, auth_headers: dict[str, str]) -> int:
     """Helper: create a project and return its ID."""
     resp = await client.post(
         "/api/v1/projects",
@@ -14,9 +12,7 @@ async def _create_project(
     return resp.json()["id"]
 
 
-async def _create_task(
-    client: httpx.AsyncClient, auth_headers: dict[str, str], project_id: int
-) -> int:
+async def _create_task(client: httpx.AsyncClient, auth_headers: dict[str, str], project_id: int) -> int:
     """Helper: create a task in a project and return its ID."""
     resp = await client.post(
         f"/api/v1/projects/{project_id}/tasks",
@@ -31,9 +27,7 @@ async def _create_task(
     return resp.json()["id"]
 
 
-async def test_create_task(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_create_task(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     resp = await client.post(
@@ -56,9 +50,7 @@ async def test_create_task(
     assert "id" in data
 
 
-async def test_list_tasks(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_list_tasks(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     await client.post(
@@ -72,9 +64,7 @@ async def test_list_tasks(
         headers=auth_headers,
     )
 
-    resp = await client.get(
-        f"/api/v1/projects/{project_id}/tasks", headers=auth_headers
-    )
+    resp = await client.get(f"/api/v1/projects/{project_id}/tasks", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
@@ -84,9 +74,7 @@ async def test_list_tasks(
     assert "Task B" in names
 
 
-async def test_get_task(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_get_task(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
@@ -98,9 +86,7 @@ async def test_get_task(
     assert data["project_id"] == project_id
 
 
-async def test_update_task(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_update_task(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
@@ -115,27 +101,19 @@ async def test_update_task(
     assert data["description"] == "Updated desc"
 
 
-async def test_delete_task(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_delete_task(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
-    resp = await client.delete(
-        f"/api/v1/tasks/{task_id}", headers=auth_headers
-    )
+    resp = await client.delete(f"/api/v1/tasks/{task_id}", headers=auth_headers)
     assert resp.status_code == 204
 
     # Verify it's gone
-    get_resp = await client.get(
-        f"/api/v1/tasks/{task_id}", headers=auth_headers
-    )
+    get_resp = await client.get(f"/api/v1/tasks/{task_id}", headers=auth_headers)
     assert get_resp.status_code == 404
 
 
-async def test_create_task_requires_type(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_create_task_requires_type(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
 
     resp = await client.post(

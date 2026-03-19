@@ -5,6 +5,7 @@ export function useMultiSelect(itemKeys: string[], resetKey?: string | number) {
   const lastClickedIndexRef = useRef<number>(-1)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedKeys(new Set())
     lastClickedIndexRef.current = -1
   }, [resetKey])

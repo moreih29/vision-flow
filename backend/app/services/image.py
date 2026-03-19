@@ -3,7 +3,8 @@ import io
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import delete as sql_delete, func, select, update
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.folder_meta import FolderMeta
@@ -94,16 +95,9 @@ class ImageService:
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Image], int]:
-        count_result = await db.execute(
-            select(func.count()).where(Image.data_store_id == data_store_id)
-        )
+        count_result = await db.execute(select(func.count()).where(Image.data_store_id == data_store_id))
         total = count_result.scalar_one()
-        result = await db.execute(
-            select(Image)
-            .where(Image.data_store_id == data_store_id)
-            .offset(skip)
-            .limit(limit)
-        )
+        result = await db.execute(select(Image).where(Image.data_store_id == data_store_id).offset(skip).limit(limit))
         images = list(result.scalars().all())
         return images, total
 
@@ -131,9 +125,7 @@ class ImageService:
                 detail="Not enough permissions",
             )
         # only delete physical file if no other image records reference same storage_key
-        count_result = await db.execute(
-            select(func.count()).where(Image.storage_key == image.storage_key)
-        )
+        count_result = await db.execute(select(func.count()).where(Image.storage_key == image.storage_key))
         ref_count = count_result.scalar_one()
         await db.delete(image)
         await db.commit()
@@ -164,11 +156,7 @@ class ImageService:
         folder_paths_result = await db.execute(
             select(Image.folder_path)
             .where(Image.data_store_id == data_store_id)
-            .where(
-                Image.folder_path.like(
-                    f"{_escape_like(normalized_path)}%", escape="\\"
-                )
-            )
+            .where(Image.folder_path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
             .distinct()
         )
         all_folder_paths: list[str] = list(folder_paths_result.scalars().all())
@@ -189,11 +177,7 @@ class ImageService:
         explicit_result = await db.execute(
             select(FolderMeta.path)
             .where(FolderMeta.data_store_id == data_store_id)
-            .where(
-                FolderMeta.path.like(
-                    f"{_escape_like(normalized_path)}%", escape="\\"
-                )
-            )
+            .where(FolderMeta.path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
             .where(FolderMeta.path != normalized_path)
         )
         for explicit_path in explicit_result.scalars():
@@ -207,26 +191,16 @@ class ImageService:
         counts_result = await db.execute(
             select(Image.folder_path, func.count().label("cnt"))
             .where(Image.data_store_id == data_store_id)
-            .where(
-                Image.folder_path.like(
-                    f"{_escape_like(normalized_path)}%", escape="\\"
-                )
-            )
+            .where(Image.folder_path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
             .group_by(Image.folder_path)
         )
-        path_image_counts: dict[str, int] = {
-            row.folder_path: row.cnt for row in counts_result
-        }
+        path_image_counts: dict[str, int] = {row.folder_path: row.cnt for row in counts_result}
 
         # build FolderInfo for each direct child using only in-memory data
         folders: list[FolderInfo] = []
         for folder_path in sorted(direct_child_folders):
             # image_count: sum counts for all folder_paths that fall under this child folder
-            image_count = sum(
-                cnt
-                for fp, cnt in path_image_counts.items()
-                if fp.startswith(folder_path)
-            )
+            image_count = sum(cnt for fp, cnt in path_image_counts.items() if fp.startswith(folder_path))
 
             # subfolder_count: count direct children of this folder
             sub_children: set[str] = set()
@@ -252,9 +226,7 @@ class ImageService:
 
         # images directly in the current path (exact folder_path match)
         total_images_result = await db.execute(
-            select(func.count())
-            .where(Image.data_store_id == data_store_id)
-            .where(Image.folder_path == normalized_path)
+            select(func.count()).where(Image.data_store_id == data_store_id).where(Image.folder_path == normalized_path)
         )
         total_images = total_images_result.scalar_one()
 
@@ -265,10 +237,7 @@ class ImageService:
             .offset(skip)
             .limit(limit)
         )
-        images = [
-            ImageResponse.model_validate(img)
-            for img in images_result.scalars().all()
-        ]
+        images = [ImageResponse.model_validate(img) for img in images_result.scalars().all()]
 
         return FolderContentsResponse(
             current_path=normalized_path,
@@ -295,22 +264,14 @@ class ImageService:
         await db.execute(
             sql_delete(FolderMeta)
             .where(FolderMeta.data_store_id == data_store_id)
-            .where(
-                FolderMeta.path.like(
-                    f"{_escape_like(normalized_path)}%", escape="\\"
-                )
-            )
+            .where(FolderMeta.path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
         )
 
         # fetch all images under this folder path (inclusive of subfolders)
         result = await db.execute(
             select(Image)
             .where(Image.data_store_id == data_store_id)
-            .where(
-                Image.folder_path.like(
-                    f"{_escape_like(normalized_path)}%", escape="\\"
-                )
-            )
+            .where(Image.folder_path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
         )
         images = list(result.scalars().all())
         if not images:
@@ -325,15 +286,11 @@ class ImageService:
         # a key can be physically deleted only if all references are within the deletion set
         keys_to_delete: list[str] = []
         for key in storage_keys:
-            count_result = await db.execute(
-                select(func.count()).where(Image.storage_key == key)
-            )
+            count_result = await db.execute(select(func.count()).where(Image.storage_key == key))
             total_refs = count_result.scalar_one()
 
             target_refs_result = await db.execute(
-                select(func.count())
-                .where(Image.storage_key == key)
-                .where(Image.id.in_(target_ids))
+                select(func.count()).where(Image.storage_key == key).where(Image.id.in_(target_ids))
             )
             target_refs = target_refs_result.scalar_one()
 
@@ -382,25 +339,14 @@ class ImageService:
         source_img_result = await db.execute(
             select(func.count())
             .where(Image.data_store_id == data_store_id)
-            .where(
-                Image.folder_path.like(
-                    f"{_escape_like(normalized_old)}%", escape="\\"
-                )
-            )
+            .where(Image.folder_path.like(f"{_escape_like(normalized_old)}%", escape="\\"))
         )
         source_meta_result = await db.execute(
             select(func.count())
             .where(FolderMeta.data_store_id == data_store_id)
-            .where(
-                FolderMeta.path.like(
-                    f"{_escape_like(normalized_old)}%", escape="\\"
-                )
-            )
+            .where(FolderMeta.path.like(f"{_escape_like(normalized_old)}%", escape="\\"))
         )
-        if (
-            source_img_result.scalar_one() == 0
-            and source_meta_result.scalar_one() == 0
-        ):
+        if source_img_result.scalar_one() == 0 and source_meta_result.scalar_one() == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source folder not found",
@@ -410,11 +356,7 @@ class ImageService:
         conflict_count_result = await db.execute(
             select(func.count())
             .where(Image.data_store_id == data_store_id)
-            .where(
-                Image.folder_path.like(
-                    f"{_escape_like(normalized_new)}%", escape="\\"
-                )
-            )
+            .where(Image.folder_path.like(f"{_escape_like(normalized_new)}%", escape="\\"))
         )
         if conflict_count_result.scalar_one() > 0:
             raise HTTPException(
@@ -427,11 +369,7 @@ class ImageService:
         result = await db.execute(
             update(Image)
             .where(Image.data_store_id == data_store_id)
-            .where(
-                Image.folder_path.like(
-                    f"{_escape_like(normalized_old)}%", escape="\\"
-                )
-            )
+            .where(Image.folder_path.like(f"{_escape_like(normalized_old)}%", escape="\\"))
             .values(
                 folder_path=func.concat(
                     normalized_new,
@@ -443,11 +381,7 @@ class ImageService:
         await db.execute(
             update(FolderMeta)
             .where(FolderMeta.data_store_id == data_store_id)
-            .where(
-                FolderMeta.path.like(
-                    f"{_escape_like(normalized_old)}%", escape="\\"
-                )
-            )
+            .where(FolderMeta.path.like(f"{_escape_like(normalized_old)}%", escape="\\"))
             .values(
                 path=func.concat(
                     normalized_new,
@@ -456,7 +390,7 @@ class ImageService:
             )
         )
         await db.commit()
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined, no-any-return]
 
     async def get_all_folder_paths(
         self,
@@ -474,9 +408,7 @@ class ImageService:
 
         # Also include explicit folder paths from FolderMeta
         explicit_result = await db.execute(
-            select(FolderMeta.path)
-            .where(FolderMeta.data_store_id == data_store_id)
-            .where(FolderMeta.path != "")
+            select(FolderMeta.path).where(FolderMeta.data_store_id == data_store_id).where(FolderMeta.path != "")
         )
         raw_paths.extend(explicit_result.scalars().all())
 
@@ -503,9 +435,7 @@ class ImageService:
                 detail="Cannot create root folder",
             )
         existing = await db.execute(
-            select(FolderMeta)
-            .where(FolderMeta.data_store_id == data_store_id)
-            .where(FolderMeta.path == normalized)
+            select(FolderMeta).where(FolderMeta.data_store_id == data_store_id).where(FolderMeta.path == normalized)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(
@@ -535,14 +465,10 @@ class ImageService:
         keys_to_delete: list[str] = []
 
         for key in storage_keys:
-            count_result = await db.execute(
-                select(func.count()).where(Image.storage_key == key)
-            )
+            count_result = await db.execute(select(func.count()).where(Image.storage_key == key))
             total_refs = count_result.scalar_one()
             target_refs_result = await db.execute(
-                select(func.count())
-                .where(Image.storage_key == key)
-                .where(Image.id.in_(target_ids))
+                select(func.count()).where(Image.storage_key == key).where(Image.id.in_(target_ids))
             )
             target_refs = target_refs_result.scalar_one()
             if total_refs <= target_refs:
@@ -566,13 +492,9 @@ class ImageService:
         if not image_ids:
             return 0
         normalized = _normalize_folder_path(target_folder)
-        result = await db.execute(
-            update(Image)
-            .where(Image.id.in_(image_ids))
-            .values(folder_path=normalized)
-        )
+        result = await db.execute(update(Image).where(Image.id.in_(image_ids)).values(folder_path=normalized))
         await db.commit()
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined, no-any-return]
 
     async def batch_delete_folders(
         self,
@@ -601,9 +523,7 @@ class ImageService:
             normalized_old = _normalize_folder_path(folder_path)
             folder_name = normalized_old.rstrip("/").split("/")[-1]
             normalized_new = normalized_target + folder_name + "/"
-            count = await self.update_folder_path(
-                db, data_store_id, normalized_old, normalized_new
-            )
+            count = await self.update_folder_path(db, data_store_id, normalized_old, normalized_new)
             total += count
         return total
 

@@ -52,9 +52,7 @@ async def get_project(
     current_user: User = Depends(get_current_user),
 ) -> ProjectResponse:
     """Get a project by ID."""
-    project = await project_service.get_project_with_ownership(
-        db, project_id, current_user.id
-    )
+    project = await project_service.get_project_with_ownership(db, project_id, current_user.id)
     return await _build_response(db, project)
 
 
@@ -66,9 +64,7 @@ async def update_project(
     current_user: User = Depends(get_current_user),
 ) -> ProjectResponse:
     """Update a project."""
-    project = await project_service.update_project(
-        db, project_id, current_user.id, project_in
-    )
+    project = await project_service.update_project(db, project_id, current_user.id, project_in)
     return await _build_response(db, project)
 
 

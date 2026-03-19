@@ -26,9 +26,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     # DB 생성 (존재하지 않을 때만)
     admin_engine = create_async_engine(f"{_BASE_URL}/postgres", isolation_level="AUTOCOMMIT")
     async with admin_engine.connect() as conn:
-        result = await conn.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = 'vision_flow_test'")
-        )
+        result = await conn.execute(text("SELECT 1 FROM pg_database WHERE datname = 'vision_flow_test'"))
         if result.scalar() is None:
             await conn.execute(text("CREATE DATABASE vision_flow_test"))
     await admin_engine.dispose()

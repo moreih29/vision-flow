@@ -1,22 +1,25 @@
 # 테스트 & 품질 도구
 
-**Status**: Not Started
+**Status**: In Progress
 **Depends on**: 01-backend-quality, 02-frontend-refactor (일부)
 
 ## Tasks
 
 ### Backend 추가 테스트
-- [ ] Images API 테스트 (업로드, 중복 제거, 폴더, 배치)
-- [ ] Tasks API 테스트 (CRUD + 이미지 멤버십)
-- [ ] Label Classes API 테스트 (CRUD + Task 소속)
-- [ ] 서비스 레이어 단위 테스트
-- [ ] 스토리지 단위 테스트 (LocalStorage)
+- [-] Images API 테스트 (업로드, 중복 제거, 폴더, 배치) → 스토리지 mock 필요, 별도 진행
+- [x] Tasks API 테스트 (CRUD + task_type 검증 + 인증) — 7 tests
+- [x] Label Classes API 테스트 (CRUD + Task 소속) — 4 tests
+- [x] DataStore API 테스트 (CRUD) — test_datasets.py → test_data_stores.py 리네이밍
+- [x] conftest.py 수정 — event loop 호환, 비밀번호 규칙 적용, 에러 응답 형식 적용
+- [-] 서비스 레이어 단위 테스트 → 별도 브랜치
+- [-] 스토리지 단위 테스트 (LocalStorage) → 별도 브랜치
 
 ### Frontend 추가 테스트
-- [ ] MSW (Mock Service Worker) 도입 — API 모킹
-- [ ] useConfirmDialog 테스트
-- [ ] 인증 컴포넌트 테스트 (LoginPage, RegisterPage)
-- [ ] 프로젝트 관리 컴포넌트 테스트
+- [-] MSW (Mock Service Worker) 도입 → 별도 브랜치
+- [x] useConfirmDialog 테스트 — 3 tests (다이얼로그 표시, 확인/취소)
+- [x] ErrorBoundary 테스트 — 2 tests (정상 렌더링, 에러 UI)
+- [-] 인증 컴포넌트 테스트 → MSW 도입 후 진행
+- [-] 프로젝트 관리 컴포넌트 테스트 → MSW 도입 후 진행
 
 ### E2E 테스트 (선택)
 - [ ] Playwright 설정

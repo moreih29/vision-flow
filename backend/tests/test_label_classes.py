@@ -1,9 +1,7 @@
 import httpx
 
 
-async def _create_project(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-) -> int:
+async def _create_project(client: httpx.AsyncClient, auth_headers: dict[str, str]) -> int:
     """Helper: create a project and return its ID."""
     resp = await client.post(
         "/api/v1/projects",
@@ -14,9 +12,7 @@ async def _create_project(
     return resp.json()["id"]
 
 
-async def _create_task(
-    client: httpx.AsyncClient, auth_headers: dict[str, str], project_id: int
-) -> int:
+async def _create_task(client: httpx.AsyncClient, auth_headers: dict[str, str], project_id: int) -> int:
     """Helper: create a task in a project and return its ID."""
     resp = await client.post(
         f"/api/v1/projects/{project_id}/tasks",
@@ -27,9 +23,7 @@ async def _create_task(
     return resp.json()["id"]
 
 
-async def test_create_label_class(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_create_label_class(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
@@ -46,9 +40,7 @@ async def test_create_label_class(
     assert "id" in data
 
 
-async def test_list_label_classes(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_list_label_classes(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
@@ -63,9 +55,7 @@ async def test_list_label_classes(
         headers=auth_headers,
     )
 
-    resp = await client.get(
-        f"/api/v1/tasks/{task_id}/classes", headers=auth_headers
-    )
+    resp = await client.get(f"/api/v1/tasks/{task_id}/classes", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
@@ -75,9 +65,7 @@ async def test_list_label_classes(
     assert "Bicycle" in names
 
 
-async def test_update_label_class(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_update_label_class(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
@@ -99,9 +87,7 @@ async def test_update_label_class(
     assert data["color"] == "#FF00FF"
 
 
-async def test_delete_label_class(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
-):
+async def test_delete_label_class(client: httpx.AsyncClient, auth_headers: dict[str, str]):
     project_id = await _create_project(client, auth_headers)
     task_id = await _create_task(client, auth_headers, project_id)
 
@@ -112,7 +98,5 @@ async def test_delete_label_class(
     )
     class_id = create_resp.json()["id"]
 
-    resp = await client.delete(
-        f"/api/v1/classes/{class_id}", headers=auth_headers
-    )
+    resp = await client.delete(f"/api/v1/classes/{class_id}", headers=auth_headers)
     assert resp.status_code == 204

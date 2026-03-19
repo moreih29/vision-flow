@@ -38,27 +38,21 @@ async def create_task(
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """프로젝트에 새 Task를 생성합니다."""
-    task = await task_service.create_task(
-        db, project_id, current_user.id, task_in
-    )
+    task = await task_service.create_task(db, project_id, current_user.id, task_in)
     response = TaskResponse.model_validate(task)
     response.image_count = 0
     response.class_count = 0
     return response
 
 
-@router.get(
-    "/projects/{project_id}/tasks", response_model=list[TaskResponse]
-)
+@router.get("/projects/{project_id}/tasks", response_model=list[TaskResponse])
 async def list_tasks(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[TaskResponse]:
     """프로젝트의 모든 Task를 조회합니다."""
-    await project_service.get_project_with_ownership(
-        db, project_id, current_user.id
-    )
+    await project_service.get_project_with_ownership(db, project_id, current_user.id)
     rows = await task_service.get_tasks_by_project(db, project_id)
     result = []
     for task, image_count, class_count in rows:
@@ -88,9 +82,7 @@ async def update_task(
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """Task를 수정합니다."""
-    task = await task_service.update_task(
-        db, task_id, current_user.id, task_in
-    )
+    task = await task_service.update_task(db, task_id, current_user.id, task_in)
     return await _build_response(db, task)
 
 
@@ -117,9 +109,7 @@ async def add_images(
 ) -> list[TaskImageResponse]:
     """Task에 이미지를 추가합니다."""
     await task_service.check_ownership(db, task_id, current_user.id)
-    task_images = await task_service.add_images(
-        db, task_id, body.image_ids
-    )
+    task_images = await task_service.add_images(db, task_id, body.image_ids)
     return [TaskImageResponse.model_validate(ti) for ti in task_images]
 
 
@@ -135,9 +125,7 @@ async def remove_images(
     await task_service.remove_images(db, task_id, body.image_ids)
 
 
-@router.get(
-    "/tasks/{task_id}/images", response_model=TaskImageListResponse
-)
+@router.get("/tasks/{task_id}/images", response_model=TaskImageListResponse)
 async def list_task_images(
     task_id: int,
     skip: int = Query(default=0, ge=0),
@@ -147,13 +135,9 @@ async def list_task_images(
 ) -> TaskImageListResponse:
     """Task의 이미지 목록을 페이지네이션으로 조회합니다."""
     await task_service.check_ownership(db, task_id, current_user.id)
-    task_images, total = await task_service.get_images(
-        db, task_id, skip, limit
-    )
+    task_images, total = await task_service.get_images(db, task_id, skip, limit)
     return TaskImageListResponse(
-        images=[
-            TaskImageResponse.model_validate(ti) for ti in task_images
-        ],
+        images=[TaskImageResponse.model_validate(ti) for ti in task_images],
         total=total,
         skip=skip,
         limit=limit,

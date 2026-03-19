@@ -31,9 +31,7 @@ class TaskService:
         await db.refresh(task)
         return task
 
-    async def get_tasks_by_project(
-        self, db: AsyncSession, project_id: int
-    ) -> list[tuple[Task, int, int]]:
+    async def get_tasks_by_project(self, db: AsyncSession, project_id: int) -> list[tuple[Task, int, int]]:
         """태스크 목록과 image_count, class_count를 한 번의 쿼리로 조회."""
         stmt = (
             select(
@@ -47,7 +45,7 @@ class TaskService:
             .group_by(Task.id)
         )
         result = await db.execute(stmt)
-        return list(result.all())
+        return list(result.all())  # type: ignore[arg-type]
 
     async def get_task(self, db: AsyncSession, task_id: int) -> Task:
         result = await db.execute(select(Task).where(Task.id == task_id))
@@ -59,9 +57,7 @@ class TaskService:
             )
         return task
 
-    async def check_ownership(
-        self, db: AsyncSession, task_id: int, user_id: int
-    ) -> Task:
+    async def check_ownership(self, db: AsyncSession, task_id: int, user_id: int) -> Task:
         """태스크 조회 + 프로젝트 소유권 검증. 태스크를 반환."""
         task = await self.get_task(db, task_id)
         project = await project_service.get_project(db, task.project_id)
@@ -84,16 +80,12 @@ class TaskService:
         await db.refresh(task)
         return task
 
-    async def delete_task(
-        self, db: AsyncSession, task_id: int, user_id: int
-    ) -> None:
+    async def delete_task(self, db: AsyncSession, task_id: int, user_id: int) -> None:
         task = await self.check_ownership(db, task_id, user_id)
         await db.delete(task)
         await db.commit()
 
-    async def add_images(
-        self, db: AsyncSession, task_id: int, image_ids: list[int]
-    ) -> list[TaskImage]:
+    async def add_images(self, db: AsyncSession, task_id: int, image_ids: list[int]) -> list[TaskImage]:
         await self.get_task(db, task_id)
         result = await db.execute(select(Image).where(Image.id.in_(image_ids)))
         found_images = result.scalars().all()
@@ -112,9 +104,7 @@ class TaskService:
         )
         existing_ids = {ti.image_id for ti in existing_result.scalars().all()}
         new_ids = [iid for iid in image_ids if iid not in existing_ids]
-        task_images = [
-            TaskImage(task_id=task_id, image_id=iid) for iid in new_ids
-        ]
+        task_images = [TaskImage(task_id=task_id, image_id=iid) for iid in new_ids]
         db.add_all(task_images)
         await db.commit()
         if new_ids:
@@ -126,12 +116,10 @@ class TaskService:
                 )
                 .options(selectinload(TaskImage.image))
             )
-            return list(result.scalars().all())
+            return list(result.scalars().all())  # type: ignore[arg-type]
         return []
 
-    async def remove_images(
-        self, db: AsyncSession, task_id: int, image_ids: list[int]
-    ) -> None:
+    async def remove_images(self, db: AsyncSession, task_id: int, image_ids: list[int]) -> None:
         await self.get_task(db, task_id)
         await db.execute(
             delete(TaskImage).where(
@@ -141,13 +129,9 @@ class TaskService:
         )
         await db.commit()
 
-    async def get_images(
-        self, db: AsyncSession, task_id: int, skip: int, limit: int
-    ) -> tuple[list[TaskImage], int]:
+    async def get_images(self, db: AsyncSession, task_id: int, skip: int, limit: int) -> tuple[list[TaskImage], int]:
         await self.get_task(db, task_id)
-        count_result = await db.execute(
-            select(func.count()).where(TaskImage.task_id == task_id)
-        )
+        count_result = await db.execute(select(func.count()).where(TaskImage.task_id == task_id))
         total = count_result.scalar_one()
         result = await db.execute(
             select(TaskImage)
@@ -160,15 +144,11 @@ class TaskService:
         return task_images, total
 
     async def get_image_count(self, db: AsyncSession, task_id: int) -> int:
-        result = await db.execute(
-            select(func.count()).where(TaskImage.task_id == task_id)
-        )
+        result = await db.execute(select(func.count()).where(TaskImage.task_id == task_id))
         return result.scalar_one()
 
     async def get_class_count(self, db: AsyncSession, task_id: int) -> int:
-        result = await db.execute(
-            select(func.count()).where(LabelClass.task_id == task_id)
-        )
+        result = await db.execute(select(func.count()).where(LabelClass.task_id == task_id))
         return result.scalar_one()
 
 

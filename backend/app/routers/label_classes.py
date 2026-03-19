@@ -31,9 +31,7 @@ async def create_class(
     return LabelClassResponse.model_validate(label_class)
 
 
-@router.get(
-    "/tasks/{task_id}/classes", response_model=list[LabelClassResponse]
-)
+@router.get("/tasks/{task_id}/classes", response_model=list[LabelClassResponse])
 async def list_classes(
     task_id: int,
     db: AsyncSession = Depends(get_db),

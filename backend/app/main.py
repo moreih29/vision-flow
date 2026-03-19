@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.error_handler import register_error_handlers
 from app.logging_config import setup_logging
-from app.routers import auth, data_stores, images, label_classes, projects, tasks
+from app.routers import annotations, auth, data_stores, images, label_classes, projects, tasks
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.include_router(data_stores.router, prefix="/api/v1")
 app.include_router(images.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(label_classes.router, prefix="/api/v1")
+app.include_router(annotations.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

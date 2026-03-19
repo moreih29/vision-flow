@@ -113,6 +113,25 @@ PostgreSQL 16 (비동기 드라이버: asyncpg)
 
 - UNIQUE(task_id, image_id): 같은 이미지를 같은 Task에 두 번 추가 불가.
 - Task 삭제 시 cascade delete.
+- TaskImage 삭제 시 연관 annotations도 cascade delete.
+
+### annotations
+| 컬럼 | 타입 | 제약조건 | 설명 |
+|------|------|---------|------|
+| id | INTEGER | PK | 어노테이션 ID |
+| task_image_id | INTEGER | FK → task_images.id, INDEXED | 소속 TaskImage |
+| label_class_id | INTEGER | FK → label_classes.id, NULLABLE | 라벨 클래스 |
+| annotation_type | VARCHAR(20) | NOT NULL | 유형 (AnnotationType enum) |
+| data | JSONB | NOT NULL, DEFAULT '{}' | 어노테이션 데이터 |
+| created_at | TIMESTAMP | NOT NULL | 생성 시간 |
+| updated_at | TIMESTAMP | NOT NULL | 수정 시간 |
+
+- **AnnotationType**: classification, bbox, polygon, keypoint
+- **data 형식** (normalized 좌표 0.0-1.0):
+  - classification: `{}` (클래스는 label_class_id로)
+  - bbox: `{"x": 0.1, "y": 0.2, "width": 0.5, "height": 0.3}`
+- TaskImage 삭제 시 cascade delete.
+- LabelClass 삭제 시 FK 제약으로 보호 (annotations 존재하면 삭제 불가).
 
 ### label_classes
 | 컬럼 | 타입 | 제약조건 | 설명 |
@@ -145,6 +164,7 @@ PostgreSQL 16 (비동기 드라이버: asyncpg)
 | Project 삭제 | DataStore + Task 삭제 |
 | DataStore 삭제 | Image + FolderMeta 삭제 |
 | Task 삭제 | TaskImage + LabelClass 삭제 |
+| TaskImage 삭제 | Annotation 삭제 |
 
 ## 인덱스 전략
 

@@ -10,6 +10,7 @@ import RegisterPage from '@/pages/RegisterPage'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectDetailPage from '@/pages/ProjectDetailPage'
 import TaskDetailPage from '@/pages/TaskDetailPage'
+import LabelingPage from '@/pages/LabelingPage'
 
 function App() {
   const fetchMe = useAuthStore((s) => s.fetchMe)
@@ -61,6 +62,14 @@ function App() {
                 <AppLayout>
                   <TaskDetailPage />
                 </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:id/tasks/:taskId/label"
+            element={
+              <ProtectedRoute>
+                <LabelingPage />
               </ProtectedRoute>
             }
           />

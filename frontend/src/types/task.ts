@@ -18,7 +18,23 @@ export const TASK_COLORS: Record<TaskType, string> = {
   pose_estimation: 'bg-orange-500',
 }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'completed'
+export type TaskStatus = 'draft' | 'labeling' | 'ready' | 'training' | 'completed'
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  draft: '준비',
+  labeling: '라벨링',
+  ready: '완료',
+  training: '학습 중',
+  completed: '학습 완료',
+}
+
+export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
+  draft: 'bg-gray-400',
+  labeling: 'bg-yellow-500',
+  ready: 'bg-green-500',
+  training: 'bg-blue-500',
+  completed: 'bg-emerald-600',
+}
 
 export interface Task {
   id: number

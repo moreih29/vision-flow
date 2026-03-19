@@ -1,7 +1,8 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.annotation import Annotation
 from app.models.label_class import LabelClass
 from app.schemas.label_class import LabelClassCreate, LabelClassUpdate
 
@@ -26,6 +27,17 @@ class LabelClassService:
     async def get_classes(self, db: AsyncSession, task_id: int) -> list[LabelClass]:
         result = await db.execute(select(LabelClass).where(LabelClass.task_id == task_id))
         return list(result.scalars().all())
+
+    async def get_classes_with_counts(self, db: AsyncSession, task_id: int) -> list[tuple[LabelClass, int]]:
+        """label_count(annotation 수)와 함께 label class 목록 조회."""
+        stmt = (
+            select(LabelClass, func.count(Annotation.id).label("label_count"))
+            .outerjoin(Annotation, Annotation.label_class_id == LabelClass.id)
+            .where(LabelClass.task_id == task_id)
+            .group_by(LabelClass.id)
+        )
+        result = await db.execute(stmt)
+        return list(result.all())
 
     async def get_class(self, db: AsyncSession, class_id: int) -> LabelClass:
         result = await db.execute(select(LabelClass).where(LabelClass.id == class_id))

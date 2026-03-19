@@ -35,7 +35,12 @@ export default function TaskDetailPage() {
 
   const [addingClass, setAddingClass] = useState(false)
   const [newClassName, setNewClassName] = useState('')
-  const [newClassColor, setNewClassColor] = useState('#3b82f6')
+  const CLASS_COLORS = [
+    '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
+    '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1',
+  ]
+  const nextColor = CLASS_COLORS[classes.length % CLASS_COLORS.length]
+  const [newClassColor, setNewClassColor] = useState(nextColor)
   const [savingClass, setSavingClass] = useState(false)
 
   useEffect(() => {
@@ -100,7 +105,7 @@ export default function TaskDetailPage() {
         prev ? { ...prev, class_count: prev.class_count + 1 } : prev,
       )
       setNewClassName('')
-      setNewClassColor('#3b82f6')
+      setNewClassColor(CLASS_COLORS[(classes.length + 1) % CLASS_COLORS.length])
       setAddingClass(false)
     } catch {
       await showAlert({ title: '클래스 추가에 실패했습니다.' })

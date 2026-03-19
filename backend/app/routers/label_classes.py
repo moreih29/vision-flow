@@ -39,8 +39,13 @@ async def list_classes(
 ) -> list[LabelClassResponse]:
     """List all label classes in a task."""
     await task_service.check_ownership(db, task_id, current_user.id)
-    classes = await label_class_service.get_classes(db, task_id)
-    return [LabelClassResponse.model_validate(c) for c in classes]
+    rows = await label_class_service.get_classes_with_counts(db, task_id)
+    result = []
+    for label_class, label_count in rows:
+        response = LabelClassResponse.model_validate(label_class)
+        response.label_count = label_count
+        result.append(response)
+    return result
 
 
 @router.put("/classes/{class_id}", response_model=LabelClassResponse)

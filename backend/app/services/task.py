@@ -3,6 +3,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.annotation import Annotation
 from app.models.image import Image
 from app.models.label_class import LabelClass
 from app.models.task import Task
@@ -31,13 +32,20 @@ class TaskService:
         await db.refresh(task)
         return task
 
-    async def get_tasks_by_project(self, db: AsyncSession, project_id: int) -> list[tuple[Task, int, int]]:
-        """태스크 목록과 image_count, class_count를 한 번의 쿼리로 조회."""
+    async def get_tasks_by_project(self, db: AsyncSession, project_id: int) -> list[tuple[Task, int, int, int]]:
+        """태스크 목록과 image_count, class_count, labeled_count를 한 번의 쿼리로 조회."""
+        labeled_subq = (
+            select(func.count(func.distinct(TaskImage.id)))
+            .join(Annotation, Annotation.task_image_id == TaskImage.id)
+            .where(TaskImage.task_id == Task.id)
+            .scalar_subquery()
+        )
         stmt = (
             select(
                 Task,
                 func.count(func.distinct(TaskImage.id)).label("image_count"),
                 func.count(func.distinct(LabelClass.id)).label("class_count"),
+                labeled_subq.label("labeled_count"),
             )
             .outerjoin(TaskImage, TaskImage.task_id == Task.id)
             .outerjoin(LabelClass, LabelClass.task_id == Task.id)
@@ -46,6 +54,15 @@ class TaskService:
         )
         result = await db.execute(stmt)
         return list(result.all())  # type: ignore[arg-type]
+
+    async def get_labeled_count(self, db: AsyncSession, task_id: int) -> int:
+        """annotations가 1개 이상 존재하는 task_image 수."""
+        result = await db.execute(
+            select(func.count(func.distinct(TaskImage.id)))
+            .join(Annotation, Annotation.task_image_id == TaskImage.id)
+            .where(TaskImage.task_id == task_id)
+        )
+        return result.scalar_one()
 
     async def get_task(self, db: AsyncSession, task_id: int) -> Task:
         result = await db.execute(select(Task).where(Task.id == task_id))

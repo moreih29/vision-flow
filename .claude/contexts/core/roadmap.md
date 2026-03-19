@@ -31,18 +31,22 @@
 - [x] 이미지 선택 모달 (Task용)
 - [x] Dataset→DataStore, Subset→Task 도메인 구조 변경 (D025)
 
-## Phase 3: Labeling (미시작)
+## Phase 3: Labeling (MVP 완료, 잔여 항목 있음)
 **목표**: 라벨링 도구 구현 + AI 보조
 
-### 계획 항목
-- [ ] Konva.js 기반 라벨링 캔버스
-- [ ] Bounding Box 도구 (Object Detection)
-- [ ] Classification 도구
+### 완료 항목
+- [x] Konva.js 기반 라벨링 캔버스 (줌/팬, 이미지 네비게이션)
+- [x] Classification 도구 (클래스 선택 → 즉시 배정)
+- [x] Bounding Box 도구 (그리기/선택/이동/리사이즈/삭제)
+- [x] Annotation 모델 + CRUD API (Bulk Save 포함)
+- [x] 라벨링 키보드 단축키 (Ctrl+Z/Y, 숫자키 클래스 선택)
+- [x] 실행 취소/다시 실행 (스냅샷 기반)
+- [x] 자동저장 (이미지 전환 시 + Ctrl+S)
+- [x] labeled_count / label_count 실계산
+
+### 잔여 항목
 - [ ] Polygon 도구 (Instance Segmentation)
 - [ ] Keypoint 도구 (Pose Estimation)
-- [ ] 라벨 데이터 저장/조회 API
-- [ ] 라벨링 키보드 단축키
-- [ ] 실행 취소/다시 실행
 - [ ] AI 보조 라벨링: SAM 통합
 - [ ] AI 보조 라벨링: Grounding DINO 통합
 
@@ -93,15 +97,20 @@ Phase 1 (완료) → Phase 2 (완료) → Phase 3 (라벨링)
 - Phase 5는 Phase 4의 학습된 모델에 의존
 - 단, 파이프라인 에디터 UI는 Phase 3과 병행 개발 가능
 
-## 기술 부채
+## 기술 부채 (해결 현황)
 
-Phase 1~2 완료 시점에서 식별된 기술 부채:
+| # | 항목 | 상태 |
+|---|------|------|
+| 1 | 테스트 | **해결** — BE 27 + FE 13 테스트, pre-commit 훅 |
+| 2 | 에러 핸들링 | **해결** — 공통 에러 핸들러 (표준 JSON 응답) |
+| 3 | 로깅 | **해결** — JSON 구조화 로깅 |
+| 4 | 페이지네이션 | **해결** — PaginatedResponse[T] 제네릭 스키마 |
+| 5 | 대형 컴포넌트 | **해결** — DataPoolTab 949→235줄, FolderTreeView 1124→365줄 |
+| 6 | 서버 데이터 관리 | **해결** — React Query 도입 (프로젝트/태스크/DataStore/이미지/폴더) |
+| 7 | 보안 | **해결** — CORS 환경변수, JWT 필수, IDOR 수정, 입력 검증 |
+| 8 | 도메인 리네이밍 | **해결** — Dataset→DataStore, Subset→Task (D025) |
 
-1. **테스트 부재**: 유닛/통합 테스트 없음. Phase 3 시작 전 테스트 프레임워크 도입 권장.
-2. **에러 핸들링**: 각 서비스에서 개별적으로 HTTPException. 공통 에러 핸들러 필요.
-3. **로깅**: 체계적 로깅 시스템 미구축.
-4. **페이지네이션**: 일부 엔드포인트만 적용. 공통 페이지네이션 스키마 필요.
-5. **대형 컴포넌트**: DataPoolTab, FolderTreeView 분할 필요.
-6. **서버 데이터 관리**: useState+useEffect 패턴 → React Query 도입 고려.
-7. **보안**: CORS 전체 허용, JWT localStorage 저장 → 프로덕션 전 보안 강화.
-8. **도메인 구조 변경 완료**: Dataset→DataStore, Subset→Task 리네이밍 완료 (D025).
+### 잔여 기술 부채
+- Refresh Token 도입 (현재 Access Token 7일)
+- 이미지 width/height 업로드 시 보장
+- CI/CD, 모니터링, 백업 (프로덕션 단계)

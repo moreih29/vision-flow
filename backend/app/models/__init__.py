@@ -1,3 +1,4 @@
+from app.models.annotation import Annotation
 from app.models.data_store import DataStore
 from app.models.folder_meta import FolderMeta
 from app.models.image import Image
@@ -16,4 +17,5 @@ __all__ = [
     "TaskImage",
     "LabelClass",
     "FolderMeta",
+    "Annotation",
 ]

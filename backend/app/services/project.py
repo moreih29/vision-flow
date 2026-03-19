@@ -27,6 +27,7 @@ class ProjectService:
             .outerjoin(DataStore, DataStore.project_id == Project.id)
             .where(Project.owner_id == user_id)
             .group_by(Project.id)
+            .order_by(Project.created_at.desc())
         )
         result = await db.execute(stmt)
         return list(result.all())  # type: ignore[arg-type]

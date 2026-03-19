@@ -16,13 +16,13 @@ export interface UploadResult {
 }
 
 export const imagesApi = {
-  list: (datasetId: number, skip?: number, limit?: number) =>
-    client.get<ImageMeta[]>(`/datasets/${datasetId}/images`, {
+  list: (dataStoreId: number, skip?: number, limit?: number) =>
+    client.get<ImageMeta[]>(`/data-stores/${dataStoreId}/images`, {
       params: { skip, limit },
     }),
 
   upload: async (
-    datasetId: number,
+    dataStoreId: number,
     files: File[],
     folderPaths?: string[],
     onProgress?: (uploaded: number, total: number) => void,
@@ -69,7 +69,7 @@ export const imagesApi = {
 
     for (const batch of batches) {
       try {
-        const res = await uploadBatch(datasetId, batch)
+        const res = await uploadBatch(dataStoreId, batch)
         allResults.push(...res)
       } catch {
         failedBatches.push(batch)
@@ -85,7 +85,7 @@ export const imagesApi = {
       const stillFailing: { file: File; path: string }[][] = []
       for (const batch of retryQueue) {
         try {
-          const res = await uploadBatch(datasetId, batch)
+          const res = await uploadBatch(dataStoreId, batch)
           allResults.push(...res)
         } catch {
           if (attempt === MAX_RETRIES) {
@@ -104,12 +104,12 @@ export const imagesApi = {
   },
 
   getFolderContents: (
-    datasetId: number,
+    dataStoreId: number,
     path?: string,
     skip?: number,
     limit?: number,
   ) =>
-    client.get<FolderContentsResponse>(`/datasets/${datasetId}/folders`, {
+    client.get<FolderContentsResponse>(`/data-stores/${dataStoreId}/folders`, {
       params: {
         path: path ?? '',
         ...(skip !== undefined && { skip }),
@@ -119,22 +119,22 @@ export const imagesApi = {
 
   delete: (id: number) => client.delete(`/images/${id}`),
 
-  deleteFolder: (datasetId: number, path: string) =>
-    client.delete<{ deleted_count: number }>(`/datasets/${datasetId}/folders`, {
+  deleteFolder: (dataStoreId: number, path: string) =>
+    client.delete<{ deleted_count: number }>(`/data-stores/${dataStoreId}/folders`, {
       params: { path },
     }),
 
-  updateFolder: (datasetId: number, oldPath: string, newPath: string) =>
+  updateFolder: (dataStoreId: number, oldPath: string, newPath: string) =>
     client.patch<{ updated_count: number }>(
-      `/datasets/${datasetId}/folders`,
+      `/data-stores/${dataStoreId}/folders`,
       { old_path: oldPath, new_path: newPath },
     ),
 
-  getAllFolders: (datasetId: number) =>
-    client.get<string[]>(`/datasets/${datasetId}/folders/tree`),
+  getAllFolders: (dataStoreId: number) =>
+    client.get<string[]>(`/data-stores/${dataStoreId}/folders/tree`),
 
-  createFolder: (datasetId: number, path: string) =>
-    client.post<{ path: string }>(`/datasets/${datasetId}/folders`, { path }),
+  createFolder: (dataStoreId: number, path: string) =>
+    client.post<{ path: string }>(`/data-stores/${dataStoreId}/folders`, { path }),
 
   batchDelete: (imageIds: number[]) =>
     client.post<{ deleted_count: number }>('/images/batch-delete', {
@@ -147,19 +147,19 @@ export const imagesApi = {
       target_folder: targetFolder,
     }),
 
-  batchDeleteFolders: (datasetId: number, paths: string[]) =>
+  batchDeleteFolders: (dataStoreId: number, paths: string[]) =>
     client.post<{ deleted_count: number }>(
-      `/datasets/${datasetId}/folders/batch-delete`,
+      `/data-stores/${dataStoreId}/folders/batch-delete`,
       { paths },
     ),
 
   batchMoveFolders: (
-    datasetId: number,
+    dataStoreId: number,
     paths: string[],
     targetFolder: string,
   ) =>
     client.patch<{ updated_count: number }>(
-      `/datasets/${datasetId}/folders/batch-move`,
+      `/data-stores/${dataStoreId}/folders/batch-move`,
       { paths, target_folder: targetFolder },
     ),
 
@@ -170,7 +170,7 @@ export const imagesApi = {
 }
 
 async function uploadBatch(
-  datasetId: number,
+  dataStoreId: number,
   batch: { file: File; path: string }[],
 ): Promise<ImageMeta[]> {
   const formData = new FormData()
@@ -183,7 +183,7 @@ async function uploadBatch(
     formData.append('folder_paths', paths.join(','))
   }
   const res = await client.post<ImageMeta[]>(
-    `/datasets/${datasetId}/images`,
+    `/data-stores/${dataStoreId}/images`,
     formData,
     { timeout: 5 * 60 * 1000 },
   )

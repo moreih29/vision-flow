@@ -5,5 +5,5 @@ export interface Project {
   owner_id: number
   created_at: string
   updated_at: string
-  dataset_count: number
+  data_store_count: number
 }

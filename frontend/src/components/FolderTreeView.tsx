@@ -46,7 +46,7 @@ export interface FolderTreeRef {
 }
 
 interface FolderTreeViewProps {
-  datasetId: number
+  dataStoreId: number
   rootLabel?: string
   rootImageCount?: number
   selectedPath: string
@@ -492,7 +492,7 @@ function TreeNode({
 export default forwardRef<FolderTreeRef, FolderTreeViewProps>(
   function FolderTreeView(
     {
-      datasetId,
+      dataStoreId,
       rootLabel,
       rootImageCount,
       selectedPath,
@@ -558,7 +558,7 @@ export default forwardRef<FolderTreeRef, FolderTreeViewProps>(
       async function loadRoot() {
         setLoading(true)
         try {
-          const res = await imagesApi.getFolderContents(datasetId, '')
+          const res = await imagesApi.getFolderContents(dataStoreId, '')
           setRootNodes(res.data.folders.map(buildNode))
         } catch {
           // silently fail
@@ -567,7 +567,7 @@ export default forwardRef<FolderTreeRef, FolderTreeViewProps>(
         }
       }
       loadRoot()
-    }, [datasetId])
+    }, [dataStoreId])
 
     useImperativeHandle(ref, () => ({
       async refresh() {
@@ -575,14 +575,14 @@ export default forwardRef<FolderTreeRef, FolderTreeViewProps>(
           (a, b) => a.split('/').length - b.split('/').length,
         )
 
-        const res = await imagesApi.getFolderContents(datasetId, '')
+        const res = await imagesApi.getFolderContents(dataStoreId, '')
         let newNodes = res.data.folders.map(buildNode)
 
         for (const path of expandedPaths) {
           if (!findNodeInTree(newNodes, path)) continue
           try {
             const childRes = await imagesApi.getFolderContents(
-              datasetId,
+              dataStoreId,
               path,
             )
             newNodes = updateNodeInTree(newNodes, path, (n) => ({
@@ -626,7 +626,7 @@ export default forwardRef<FolderTreeRef, FolderTreeViewProps>(
 
       if (!node.loaded) {
         try {
-          const res = await imagesApi.getFolderContents(datasetId, path)
+          const res = await imagesApi.getFolderContents(dataStoreId, path)
           setRootNodes((prev) =>
             updateNodeInTree(prev, path, (n) => ({
               ...n,

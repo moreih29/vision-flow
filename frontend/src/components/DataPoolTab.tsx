@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FolderPlus, Images, LayoutGrid, List, Upload } from 'lucide-react'
-import { datasetsApi } from '@/api/datasets'
+import { dataStoresApi } from '@/api/data-stores'
 import { imagesApi } from '@/api/images'
-import type { Dataset } from '@/types/dataset'
+import type { DataStore } from '@/types/data-store'
 import type { DataPoolItem, FolderInfo, ImageMeta } from '@/types/image'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -72,7 +72,7 @@ interface DataPoolTabProps {
 }
 
 export default function DataPoolTab({ projectId }: DataPoolTabProps) {
-  const [dataset, setDataset] = useState<Dataset | null>(null)
+  const [dataStore, setDataStore] = useState<DataStore | null>(null)
   const [folders, setFolders] = useState<FolderInfo[]>([])
   const [images, setImages] = useState<ImageMeta[]>([])
   const [totalImages, setTotalImages] = useState(0)
@@ -177,30 +177,30 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
   // -- Data fetching --
 
   useEffect(() => {
-    initDataset()
+    initDataStore()
   }, [projectId])
 
   useEffect(() => {
-    if (dataset) {
+    if (dataStore) {
       fetchFolderContents(currentPath)
     }
-  }, [dataset?.id, currentPath])
+  }, [dataStore?.id, currentPath])
 
-  async function initDataset() {
+  async function initDataStore() {
     setLoading(true)
     setError(null)
     try {
-      const res = await datasetsApi.list(projectId)
+      const res = await dataStoresApi.list(projectId)
       if (res.data.length > 0) {
-        setDataset(res.data[0])
+        setDataStore(res.data[0])
       } else {
-        const created = await datasetsApi.create(projectId, {
+        const created = await dataStoresApi.create(projectId, {
           name: 'Default Pool',
         })
-        setDataset(created.data)
+        setDataStore(created.data)
       }
     } catch {
-      setError('\uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('데이터를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -209,17 +209,17 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
   const PAGE_SIZE = 50
 
   async function fetchFolderContents(path: string) {
-    if (!dataset) return
+    if (!dataStore) return
     const isInitialLoad =
       folders.length === 0 && images.length === 0 && totalImages === 0
     if (isInitialLoad) setContentsLoading(true)
     try {
-      const res = await imagesApi.getFolderContents(dataset.id, path)
+      const res = await imagesApi.getFolderContents(dataStore.id, path)
       setFolders(res.data.folders)
       setImages(res.data.images)
       setTotalImages(res.data.total_images)
     } catch {
-      setError('\uD3F4\uB354 \uB0B4\uC6A9\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('폴더 내용을 불러오지 못했습니다.')
     } finally {
       setContentsLoading(false)
     }
@@ -231,11 +231,11 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
   }
 
   const loadMoreImages = useCallback(async () => {
-    if (!dataset || loadingMore || images.length >= totalImages) return
+    if (!dataStore || loadingMore || images.length >= totalImages) return
     setLoadingMore(true)
     try {
       const res = await imagesApi.getFolderContents(
-        dataset.id,
+        dataStore.id,
         currentPath,
         images.length,
         PAGE_SIZE,
@@ -246,12 +246,12 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
     } finally {
       setLoadingMore(false)
     }
-  }, [dataset, currentPath, images.length, totalImages, loadingMore])
+  }, [dataStore, currentPath, images.length, totalImages, loadingMore])
 
   // -- Upload --
 
   const processUploadQueue = useCallback(async () => {
-    if (isUploadingRef.current || !dataset) return
+    if (isUploadingRef.current || !dataStore) return
     isUploadingRef.current = true
 
     while (uploadQueueRef.current.length > 0) {
@@ -271,14 +271,14 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
 
       try {
         const res = await imagesApi.upload(
-          dataset.id,
+          dataStore.id,
           job.files,
           effectivePaths,
           (uploaded) => {
             setUploadProgress({ uploaded, total: remainingTotal })
           },
         )
-        setDataset((prev) =>
+        setDataStore((prev) =>
           prev
             ? { ...prev, image_count: prev.image_count + res.data.length }
             : prev,
@@ -300,7 +300,7 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
 
     isUploadingRef.current = false
     setUploadProgress(null)
-  }, [dataset, currentPath])
+  }, [dataStore, currentPath])
 
   const handleUpload = useCallback(
     (files: File[], folderPaths?: string[], targetFolder?: string) => {
@@ -413,9 +413,9 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
 
   async function handleDeleteImage(imageId: number) {
     const confirmed = await confirm({
-      title: '\uC774\uBBF8\uC9C0 \uC0AD\uC81C',
-      description: '\uC774\uBBF8\uC9C0\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',
-      confirmLabel: '\uC0AD\uC81C',
+      title: '이미지 삭제',
+      description: '이미지를 삭제하시겠습니까?',
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
@@ -423,30 +423,30 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
       await imagesApi.delete(imageId)
       setImages((prev) => prev.filter((img) => img.id !== imageId))
       setTotalImages((prev) => Math.max(0, prev - 1))
-      setDataset((prev) =>
+      setDataStore((prev) =>
         prev
           ? { ...prev, image_count: Math.max(0, prev.image_count - 1) }
           : prev,
       )
       treeRef.current?.refresh()
     } catch {
-      await showAlert({ title: '\uC774\uBBF8\uC9C0 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '이미지 삭제에 실패했습니다.' })
     }
   }
 
   async function handleDeleteFolder(folderPath: string) {
-    if (!dataset) return
+    if (!dataStore) return
     const folderName =
       folderPath.replace(/\/$/, '').split('/').pop() || folderPath
     const confirmed = await confirm({
-      title: '\uD3F4\uB354 \uC0AD\uC81C',
-      description: `"${folderName}" \uD3F4\uB354\uC640 \uBAA8\uB4E0 \uD558\uC704 \uC774\uBBF8\uC9C0\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`,
-      confirmLabel: '\uC0AD\uC81C',
+      title: '폴더 삭제',
+      description: `"${folderName}" 폴더와 모든 하위 이미지를 삭제하시겠습니까?`,
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
     try {
-      await imagesApi.deleteFolder(dataset.id, folderPath)
+      await imagesApi.deleteFolder(dataStore.id, folderPath)
       if (currentPath === folderPath || currentPath.startsWith(folderPath)) {
         const parts = folderPath.replace(/\/$/, '').split('/')
         parts.pop()
@@ -454,29 +454,29 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
       } else {
         await fetchFolderContents(currentPath)
       }
-      const refreshed = await datasetsApi.get(dataset.id)
-      setDataset(refreshed.data)
+      const refreshed = await dataStoresApi.get(dataStore.id)
+      setDataStore(refreshed.data)
       treeRef.current?.refresh()
     } catch {
-      await showAlert({ title: '\uD3F4\uB354 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '폴더 삭제에 실패했습니다.' })
     }
   }
 
   async function handleCreateFolder(folderPath: string) {
-    if (!dataset) return
+    if (!dataStore) return
     try {
-      await imagesApi.createFolder(dataset.id, folderPath)
+      await imagesApi.createFolder(dataStore.id, folderPath)
       await fetchFolderContents(currentPath)
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
-      await showAlert({ title: detail || '\uD3F4\uB354 \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: detail || '폴더 생성에 실패했습니다.' })
       throw e
     }
   }
 
   function generateNewFolderName() {
-    const baseName = '\uC0C8 \uD3F4\uB354'
+    const baseName = '새 폴더'
     const existingNames = new Set(folders.map((f) => f.name))
     if (!existingNames.has(baseName)) return baseName
     let i = 1
@@ -499,7 +499,7 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
     if (!trimmed || trimmed === oldName) return
     if (trimmed.includes('/') || trimmed.includes('\\')) {
       await showAlert({
-        title: '\uD3F4\uB354 \uC774\uB984\uC5D0 / \uB610\uB294 \\ \uBB38\uC790\uB97C \uD3EC\uD568\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
+        title: '폴더 이름에 / 또는 \\ 문자를 포함할 수 없습니다.',
       })
       return
     }
@@ -515,14 +515,14 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
   }
 
   async function handleUpdateFolder(oldPath: string, newPath: string) {
-    if (!dataset) return
+    if (!dataStore) return
     try {
-      await imagesApi.updateFolder(dataset.id, oldPath, newPath)
+      await imagesApi.updateFolder(dataStore.id, oldPath, newPath)
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
       await showAlert({
-        title: detail || '\uD3F4\uB354 \uC5C5\uB370\uC774\uD2B8\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.',
+        title: detail || '폴더 업데이트에 실패했습니다.',
       })
       throw e
     }
@@ -540,11 +540,11 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
 
   handleBulkDeleteRef.current = handleBulkDelete
   async function handleBulkDelete() {
-    if (!dataset || selectedCount === 0) return
+    if (!dataStore || selectedCount === 0) return
     const confirmed = await confirm({
-      title: '\uD56D\uBAA9 \uC0AD\uC81C',
-      description: `\uC120\uD0DD\uD55C ${selectedCount}\uAC1C \uD56D\uBAA9\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`,
-      confirmLabel: '\uC0AD\uC81C',
+      title: '항목 삭제',
+      description: `선택한 ${selectedCount}개 항목을 삭제하시겠습니까?`,
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
@@ -554,20 +554,20 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
         await imagesApi.batchDelete(selectedImageIds)
       }
       if (selectedFolderPaths.length > 0) {
-        await imagesApi.batchDeleteFolders(dataset.id, selectedFolderPaths)
+        await imagesApi.batchDeleteFolders(dataStore.id, selectedFolderPaths)
       }
       clearSelection()
       await fetchFolderContents(currentPath)
-      const refreshed = await datasetsApi.get(dataset.id)
-      setDataset(refreshed.data)
+      const refreshed = await dataStoresApi.get(dataStore.id)
+      setDataStore(refreshed.data)
       treeRef.current?.refresh()
     } catch {
-      await showAlert({ title: '\uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '삭제에 실패했습니다.' })
     }
   }
 
   async function handleBulkMove(targetFolder: string) {
-    if (!dataset || selectedCount === 0) return
+    if (!dataStore || selectedCount === 0) return
 
     try {
       if (selectedImageIds.length > 0) {
@@ -575,7 +575,7 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
       }
       if (selectedFolderPaths.length > 0) {
         await imagesApi.batchMoveFolders(
-          dataset.id,
+          dataStore.id,
           selectedFolderPaths,
           targetFolder,
         )
@@ -583,11 +583,11 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
       setMoveDialogOpen(false)
       clearSelection()
       await fetchFolderContents(currentPath)
-      const refreshed = await datasetsApi.get(dataset.id)
-      setDataset(refreshed.data)
+      const refreshed = await dataStoresApi.get(dataStore.id)
+      setDataStore(refreshed.data)
       treeRef.current?.refresh()
     } catch {
-      await showAlert({ title: '\uC774\uB3D9\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '이동에 실패했습니다.' })
     }
   }
 
@@ -600,18 +600,18 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
     folderPaths: string[],
     targetPath: string,
   ) {
-    if (!dataset) return
+    if (!dataStore) return
     try {
       if (imageIds.length > 0) {
         await imagesApi.batchMove(imageIds, targetPath)
       }
       if (folderPaths.length > 0) {
-        await imagesApi.batchMoveFolders(dataset.id, folderPaths, targetPath)
+        await imagesApi.batchMoveFolders(dataStore.id, folderPaths, targetPath)
       }
       clearSelection()
       await refreshAll()
     } catch {
-      await showAlert({ title: '\uC774\uB3D9\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '이동에 실패했습니다.' })
     }
   }
 
@@ -657,13 +657,13 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {dataset && (
+      {dataStore && (
         <div className="mb-4 flex items-center gap-2">
           <Badge variant="secondary">
             <Images className="mr-1 h-3 w-3" />
-            {dataset.image_count}개
+            {dataStore.image_count}개
           </Badge>
-          <span className="text-sm text-muted-foreground">{dataset.name}</span>
+          <span className="text-sm text-muted-foreground">{dataStore.name}</span>
         </div>
       )}
 
@@ -708,13 +708,13 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
       {/* Main content: left tree + right preview */}
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: Tree */}
-        {dataset && (
+        {dataStore && (
           <div className="w-64 shrink-0 rounded-lg border p-2 overflow-y-auto">
             <FolderTreeView
               ref={treeRef}
-              datasetId={dataset.id}
-              rootLabel={dataset.name}
-              rootImageCount={dataset.image_count}
+              dataStoreId={dataStore.id}
+              rootLabel={dataStore.name}
+              rootImageCount={dataStore.image_count}
               selectedPath={currentPath}
               onSelectPath={setCurrentPath}
               onDeleteFolder={handleDeleteFolder}
@@ -722,8 +722,8 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
               onCreateFolder={handleCreateFolder}
               onDropItems={handleDropItemsOnTree}
               onRefresh={async () => {
-                const refreshed = await datasetsApi.get(dataset.id)
-                setDataset(refreshed.data)
+                const refreshed = await dataStoresApi.get(dataStore.id)
+                setDataStore(refreshed.data)
                 await refreshAll()
               }}
               onExternalFileDrop={async (entries, targetPath) => {
@@ -782,8 +782,8 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
                 <Upload className="h-10 w-10" />
                 <p className="text-sm font-medium">
                   {currentPath
-                    ? `"${currentPath.replace(/\/$/, '').split('/').pop()}" \uD3F4\uB354\uC5D0 \uC5C5\uB85C\uB4DC`
-                    : '\uD604\uC7AC \uC704\uCE58\uC5D0 \uD30C\uC77C \uC5C5\uB85C\uB4DC'}
+                    ? `"${currentPath.replace(/\/$/, '').split('/').pop()}" 폴더에 업로드`
+                    : '현재 위치에 파일 업로드'}
                 </p>
               </div>
             </div>
@@ -798,8 +798,8 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
               />
               <span className="text-sm text-muted-foreground">
                 {contentsLoading
-                  ? '\uB85C\uB529 \uC911...'
-                  : `${folders.length > 0 ? `${folders.length}\uAC1C \uD3F4\uB354, ` : ''}${totalImages}\uAC1C \uC774\uBBF8\uC9C0`}
+                  ? '로딩 중...'
+                  : `${folders.length > 0 ? `${folders.length}개 폴더, ` : ''}${totalImages}개 이미지`}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -921,9 +921,9 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
       </div>
 
       {/* Folder picker dialog for move */}
-      {dataset && (
+      {dataStore && (
         <FolderPickerDialog
-          datasetId={dataset.id}
+          dataStoreId={dataStore.id}
           open={moveDialogOpen}
           onClose={() => setMoveDialogOpen(false)}
           onSelect={handleBulkMove}

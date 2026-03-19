@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
-import { datasetsApi } from '@/api/datasets'
+import { dataStoresApi } from '@/api/data-stores'
 import { imagesApi } from '@/api/images'
-import { subsetsApi } from '@/api/subsets'
-import type { Dataset } from '@/types/dataset'
+import { tasksApi } from '@/api/tasks'
+import type { DataStore } from '@/types/data-store'
 import type { FolderInfo, ImageMeta } from '@/types/image'
 import {
   Dialog,
@@ -20,7 +20,7 @@ interface ImageSelectionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId: number
-  subsetId: number
+  taskId: number
   existingImageIds: number[]
   onAdded: (addedIds: number[]) => void
 }
@@ -39,12 +39,12 @@ export default function ImageSelectionModal({
   open,
   onOpenChange,
   projectId,
-  subsetId,
+  taskId,
   existingImageIds,
   onAdded,
 }: ImageSelectionModalProps) {
   const { confirmDialog, showAlert } = useConfirmDialog()
-  const [dataset, setDataset] = useState<Dataset | null>(null)
+  const [dataStore, setDataStore] = useState<DataStore | null>(null)
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([])
   const [selectedPath, setSelectedPath] = useState('')
   const [images, setImages] = useState<ImageMeta[]>([])
@@ -59,23 +59,23 @@ export default function ImageSelectionModal({
       setSelectedPath('')
       setTreeNodes([])
       setImages([])
-      initDataset()
+      initDataStore()
     }
   }, [open, projectId])
 
   useEffect(() => {
-    if (dataset && open) {
+    if (dataStore && open) {
       fetchImages(selectedPath)
     }
-  }, [dataset?.id, selectedPath, open])
+  }, [dataStore?.id, selectedPath, open])
 
-  async function initDataset() {
+  async function initDataStore() {
     setLoading(true)
     try {
-      const res = await datasetsApi.list(projectId)
+      const res = await dataStoresApi.list(projectId)
       if (res.data.length > 0) {
         const ds = res.data[0]
-        setDataset(ds)
+        setDataStore(ds)
         await loadRootFolders(ds.id)
       }
     } catch {
@@ -85,9 +85,9 @@ export default function ImageSelectionModal({
     }
   }
 
-  async function loadRootFolders(datasetId: number) {
+  async function loadRootFolders(dataStoreId: number) {
     try {
-      const res = await imagesApi.getFolderContents(datasetId, '')
+      const res = await imagesApi.getFolderContents(dataStoreId, '')
       const nodes: TreeNode[] = res.data.folders.map((f: FolderInfo) => ({
         path: f.path,
         name: f.name,
@@ -103,10 +103,10 @@ export default function ImageSelectionModal({
   }
 
   async function fetchImages(path: string) {
-    if (!dataset) return
+    if (!dataStore) return
     setImagesLoading(true)
     try {
-      const res = await imagesApi.getFolderContents(dataset.id, path)
+      const res = await imagesApi.getFolderContents(dataStore.id, path)
       setImages(res.data.images)
     } catch {
       /* silently fail */
@@ -116,7 +116,7 @@ export default function ImageSelectionModal({
   }
 
   async function toggleExpand(nodePath: string) {
-    if (!dataset) return
+    if (!dataStore) return
 
     const updateNodes = (nodes: TreeNode[]): TreeNode[] =>
       nodes.map((node) => {
@@ -146,7 +146,7 @@ export default function ImageSelectionModal({
     const node = findNode(treeNodes)
     if (node && !node.loaded) {
       try {
-        const res = await imagesApi.getFolderContents(dataset.id, nodePath)
+        const res = await imagesApi.getFolderContents(dataStore.id, nodePath)
         const children: TreeNode[] = res.data.folders.map(
           (f: FolderInfo) => ({
             path: f.path,
@@ -208,11 +208,11 @@ export default function ImageSelectionModal({
     if (selectedIds.length === 0) return
     setAdding(true)
     try {
-      await subsetsApi.addImages(subsetId, selectedIds)
+      await tasksApi.addImages(taskId, selectedIds)
       onAdded(selectedIds)
       onOpenChange(false)
     } catch {
-      await showAlert({ title: '\uC774\uBBF8\uC9C0 \uCD94\uAC00\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '이미지 추가에 실패했습니다.' })
     } finally {
       setAdding(false)
     }
@@ -290,7 +290,7 @@ export default function ImageSelectionModal({
               <Skeleton key={i} className="aspect-square w-full rounded-md" />
             ))}
           </div>
-        ) : !dataset ? (
+        ) : !dataStore ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
             Data Pool이 없습니다.
           </div>

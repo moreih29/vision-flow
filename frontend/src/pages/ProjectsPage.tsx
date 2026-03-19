@@ -164,7 +164,7 @@ export default function ProjectsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>데이터셋 {project.dataset_count}개</span>
+                    <span>데이터 저장소 {project.data_store_count}개</span>
                     <span>{formatDate(project.created_at)}</span>
                   </div>
                 </CardContent>

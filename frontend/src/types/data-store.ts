@@ -1,4 +1,4 @@
-export interface Dataset {
+export interface DataStore {
   id: number
   name: string
   description: string | null

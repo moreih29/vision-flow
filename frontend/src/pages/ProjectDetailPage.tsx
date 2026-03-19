@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { projectsApi } from '@/api/projects'
-import { subsetsApi } from '@/api/subsets'
-import { datasetsApi } from '@/api/datasets'
+import { tasksApi } from '@/api/tasks'
+import { dataStoresApi } from '@/api/data-stores'
 import type { Project } from '@/types/project'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import DataPoolTab from '@/components/DataPoolTab'
-import SubsetsTab from '@/components/SubsetsTab'
+import TasksTab from '@/components/TasksTab'
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -39,7 +39,7 @@ export default function ProjectDetailPage() {
   const [saving, setSaving] = useState(false)
 
   const [poolImageCount, setPoolImageCount] = useState<number | null>(null)
-  const [subsetCount, setSubsetCount] = useState<number | null>(null)
+  const [taskCount, setTaskCount] = useState<number | null>(null)
 
   useEffect(() => {
     fetchProject()
@@ -53,7 +53,7 @@ export default function ProjectDetailPage() {
       const res = await projectsApi.get(projectId)
       setProject(res.data)
     } catch {
-      setError('\uD504\uB85C\uC81D\uD2B8\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('프로젝트를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -61,16 +61,16 @@ export default function ProjectDetailPage() {
 
   async function fetchCounts() {
     try {
-      const [datasetsRes, subsetsRes] = await Promise.all([
-        datasetsApi.list(projectId),
-        subsetsApi.list(projectId),
+      const [dataStoresRes, tasksRes] = await Promise.all([
+        dataStoresApi.list(projectId),
+        tasksApi.list(projectId),
       ])
-      const totalImages = datasetsRes.data.reduce(
+      const totalImages = dataStoresRes.data.reduce(
         (sum, d) => sum + d.image_count,
         0,
       )
       setPoolImageCount(totalImages)
-      setSubsetCount(subsetsRes.data.length)
+      setTaskCount(tasksRes.data.length)
     } catch {
       // counts are cosmetic
     }
@@ -94,7 +94,7 @@ export default function ProjectDetailPage() {
       setProject(res.data)
       setEditDialogOpen(false)
     } catch {
-      await showAlert({ title: '\uD504\uB85C\uC81D\uD2B8 \uC218\uC815\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '프로젝트 수정에 실패했습니다.' })
     } finally {
       setSaving(false)
     }
@@ -148,11 +148,11 @@ export default function ProjectDetailPage() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="subsets">
-              Subsets
-              {subsetCount !== null && (
+            <TabsTrigger value="tasks">
+              Tasks
+              {taskCount !== null && (
                 <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {subsetCount}
+                  {taskCount}
                 </span>
               )}
             </TabsTrigger>
@@ -162,8 +162,8 @@ export default function ProjectDetailPage() {
             <DataPoolTab projectId={projectId} />
           </TabsContent>
 
-          <TabsContent value="subsets" className="flex-1 min-h-0 overflow-auto">
-            <SubsetsTab projectId={projectId} />
+          <TabsContent value="tasks" className="flex-1 min-h-0 overflow-auto">
+            <TasksTab projectId={projectId} />
           </TabsContent>
         </Tabs>
       </main>

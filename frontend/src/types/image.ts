@@ -7,7 +7,7 @@ export interface ImageMeta {
   width: number | null
   height: number | null
   mime_type: string
-  dataset_id: number
+  data_store_id: number
   uploaded_by: number
   created_at: string
 }

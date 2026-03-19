@@ -7,7 +7,7 @@ import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectDetailPage from '@/pages/ProjectDetailPage'
-import SubsetDetailPage from '@/pages/SubsetDetailPage'
+import TaskDetailPage from '@/pages/TaskDetailPage'
 
 function App() {
   const fetchMe = useAuthStore((s) => s.fetchMe)
@@ -46,10 +46,10 @@ function App() {
           }
         />
         <Route
-          path="/projects/:id/subsets/:subsetId"
+          path="/projects/:id/tasks/:taskId"
           element={
             <ProtectedRoute>
-              <SubsetDetailPage />
+              <TaskDetailPage />
             </ProtectedRoute>
           }
         />

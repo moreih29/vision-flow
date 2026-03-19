@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Images, Tag } from 'lucide-react'
-import { subsetsApi } from '@/api/subsets'
+import { tasksApi } from '@/api/tasks'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
-import type { Subset, TaskType } from '@/types/subset'
-import { TASK_LABELS, TASK_COLORS } from '@/types/subset'
+import type { Task, TaskType } from '@/types/task'
+import { TASK_LABELS, TASK_COLORS } from '@/types/task'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select'
 import { Progress } from '@/components/ui/progress'
 
-interface SubsetsTabProps {
+interface TasksTabProps {
   projectId: number
 }
 
@@ -38,30 +38,30 @@ const TASK_TYPES: TaskType[] = [
   'pose_estimation',
 ]
 
-export default function SubsetsTab({ projectId }: SubsetsTabProps) {
+export default function TasksTab({ projectId }: TasksTabProps) {
   const navigate = useNavigate()
   const { confirmDialog, showAlert } = useConfirmDialog()
-  const [subsets, setSubsets] = useState<Subset[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
-  const [newTask, setNewTask] = useState<TaskType>('classification')
+  const [newTaskType, setNewTaskType] = useState<TaskType>('classification')
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    fetchSubsets()
+    fetchTasks()
   }, [projectId])
 
-  async function fetchSubsets() {
+  async function fetchTasks() {
     setLoading(true)
     setError(null)
     try {
-      const res = await subsetsApi.list(projectId)
-      setSubsets(res.data)
+      const res = await tasksApi.list(projectId)
+      setTasks(res.data)
     } catch {
-      setError('\uC11C\uBE0C\uC14B\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('태스크를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -71,18 +71,18 @@ export default function SubsetsTab({ projectId }: SubsetsTabProps) {
     if (!newName.trim()) return
     setCreating(true)
     try {
-      const res = await subsetsApi.create(projectId, {
+      const res = await tasksApi.create(projectId, {
         name: newName.trim(),
         description: newDesc.trim() || undefined,
-        task: newTask,
+        task_type: newTaskType,
       })
-      setSubsets((prev) => [res.data, ...prev])
+      setTasks((prev) => [res.data, ...prev])
       setDialogOpen(false)
       setNewName('')
       setNewDesc('')
-      setNewTask('classification')
+      setNewTaskType('classification')
     } catch {
-      await showAlert({ title: '\uC11C\uBE0C\uC14B \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '태스크 생성에 실패했습니다.' })
     } finally {
       setCreating(false)
     }
@@ -91,7 +91,7 @@ export default function SubsetsTab({ projectId }: SubsetsTabProps) {
   function openDialog() {
     setNewName('')
     setNewDesc('')
-    setNewTask('classification')
+    setNewTaskType('classification')
     setDialogOpen(true)
   }
 
@@ -102,7 +102,7 @@ export default function SubsetsTab({ projectId }: SubsetsTabProps) {
           학습 목적에 맞게 이미지를 분류하고 라벨링하세요.
         </p>
         <Button size="sm" onClick={openDialog}>
-          <Plus className="mr-2 h-4 w-4" />새 서브셋
+          <Plus className="mr-2 h-4 w-4" />새 태스크
         </Button>
       </div>
 
@@ -118,26 +118,26 @@ export default function SubsetsTab({ projectId }: SubsetsTabProps) {
             <Skeleton key={i} className="h-40 w-full rounded-lg" />
           ))}
         </div>
-      ) : subsets.length === 0 ? (
+      ) : tasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
           <Tag className="h-10 w-10 text-muted-foreground" />
-          <p className="font-medium">서브셋이 없습니다</p>
+          <p className="font-medium">태스크가 없습니다</p>
           <p className="text-sm text-muted-foreground">
-            서브셋을 만들어 이미지를 분류하고 라벨링하세요
+            태스크를 만들어 이미지를 분류하고 라벨링하세요
           </p>
           <Button size="sm" onClick={openDialog}>
             <Plus className="mr-2 h-4 w-4" />
-            서브셋 만들기
+            태스크 만들기
           </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {subsets.map((subset) => (
-            <SubsetCard
-              key={subset.id}
-              subset={subset}
+          {tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
               onClick={() =>
-                navigate(`/projects/${projectId}/subsets/${subset.id}`)
+                navigate(`/projects/${projectId}/tasks/${task.id}`)
               }
             />
           ))}
@@ -147,49 +147,49 @@ export default function SubsetsTab({ projectId }: SubsetsTabProps) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>새 서브셋</DialogTitle>
+            <DialogTitle>새 태스크</DialogTitle>
             <DialogDescription>
-              서브셋 이름, 설명, Task 유형을 입력하세요.
+              태스크 이름, 설명, Task 유형을 입력하세요.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="subset-name">이름 *</Label>
+              <Label htmlFor="task-name">이름 *</Label>
               <Input
-                id="subset-name"
+                id="task-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="서브셋 이름"
+                placeholder="태스크 이름"
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="subset-desc">설명</Label>
+              <Label htmlFor="task-desc">설명</Label>
               <Textarea
-                id="subset-desc"
+                id="task-desc"
                 value={newDesc}
                 onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="서브셋 설명 (선택)"
+                placeholder="태스크 설명 (선택)"
                 rows={2}
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Task 유형 *</Label>
               <Select
-                value={newTask}
-                onValueChange={(v) => setNewTask(v as TaskType)}
+                value={newTaskType}
+                onValueChange={(v) => setNewTaskType(v as TaskType)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TASK_TYPES.map((task) => (
-                    <SelectItem key={task} value={task}>
+                  {TASK_TYPES.map((taskType) => (
+                    <SelectItem key={taskType} value={taskType}>
                       <div className="flex items-center gap-2">
                         <span
-                          className={`inline-block h-2 w-2 rounded-full ${TASK_COLORS[task]}`}
+                          className={`inline-block h-2 w-2 rounded-full ${TASK_COLORS[taskType]}`}
                         />
-                        {TASK_LABELS[task]}
+                        {TASK_LABELS[taskType]}
                       </div>
                     </SelectItem>
                   ))}
@@ -219,17 +219,17 @@ export default function SubsetsTab({ projectId }: SubsetsTabProps) {
   )
 }
 
-// --- SubsetCard ---
+// --- TaskCard ---
 
-interface SubsetCardProps {
-  subset: Subset
+interface TaskCardProps {
+  task: Task
   onClick: () => void
 }
 
-function SubsetCard({ subset, onClick }: SubsetCardProps) {
+function TaskCard({ task, onClick }: TaskCardProps) {
   const labelingProgress =
-    subset.image_count > 0
-      ? Math.round((subset.labeled_count / subset.image_count) * 100)
+    task.image_count > 0
+      ? Math.round((task.labeled_count / task.image_count) * 100)
       : 0
 
   return (
@@ -239,28 +239,28 @@ function SubsetCard({ subset, onClick }: SubsetCardProps) {
       className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold leading-tight">{subset.name}</h3>
+        <h3 className="font-semibold leading-tight">{task.name}</h3>
         <span
-          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium text-white ${TASK_COLORS[subset.task]}`}
+          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium text-white ${TASK_COLORS[task.task_type]}`}
         >
-          {TASK_LABELS[subset.task]}
+          {TASK_LABELS[task.task_type]}
         </span>
       </div>
 
-      {subset.description && (
+      {task.description && (
         <p className="line-clamp-2 text-sm text-muted-foreground">
-          {subset.description}
+          {task.description}
         </p>
       )}
 
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
           <Images className="h-3.5 w-3.5" />
-          {subset.image_count}개
+          {task.image_count}개
         </span>
         <span className="flex items-center gap-1">
           <Tag className="h-3.5 w-3.5" />
-          {subset.class_count}개 클래스
+          {task.class_count}개 클래스
         </span>
       </div>
 

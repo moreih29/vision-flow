@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 
 interface FolderPickerDialogProps {
-  datasetId: number
+  dataStoreId: number
   open: boolean
   onClose: () => void
   onSelect: (targetFolder: string) => void
@@ -20,7 +20,7 @@ interface FolderPickerDialogProps {
 }
 
 export default function FolderPickerDialog({
-  datasetId,
+  dataStoreId,
   open,
   onClose,
   onSelect,
@@ -35,12 +35,12 @@ export default function FolderPickerDialog({
       setLoading(true)
       setSelected('')
       imagesApi
-        .getAllFolders(datasetId)
+        .getAllFolders(dataStoreId)
         .then((res) => setFolders(res.data))
         .catch(() => setFolders([]))
         .finally(() => setLoading(false))
     }
-  }, [open, datasetId])
+  }, [open, dataStoreId])
 
   const excludeSet = new Set(excludePaths)
   const available = folders.filter((f) => !excludeSet.has(f))

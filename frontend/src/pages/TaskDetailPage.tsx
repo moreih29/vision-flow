@@ -10,11 +10,11 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react'
-import { subsetsApi } from '@/api/subsets'
+import { tasksApi } from '@/api/tasks'
 import { labelClassesApi } from '@/api/label-classes'
 import { imagesApi } from '@/api/images'
-import type { Subset } from '@/types/subset'
-import { TASK_LABELS, TASK_COLORS } from '@/types/subset'
+import type { Task } from '@/types/task'
+import { TASK_LABELS, TASK_COLORS } from '@/types/task'
 import type { LabelClass } from '@/types/label-class'
 import type { ImageMeta } from '@/types/image'
 import { Button } from '@/components/ui/button'
@@ -23,14 +23,14 @@ import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import ImageSelectionModal from '@/components/ImageSelectionModal'
 
-export default function SubsetDetailPage() {
-  const { id, subsetId } = useParams<{ id: string; subsetId: string }>()
+export default function TaskDetailPage() {
+  const { id, taskId } = useParams<{ id: string; taskId: string }>()
   const navigate = useNavigate()
   const projectId = Number(id)
-  const subsetIdNum = Number(subsetId)
+  const taskIdNum = Number(taskId)
   const { confirmDialog, confirm, showAlert } = useConfirmDialog()
 
-  const [subset, setSubset] = useState<Subset | null>(null)
+  const [task, setTask] = useState<Task | null>(null)
   const [images, setImages] = useState<ImageMeta[]>([])
   const [classes, setClasses] = useState<LabelClass[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,7 +39,7 @@ export default function SubsetDetailPage() {
   const [addImageModalOpen, setAddImageModalOpen] = useState(false)
   const [previewMode, setPreviewMode] = useState<'grid' | 'list'>(() => {
     return (
-      (localStorage.getItem('subset_preview_mode') as 'grid' | 'list') ||
+      (localStorage.getItem('task_preview_mode') as 'grid' | 'list') ||
       'grid'
     )
   })
@@ -51,18 +51,18 @@ export default function SubsetDetailPage() {
 
   useEffect(() => {
     fetchAll()
-  }, [subsetIdNum])
+  }, [taskIdNum])
 
   async function fetchAll() {
     setLoading(true)
     setError(null)
     try {
-      const [subsetRes, classesRes, imagesRes] = await Promise.all([
-        subsetsApi.get(subsetIdNum),
-        labelClassesApi.list(subsetIdNum),
-        subsetsApi.getImages(subsetIdNum),
+      const [taskRes, classesRes, imagesRes] = await Promise.all([
+        tasksApi.get(taskIdNum),
+        labelClassesApi.list(taskIdNum),
+        tasksApi.getImages(taskIdNum),
       ])
-      setSubset(subsetRes.data)
+      setTask(taskRes.data)
       setClasses(classesRes.data)
       const rawImages =
         (
@@ -73,7 +73,7 @@ export default function SubsetDetailPage() {
         (imagesRes.data as { image: ImageMeta; image_id: number }[])
       setImages(rawImages.map((si: { image: ImageMeta }) => si.image))
     } catch {
-      setError('\uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('데이터를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -81,22 +81,22 @@ export default function SubsetDetailPage() {
 
   async function handleRemoveImage(imageId: number) {
     const confirmed = await confirm({
-      title: '\uC774\uBBF8\uC9C0 \uC81C\uAC70',
-      description: '\uC774 \uC774\uBBF8\uC9C0\uB97C \uC11C\uBE0C\uC14B\uC5D0\uC11C \uC81C\uAC70\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',
-      confirmLabel: '\uC0AD\uC81C',
+      title: '이미지 제거',
+      description: '이 이미지를 태스크에서 제거하시겠습니까?',
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
     try {
-      await subsetsApi.removeImages(subsetIdNum, [imageId])
+      await tasksApi.removeImages(taskIdNum, [imageId])
       setImages((prev) => prev.filter((img) => img.id !== imageId))
-      setSubset((prev) =>
+      setTask((prev) =>
         prev
           ? { ...prev, image_count: Math.max(0, prev.image_count - 1) }
           : prev,
       )
     } catch {
-      await showAlert({ title: '\uC774\uBBF8\uC9C0 \uC81C\uAC70\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '이미지 제거에 실패했습니다.' })
     }
   }
 
@@ -104,19 +104,19 @@ export default function SubsetDetailPage() {
     if (!newClassName.trim()) return
     setSavingClass(true)
     try {
-      const res = await labelClassesApi.create(subsetIdNum, {
+      const res = await labelClassesApi.create(taskIdNum, {
         name: newClassName.trim(),
         color: newClassColor,
       })
       setClasses((prev) => [...prev, res.data])
-      setSubset((prev) =>
+      setTask((prev) =>
         prev ? { ...prev, class_count: prev.class_count + 1 } : prev,
       )
       setNewClassName('')
       setNewClassColor('#3b82f6')
       setAddingClass(false)
     } catch {
-      await showAlert({ title: '\uD074\uB798\uC2A4 \uCD94\uAC00\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '클래스 추가에 실패했습니다.' })
     } finally {
       setSavingClass(false)
     }
@@ -124,32 +124,32 @@ export default function SubsetDetailPage() {
 
   async function handleDeleteClass(classId: number) {
     const confirmed = await confirm({
-      title: '\uD074\uB798\uC2A4 \uC0AD\uC81C',
-      description: '\uD074\uB798\uC2A4\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',
-      confirmLabel: '\uC0AD\uC81C',
+      title: '클래스 삭제',
+      description: '클래스를 삭제하시겠습니까?',
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
     try {
       await labelClassesApi.delete(classId)
       setClasses((prev) => prev.filter((c) => c.id !== classId))
-      setSubset((prev) =>
+      setTask((prev) =>
         prev
           ? { ...prev, class_count: Math.max(0, prev.class_count - 1) }
           : prev,
       )
     } catch {
-      await showAlert({ title: '\uD074\uB798\uC2A4 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '클래스 삭제에 실패했습니다.' })
     }
   }
 
   function handleImagesAdded(addedIds: number[]) {
-    subsetsApi.getImages(subsetIdNum).then((res) => {
+    tasksApi.getImages(taskIdNum).then((res) => {
       const rawImages =
         (res.data as { images?: { image: ImageMeta }[] }).images ?? []
       setImages(rawImages.map((si: { image: ImageMeta }) => si.image))
     })
-    setSubset((prev) =>
+    setTask((prev) =>
       prev
         ? { ...prev, image_count: prev.image_count + addedIds.length }
         : prev,
@@ -157,8 +157,8 @@ export default function SubsetDetailPage() {
   }
 
   const labelingProgress =
-    subset && subset.image_count > 0
-      ? Math.round((subset.labeled_count / subset.image_count) * 100)
+    task && task.image_count > 0
+      ? Math.round((task.labeled_count / task.image_count) * 100)
       : 0
 
   return (
@@ -176,22 +176,22 @@ export default function SubsetDetailPage() {
             <Skeleton className="h-6 w-48" />
           ) : (
             <div className="flex flex-1 flex-wrap items-center gap-3">
-              <h1 className="text-xl font-bold">{subset?.name}</h1>
-              {subset && (
+              <h1 className="text-xl font-bold">{task?.name}</h1>
+              {task && (
                 <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white ${TASK_COLORS[subset.task]}`}
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white ${TASK_COLORS[task.task_type]}`}
                 >
-                  {TASK_LABELS[subset.task]}
+                  {TASK_LABELS[task.task_type]}
                 </span>
               )}
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Images className="h-3.5 w-3.5" />
-                  {subset?.image_count ?? 0}개
+                  {task?.image_count ?? 0}개
                 </span>
                 <span className="flex items-center gap-1">
                   <Tag className="h-3.5 w-3.5" />
-                  {subset?.class_count ?? 0}개 클래스
+                  {task?.class_count ?? 0}개 클래스
                 </span>
               </div>
             </div>
@@ -223,7 +223,7 @@ export default function SubsetDetailPage() {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold">이미지</h2>
-                {subset && subset.image_count > 0 && (
+                {task && task.image_count > 0 && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Progress value={labelingProgress} className="h-1.5 w-24" />
                     <span>라벨링 {labelingProgress}%</span>
@@ -238,7 +238,7 @@ export default function SubsetDetailPage() {
                     className="h-7 w-7"
                     onClick={() => {
                       setPreviewMode('grid')
-                      localStorage.setItem('subset_preview_mode', 'grid')
+                      localStorage.setItem('task_preview_mode', 'grid')
                     }}
                     title="격자 보기"
                   >
@@ -250,7 +250,7 @@ export default function SubsetDetailPage() {
                     className="h-7 w-7"
                     onClick={() => {
                       setPreviewMode('list')
-                      localStorage.setItem('subset_preview_mode', 'list')
+                      localStorage.setItem('task_preview_mode', 'list')
                     }}
                     title="리스트 보기"
                   >
@@ -285,7 +285,7 @@ export default function SubsetDetailPage() {
             ) : previewMode === 'grid' ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {images.map((image) => (
-                  <SubsetImageCard
+                  <TaskImageCard
                     key={image.id}
                     image={image}
                     onRemove={() => handleRemoveImage(image.id)}
@@ -293,7 +293,7 @@ export default function SubsetDetailPage() {
                 ))}
               </div>
             ) : (
-              <SubsetImageListView
+              <TaskImageListView
                 images={images}
                 onRemove={handleRemoveImage}
               />
@@ -410,7 +410,7 @@ export default function SubsetDetailPage() {
         open={addImageModalOpen}
         onOpenChange={setAddImageModalOpen}
         projectId={projectId}
-        subsetId={subsetIdNum}
+        taskId={taskIdNum}
         existingImageIds={images.map((img) => img.id)}
         onAdded={handleImagesAdded}
       />
@@ -419,14 +419,14 @@ export default function SubsetDetailPage() {
   )
 }
 
-// --- SubsetImageCard ---
+// --- TaskImageCard ---
 
-interface SubsetImageCardProps {
+interface TaskImageCardProps {
   image: ImageMeta
   onRemove: () => void
 }
 
-function SubsetImageCard({ image, onRemove }: SubsetImageCardProps) {
+function TaskImageCard({ image, onRemove }: TaskImageCardProps) {
   return (
     <div className="group relative flex flex-col gap-1">
       <div className="relative overflow-hidden rounded-md border bg-muted aspect-square">
@@ -458,14 +458,14 @@ function SubsetImageCard({ image, onRemove }: SubsetImageCardProps) {
   )
 }
 
-// --- SubsetImageListView ---
+// --- TaskImageListView ---
 
-interface SubsetImageListViewProps {
+interface TaskImageListViewProps {
   images: ImageMeta[]
   onRemove: (id: number) => void
 }
 
-function SubsetImageListView({ images, onRemove }: SubsetImageListViewProps) {
+function TaskImageListView({ images, onRemove }: TaskImageListViewProps) {
   function formatBytes(bytes: number) {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`

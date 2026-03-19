@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Images, LayoutGrid, ListTree } from 'lucide-react'
-import { datasetsApi } from '@/api/datasets'
+import { dataStoresApi } from '@/api/data-stores'
 import { imagesApi } from '@/api/images'
-import type { Dataset } from '@/types/dataset'
+import type { DataStore } from '@/types/data-store'
 import type { FolderContentsResponse, FolderInfo, ImageMeta } from '@/types/image'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,13 +15,13 @@ import FolderBreadcrumb from '@/components/FolderBreadcrumb'
 import FolderTreeView from '@/components/FolderTreeView'
 import { useConfirmDialog } from '@/hooks/useConfirmDialog'
 
-export default function DatasetDetailPage() {
+export default function DataStoreDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const datasetId = Number(id)
+  const dataStoreId = Number(id)
   const { confirmDialog, confirm, showAlert } = useConfirmDialog()
 
-  const [dataset, setDataset] = useState<Dataset | null>(null)
+  const [dataStore, setDataStore] = useState<DataStore | null>(null)
   const [folderContents, setFolderContents] =
     useState<FolderContentsResponse | null>(null)
   const [currentPath, setCurrentPath] = useState('')
@@ -33,21 +33,21 @@ export default function DatasetDetailPage() {
   const [treeKey, setTreeKey] = useState(0)
 
   useEffect(() => {
-    fetchDataset()
-  }, [datasetId])
+    fetchDataStore()
+  }, [dataStoreId])
 
   useEffect(() => {
     fetchFolderContents(currentPath)
-  }, [datasetId, currentPath])
+  }, [dataStoreId, currentPath])
 
-  async function fetchDataset() {
+  async function fetchDataStore() {
     setLoading(true)
     setError(null)
     try {
-      const res = await datasetsApi.get(datasetId)
-      setDataset(res.data)
+      const res = await dataStoresApi.get(dataStoreId)
+      setDataStore(res.data)
     } catch {
-      setError('\uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('데이터를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -56,10 +56,10 @@ export default function DatasetDetailPage() {
   async function fetchFolderContents(path: string) {
     setContentsLoading(true)
     try {
-      const res = await imagesApi.getFolderContents(datasetId, path)
+      const res = await imagesApi.getFolderContents(dataStoreId, path)
       setFolderContents(res.data)
     } catch {
-      setError('\uD3F4\uB354 \uB0B4\uC6A9\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
+      setError('폴더 내용을 불러오지 못했습니다.')
     } finally {
       setContentsLoading(false)
     }
@@ -69,8 +69,8 @@ export default function DatasetDetailPage() {
     async (files: File[], folderPaths?: string[]) => {
       setUploading(true)
       try {
-        const res = await imagesApi.upload(datasetId, files, folderPaths)
-        setDataset((prev) =>
+        const res = await imagesApi.upload(dataStoreId, files, folderPaths)
+        setDataStore((prev) =>
           prev
             ? { ...prev, image_count: prev.image_count + res.data.length }
             : prev,
@@ -89,14 +89,14 @@ export default function DatasetDetailPage() {
         setUploading(false)
       }
     },
-    [datasetId, currentPath],
+    [dataStoreId, currentPath],
   )
 
   async function handleDeleteImage(imageId: number) {
     const confirmed = await confirm({
-      title: '\uC774\uBBF8\uC9C0 \uC0AD\uC81C',
-      description: '\uC774\uBBF8\uC9C0\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',
-      confirmLabel: '\uC0AD\uC81C',
+      title: '이미지 삭제',
+      description: '이미지를 삭제하시겠습니까?',
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
@@ -111,26 +111,26 @@ export default function DatasetDetailPage() {
             }
           : prev,
       )
-      setDataset((prev) =>
+      setDataStore((prev) =>
         prev
           ? { ...prev, image_count: Math.max(0, prev.image_count - 1) }
           : prev,
       )
     } catch {
-      await showAlert({ title: '\uC774\uBBF8\uC9C0 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '이미지 삭제에 실패했습니다.' })
     }
   }
 
   async function handleDeleteFolder(folderPath: string) {
     const confirmed = await confirm({
-      title: '\uD3F4\uB354 \uC0AD\uC81C',
-      description: `"${folderPath}" \uD3F4\uB354\uC640 \uD558\uC704 \uC774\uBBF8\uC9C0\uB97C \uBAA8\uB450 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`,
-      confirmLabel: '\uC0AD\uC81C',
+      title: '폴더 삭제',
+      description: `"${folderPath}" 폴더와 하위 이미지를 모두 삭제하시겠습니까?`,
+      confirmLabel: '삭제',
       variant: 'destructive',
     })
     if (!confirmed) return
     try {
-      await imagesApi.deleteFolder(datasetId, folderPath)
+      await imagesApi.deleteFolder(dataStoreId, folderPath)
       if (
         currentPath === folderPath ||
         currentPath.startsWith(folderPath + '/')
@@ -139,10 +139,10 @@ export default function DatasetDetailPage() {
       } else {
         await fetchFolderContents(currentPath)
       }
-      await fetchDataset()
+      await fetchDataStore()
       setTreeKey((k) => k + 1)
     } catch {
-      await showAlert({ title: '\uD3F4\uB354 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '폴더 삭제에 실패했습니다.' })
     }
   }
 
@@ -165,8 +165,8 @@ export default function DatasetDetailPage() {
             variant="ghost"
             size="icon"
             onClick={() =>
-              dataset
-                ? navigate(`/projects/${dataset.project_id}`)
+              dataStore
+                ? navigate(`/projects/${dataStore.project_id}`)
                 : navigate('/projects')
             }
           >
@@ -177,16 +177,16 @@ export default function DatasetDetailPage() {
           ) : (
             <div className="flex flex-1 items-center gap-3">
               <div>
-                <h1 className="text-xl font-bold">{dataset?.name}</h1>
-                {dataset?.description && (
+                <h1 className="text-xl font-bold">{dataStore?.name}</h1>
+                {dataStore?.description && (
                   <p className="text-sm text-muted-foreground">
-                    {dataset.description}
+                    {dataStore.description}
                   </p>
                 )}
               </div>
               <Badge variant="secondary">
                 <Images className="mr-1 h-3 w-3" />
-                {dataset?.image_count ?? 0}개
+                {dataStore?.image_count ?? 0}개
               </Badge>
             </div>
           )}
@@ -282,7 +282,7 @@ export default function DatasetDetailPage() {
             <div className="w-64 shrink-0 rounded-lg border p-2">
               <FolderTreeView
                 key={treeKey}
-                datasetId={datasetId}
+                dataStoreId={dataStoreId}
                 selectedPath={currentPath}
                 onSelectPath={setCurrentPath}
                 onDeleteFolder={handleDeleteFolder}
@@ -304,7 +304,7 @@ export default function DatasetDetailPage() {
                     <h2 className="text-lg font-semibold">
                       {currentPath
                         ? currentPath.split('/').pop()
-                        : '\uC804\uCCB4'}
+                        : '전체'}
                     </h2>
                     <span className="text-sm text-muted-foreground">
                       총 {images.length}개

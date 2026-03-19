@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 
 import httpx
-import pytest
+import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -13,22 +13,18 @@ from app.main import app
 # ---------------------------------------------------------------------------
 # Test database URL – use a dedicated test database
 # ---------------------------------------------------------------------------
-_BASE_URL = settings.database_url.rsplit("/", 1)[0]  # everything before db name
+_BASE_URL = settings.database_url.rsplit("/", 1)[0]
 TEST_DATABASE_URL = f"{_BASE_URL}/vision_flow_test"
 
-engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-TestingSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
 
 # ---------------------------------------------------------------------------
-# Session-scoped: create the test database & tables once per test session
+# Per-test: create engine, tables, session, cleanup
 # ---------------------------------------------------------------------------
-@pytest.fixture(scope="session")
-async def _setup_database():
-    """Create the vision_flow_test database if it doesn't exist, then create all tables."""
-    # Connect to the default 'postgres' database to create the test DB
-    admin_url = f"{_BASE_URL}/postgres"
-    admin_engine = create_async_engine(admin_url, isolation_level="AUTOCOMMIT")
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """매 테스트마다 테이블 생성 → 세션 제공 → 롤백 → 테이블 삭제."""
+    # DB 생성 (존재하지 않을 때만)
+    admin_engine = create_async_engine(f"{_BASE_URL}/postgres", isolation_level="AUTOCOMMIT")
     async with admin_engine.connect() as conn:
         result = await conn.execute(
             text("SELECT 1 FROM pg_database WHERE datname = 'vision_flow_test'")
@@ -37,14 +33,18 @@ async def _setup_database():
             await conn.execute(text("CREATE DATABASE vision_flow_test"))
     await admin_engine.dispose()
 
-    # Import all models so Base.metadata is fully populated
+    # 모델 import + 테이블 생성
     import app.models  # noqa: F401
 
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
-    yield
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        yield session
+        await session.rollback()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -52,20 +52,9 @@ async def _setup_database():
 
 
 # ---------------------------------------------------------------------------
-# Per-test: provide a fresh DB session with rollback isolation
-# ---------------------------------------------------------------------------
-@pytest.fixture
-async def db_session(_setup_database) -> AsyncGenerator[AsyncSession, None]:
-    async with TestingSessionLocal() as session:
-        yield session
-        # Roll back any uncommitted changes so tests stay independent
-        await session.rollback()
-
-
-# ---------------------------------------------------------------------------
 # Per-test: httpx.AsyncClient wired to the FastAPI app
 # ---------------------------------------------------------------------------
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[httpx.AsyncClient, None]:
     async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
@@ -82,7 +71,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[httpx.AsyncClient, 
 # ---------------------------------------------------------------------------
 # Helper: register + login and return auth headers
 # ---------------------------------------------------------------------------
-@pytest.fixture
+@pytest_asyncio.fixture
 async def auth_headers(client: httpx.AsyncClient) -> dict[str, str]:
     """Register a test user and return Authorization headers."""
     await client.post(
@@ -90,12 +79,12 @@ async def auth_headers(client: httpx.AsyncClient) -> dict[str, str]:
         json={
             "email": "test@example.com",
             "name": "Test User",
-            "password": "testpassword123",
+            "password": "Test1234!",
         },
     )
     resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "test@example.com", "password": "testpassword123"},
+        json={"email": "test@example.com", "password": "Test1234!"},
     )
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

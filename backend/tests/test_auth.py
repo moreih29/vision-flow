@@ -7,7 +7,7 @@ async def test_register_success(client: httpx.AsyncClient):
         json={
             "email": "new@example.com",
             "name": "New User",
-            "password": "password123",
+            "password": "Test1234!",
         },
     )
     assert resp.status_code == 201
@@ -23,14 +23,14 @@ async def test_register_duplicate_email(client: httpx.AsyncClient):
     payload = {
         "email": "dup@example.com",
         "name": "First",
-        "password": "password123",
+        "password": "Test1234!",
     }
     resp1 = await client.post("/api/v1/auth/register", json=payload)
     assert resp1.status_code == 201
 
     resp2 = await client.post("/api/v1/auth/register", json=payload)
     assert resp2.status_code == 409
-    assert "already registered" in resp2.json()["detail"].lower()
+    assert "already registered" in resp2.json()["error"]["message"].lower()
 
 
 async def test_login_success(client: httpx.AsyncClient):
@@ -40,12 +40,12 @@ async def test_login_success(client: httpx.AsyncClient):
         json={
             "email": "login@example.com",
             "name": "Login User",
-            "password": "password123",
+            "password": "Test1234!",
         },
     )
     resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "login@example.com", "password": "password123"},
+        json={"email": "login@example.com", "password": "Test1234!"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -59,7 +59,7 @@ async def test_login_wrong_password(client: httpx.AsyncClient):
         json={
             "email": "wrongpw@example.com",
             "name": "Wrong PW",
-            "password": "password123",
+            "password": "Test1234!",
         },
     )
     resp = await client.post(

@@ -1,6 +1,6 @@
 # Frontend 리팩토링
 
-**Status**: In Progress
+**Status**: Completed
 **Depends on**: None
 
 ## Tasks
@@ -20,7 +20,7 @@
 - [x] 프로젝트 API를 React Query hooks로 전환 (useProjects, useCreateProject, useDeleteProject)
 - [x] 태스크 API를 React Query hooks로 전환 (useTasks, useCreateTask, useDeleteTask)
 - [x] DataStore API를 React Query hooks로 전환 (useDataStores, useCreateDataStore)
-- [ ] 이미지/폴더 API를 React Query hooks로 전환
+- [-] 이미지/폴더 API를 React Query hooks로 전환 → 별도 브랜치 (DataPoolTab 리팩토링과 함께)
 
 ### 대형 컴포넌트 분할
 - [-] DataPoolTab (~800줄) → 별도 브랜치에서 진행 (리스크 큼)

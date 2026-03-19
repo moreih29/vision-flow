@@ -1,6 +1,6 @@
 # Backend 품질 개선
 
-**Status**: In Progress
+**Status**: Completed
 **Depends on**: None
 
 ## Tasks
@@ -24,7 +24,7 @@
 - [x] 공통 페이지네이션 스키마 — PaginatedResponse[T] 제네릭 + TaskImageListResponse 적용
 
 ### 개선
-- [ ] Refresh Token 도입 검토 (현재 Access Token 7일은 보안 약점)
+- [-] Refresh Token 도입 검토 → 별도 이슈로 분리
 - [x] 비밀번호 강도 검증 추가 — field_validator (대소문자/숫자/특수문자)
 - [-] 배치 작업 트랜잭션 안전성 강화 → 별도 브랜치에서 진행
 - [-] 썸네일 생성 파이프라인 → 기능 작업 (Phase 3 이후)

@@ -10,13 +10,13 @@ class LabelClassService:
     async def create_class(
         self,
         db: AsyncSession,
-        subset_id: int,
+        task_id: int,
         class_in: LabelClassCreate,
     ) -> LabelClass:
         label_class = LabelClass(
             name=class_in.name,
             color=class_in.color,
-            subset_id=subset_id,
+            task_id=task_id,
         )
         db.add(label_class)
         await db.commit()
@@ -24,10 +24,10 @@ class LabelClassService:
         return label_class
 
     async def get_classes(
-        self, db: AsyncSession, subset_id: int
+        self, db: AsyncSession, task_id: int
     ) -> list[LabelClass]:
         result = await db.execute(
-            select(LabelClass).where(LabelClass.subset_id == subset_id)
+            select(LabelClass).where(LabelClass.task_id == task_id)
         )
         return list(result.scalars().all())
 

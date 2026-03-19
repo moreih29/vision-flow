@@ -1,6 +1,6 @@
 from app.schemas.user import UserCreate, UserLogin, UserResponse, UserUpdate, Token, TokenData
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
-from app.schemas.dataset import DatasetCreate, DatasetResponse, DatasetUpdate
+from app.schemas.data_store import DataStoreCreate, DataStoreResponse, DataStoreUpdate
 from app.schemas.image import (
     ImageResponse,
     ImageListResponse,
@@ -13,12 +13,12 @@ from app.schemas.image import (
     BatchFolderDeleteRequest,
     BatchFolderMoveRequest,
 )
-from app.schemas.subset import SubsetCreate, SubsetResponse, SubsetUpdate
-from app.schemas.subset_image import (
-    SubsetImageAdd,
-    SubsetImageRemove,
-    SubsetImageResponse,
-    SubsetImageListResponse,
+from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.schemas.task_image import (
+    TaskImageAdd,
+    TaskImageRemove,
+    TaskImageResponse,
+    TaskImageListResponse,
 )
 from app.schemas.label_class import LabelClassCreate, LabelClassResponse, LabelClassUpdate
 
@@ -32,9 +32,9 @@ __all__ = [
     "ProjectCreate",
     "ProjectResponse",
     "ProjectUpdate",
-    "DatasetCreate",
-    "DatasetResponse",
-    "DatasetUpdate",
+    "DataStoreCreate",
+    "DataStoreResponse",
+    "DataStoreUpdate",
     "ImageResponse",
     "ImageListResponse",
     "FolderInfo",
@@ -45,13 +45,13 @@ __all__ = [
     "BatchMoveRequest",
     "BatchFolderDeleteRequest",
     "BatchFolderMoveRequest",
-    "SubsetCreate",
-    "SubsetResponse",
-    "SubsetUpdate",
-    "SubsetImageAdd",
-    "SubsetImageRemove",
-    "SubsetImageResponse",
-    "SubsetImageListResponse",
+    "TaskCreate",
+    "TaskResponse",
+    "TaskUpdate",
+    "TaskImageAdd",
+    "TaskImageRemove",
+    "TaskImageResponse",
+    "TaskImageListResponse",
     "LabelClassCreate",
     "LabelClassResponse",
     "LabelClassUpdate",

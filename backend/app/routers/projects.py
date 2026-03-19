@@ -17,9 +17,9 @@ async def create_project(
 ) -> ProjectResponse:
     """Create a new project."""
     project = await project_service.create_project(db, current_user, project_in)
-    dataset_count = await project_service.get_dataset_count(db, project.id)
+    data_store_count = await project_service.get_data_store_count(db, project.id)
     response = ProjectResponse.model_validate(project)
-    response.dataset_count = dataset_count
+    response.data_store_count = data_store_count
     return response
 
 
@@ -32,9 +32,9 @@ async def list_projects(
     projects = await project_service.get_projects_by_user(db, current_user.id)
     result = []
     for project in projects:
-        dataset_count = await project_service.get_dataset_count(db, project.id)
+        data_store_count = await project_service.get_data_store_count(db, project.id)
         response = ProjectResponse.model_validate(project)
-        response.dataset_count = dataset_count
+        response.data_store_count = data_store_count
         result.append(response)
     return result
 
@@ -47,9 +47,9 @@ async def get_project(
 ) -> ProjectResponse:
     """Get a project by ID."""
     project = await project_service.get_project(db, project_id)
-    dataset_count = await project_service.get_dataset_count(db, project.id)
+    data_store_count = await project_service.get_data_store_count(db, project.id)
     response = ProjectResponse.model_validate(project)
-    response.dataset_count = dataset_count
+    response.data_store_count = data_store_count
     return response
 
 
@@ -64,9 +64,9 @@ async def update_project(
     project = await project_service.update_project(
         db, project_id, current_user.id, project_in
     )
-    dataset_count = await project_service.get_dataset_count(db, project.id)
+    data_store_count = await project_service.get_data_store_count(db, project.id)
     response = ProjectResponse.model_validate(project)
-    response.dataset_count = dataset_count
+    response.data_store_count = data_store_count
     return response
 
 

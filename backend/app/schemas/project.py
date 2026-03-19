@@ -20,6 +20,6 @@ class ProjectResponse(BaseModel):
     owner_id: int
     created_at: datetime
     updated_at: datetime
-    dataset_count: int = 0
+    data_store_count: int = 0
 
     model_config = {"from_attributes": True}

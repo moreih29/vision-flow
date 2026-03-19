@@ -1,7 +1,7 @@
 """initial schema
 
 Revision ID: 980c9ca3a283
-Revises: 
+Revises:
 Create Date: 2026-03-19 10:52:48.802232
 """
 from typing import Sequence, Union
@@ -42,7 +42,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_projects_id'), 'projects', ['id'], unique=False)
-    op.create_table('datasets',
+    op.create_table('data_stores',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
@@ -52,27 +52,28 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_datasets_id'), 'datasets', ['id'], unique=False)
-    op.create_table('subsets',
+    op.create_index(op.f('ix_data_stores_id'), 'data_stores', ['id'], unique=False)
+    op.create_table('tasks',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('task', sa.String(length=50), nullable=False),
+    sa.Column('task_type', sa.String(length=50), nullable=False),
+    sa.Column('status', sa.String(length=20), server_default='draft', nullable=False),
     sa.Column('project_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_subsets_id'), 'subsets', ['id'], unique=False)
+    op.create_index(op.f('ix_tasks_id'), 'tasks', ['id'], unique=False)
     op.create_table('folder_meta',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('dataset_id', sa.Integer(), nullable=False),
+    sa.Column('data_store_id', sa.Integer(), nullable=False),
     sa.Column('path', sa.String(length=1000), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ),
+    sa.ForeignKeyConstraint(['data_store_id'], ['data_stores.id'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('dataset_id', 'path')
+    sa.UniqueConstraint('data_store_id', 'path')
     )
     op.create_index(op.f('ix_folder_meta_id'), 'folder_meta', ['id'], unique=False)
     op.create_table('images',
@@ -85,10 +86,10 @@ def upgrade() -> None:
     sa.Column('height', sa.Integer(), nullable=True),
     sa.Column('mime_type', sa.String(length=100), nullable=False),
     sa.Column('folder_path', sa.String(length=1000), server_default='', nullable=False),
-    sa.Column('dataset_id', sa.Integer(), nullable=False),
+    sa.Column('data_store_id', sa.Integer(), nullable=False),
     sa.Column('uploaded_by', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ),
+    sa.ForeignKeyConstraint(['data_store_id'], ['data_stores.id'], ),
     sa.ForeignKeyConstraint(['uploaded_by'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -98,31 +99,31 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('color', sa.String(length=7), nullable=False),
-    sa.Column('subset_id', sa.Integer(), nullable=False),
+    sa.Column('task_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['subset_id'], ['subsets.id'], ),
+    sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('subset_id', 'name')
+    sa.UniqueConstraint('task_id', 'name')
     )
     op.create_index(op.f('ix_label_classes_id'), 'label_classes', ['id'], unique=False)
-    op.create_table('subset_images',
+    op.create_table('task_images',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('subset_id', sa.Integer(), nullable=False),
+    sa.Column('task_id', sa.Integer(), nullable=False),
     sa.Column('image_id', sa.Integer(), nullable=False),
     sa.Column('added_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['image_id'], ['images.id'], ),
-    sa.ForeignKeyConstraint(['subset_id'], ['subsets.id'], ),
+    sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('subset_id', 'image_id')
+    sa.UniqueConstraint('task_id', 'image_id')
     )
-    op.create_index(op.f('ix_subset_images_id'), 'subset_images', ['id'], unique=False)
+    op.create_index(op.f('ix_task_images_id'), 'task_images', ['id'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_index(op.f('ix_subset_images_id'), table_name='subset_images')
-    op.drop_table('subset_images')
+    op.drop_index(op.f('ix_task_images_id'), table_name='task_images')
+    op.drop_table('task_images')
     op.drop_index(op.f('ix_label_classes_id'), table_name='label_classes')
     op.drop_table('label_classes')
     op.drop_index(op.f('ix_images_id'), table_name='images')
@@ -130,10 +131,10 @@ def downgrade() -> None:
     op.drop_table('images')
     op.drop_index(op.f('ix_folder_meta_id'), table_name='folder_meta')
     op.drop_table('folder_meta')
-    op.drop_index(op.f('ix_subsets_id'), table_name='subsets')
-    op.drop_table('subsets')
-    op.drop_index(op.f('ix_datasets_id'), table_name='datasets')
-    op.drop_table('datasets')
+    op.drop_index(op.f('ix_tasks_id'), table_name='tasks')
+    op.drop_table('tasks')
+    op.drop_index(op.f('ix_data_stores_id'), table_name='data_stores')
+    op.drop_table('data_stores')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
     op.drop_index(op.f('ix_users_id'), table_name='users')

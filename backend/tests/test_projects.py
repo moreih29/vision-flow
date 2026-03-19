@@ -13,7 +13,7 @@ async def test_create_project(
     data = resp.json()
     assert data["name"] == "My Project"
     assert data["description"] == "A test project"
-    assert data["dataset_count"] == 0
+    assert data["data_store_count"] == 0
     assert "id" in data
     assert "owner_id" in data
 

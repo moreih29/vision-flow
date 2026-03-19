@@ -17,7 +17,7 @@ class LabelClassResponse(BaseModel):
     id: int
     name: str
     color: str
-    subset_id: int
+    task_id: int
     label_count: int = 0
     created_at: datetime
 

@@ -20,7 +20,7 @@ class Image(Base):
     folder_path: Mapped[str] = mapped_column(
         String(1000), nullable=False, default="", server_default=""
     )
-    dataset_id: Mapped[int] = mapped_column(ForeignKey("datasets.id"), nullable=False)
+    data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id"), nullable=False)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -29,4 +29,4 @@ class Image(Base):
     )
 
     # relationships
-    dataset: Mapped["Dataset"] = relationship(back_populates="images")
+    data_store: Mapped["DataStore"] = relationship(back_populates="images")

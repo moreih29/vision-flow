@@ -10,10 +10,10 @@ class FolderMeta(Base):
     """Tracks explicitly created folders (which may be empty, with no images)."""
 
     __tablename__ = "folder_meta"
-    __table_args__ = (UniqueConstraint("dataset_id", "path"),)
+    __table_args__ = (UniqueConstraint("data_store_id", "path"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    dataset_id: Mapped[int] = mapped_column(ForeignKey("datasets.id"), nullable=False)
+    data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id"), nullable=False)
     path: Mapped[str] = mapped_column(String(1000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -9,40 +9,40 @@ from app.schemas.label_class import (
     LabelClassUpdate,
 )
 from app.services.label_class import label_class_service
-from app.services.subset import subset_service
+from app.services.task import task_service
 
 router = APIRouter(tags=["label_classes"])
 
 
 @router.post(
-    "/subsets/{subset_id}/classes",
+    "/tasks/{task_id}/classes",
     response_model=LabelClassResponse,
     status_code=201,
 )
 async def create_class(
-    subset_id: int,
+    task_id: int,
     class_in: LabelClassCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LabelClassResponse:
-    """Create a new label class in a subset."""
-    # verify subset exists
-    await subset_service.get_subset(db, subset_id)
-    label_class = await label_class_service.create_class(db, subset_id, class_in)
+    """Create a new label class in a task."""
+    # verify task exists
+    await task_service.get_task(db, task_id)
+    label_class = await label_class_service.create_class(db, task_id, class_in)
     return LabelClassResponse.model_validate(label_class)
 
 
 @router.get(
-    "/subsets/{subset_id}/classes", response_model=list[LabelClassResponse]
+    "/tasks/{task_id}/classes", response_model=list[LabelClassResponse]
 )
 async def list_classes(
-    subset_id: int,
+    task_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[LabelClassResponse]:
-    """List all label classes in a subset."""
-    await subset_service.get_subset(db, subset_id)
-    classes = await label_class_service.get_classes(db, subset_id)
+    """List all label classes in a task."""
+    await task_service.get_task(db, task_id)
+    classes = await label_class_service.get_classes(db, task_id)
     return [LabelClassResponse.model_validate(c) for c in classes]
 
 

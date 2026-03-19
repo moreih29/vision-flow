@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.dataset import Dataset
+from app.models.data_store import DataStore
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectUpdate
@@ -70,9 +70,9 @@ class ProjectService:
         await db.delete(project)
         await db.commit()
 
-    async def get_dataset_count(self, db: AsyncSession, project_id: int) -> int:
+    async def get_data_store_count(self, db: AsyncSession, project_id: int) -> int:
         result = await db.execute(
-            select(func.count()).where(Dataset.project_id == project_id)
+            select(func.count()).where(DataStore.project_id == project_id)
         )
         return result.scalar_one()
 

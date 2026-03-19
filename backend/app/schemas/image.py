@@ -13,7 +13,7 @@ class ImageResponse(BaseModel):
     height: int | None
     mime_type: str
     folder_path: str
-    dataset_id: int
+    data_store_id: int
     uploaded_by: int
     created_at: datetime
 

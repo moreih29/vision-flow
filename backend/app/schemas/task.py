@@ -2,24 +2,31 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.models.enums import TaskType
 
-class DatasetCreate(BaseModel):
+
+class TaskCreate(BaseModel):
     name: str
     description: str | None = None
+    task_type: TaskType
 
 
-class DatasetUpdate(BaseModel):
+class TaskUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
 
 
-class DatasetResponse(BaseModel):
+class TaskResponse(BaseModel):
     id: int
     name: str
     description: str | None
+    task_type: str
+    status: str
     project_id: int
     created_at: datetime
     updated_at: datetime
     image_count: int = 0
+    labeled_count: int = 0
+    class_count: int = 0
 
     model_config = {"from_attributes": True}

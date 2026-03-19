@@ -6,12 +6,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class SubsetImage(Base):
-    __tablename__ = "subset_images"
-    __table_args__ = (UniqueConstraint("subset_id", "image_id"),)
+class TaskImage(Base):
+    __tablename__ = "task_images"
+    __table_args__ = (UniqueConstraint("task_id", "image_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    subset_id: Mapped[int] = mapped_column(ForeignKey("subsets.id"), nullable=False)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False)
     image_id: Mapped[int] = mapped_column(ForeignKey("images.id"), nullable=False)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -20,5 +20,5 @@ class SubsetImage(Base):
     )
 
     # relationships
-    subset: Mapped["Subset"] = relationship(back_populates="subset_images")
+    task: Mapped["Task"] = relationship(back_populates="task_images")
     image: Mapped["Image"] = relationship()

@@ -35,7 +35,7 @@ class ImageService:
     async def upload_image(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         user_id: int,
         file: UploadFile,
         storage: StorageBackend,
@@ -79,7 +79,7 @@ class ImageService:
             height=height,
             mime_type=mime_type,
             folder_path=normalized_folder_path,
-            dataset_id=dataset_id,
+            data_store_id=data_store_id,
             uploaded_by=user_id,
         )
         db.add(image)
@@ -87,20 +87,20 @@ class ImageService:
         await db.refresh(image)
         return image
 
-    async def get_images_by_dataset(
+    async def get_images_by_data_store(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Image], int]:
         count_result = await db.execute(
-            select(func.count()).where(Image.dataset_id == dataset_id)
+            select(func.count()).where(Image.data_store_id == data_store_id)
         )
         total = count_result.scalar_one()
         result = await db.execute(
             select(Image)
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .offset(skip)
             .limit(limit)
         )
@@ -153,7 +153,7 @@ class ImageService:
     async def get_folder_contents(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         path: str = "",
         skip: int = 0,
         limit: int = 100,
@@ -163,7 +163,7 @@ class ImageService:
         # get all distinct folder_paths under the given prefix
         folder_paths_result = await db.execute(
             select(Image.folder_path)
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(
                 Image.folder_path.like(
                     f"{_escape_like(normalized_path)}%", escape="\\"
@@ -188,7 +188,7 @@ class ImageService:
         # Also include explicit folders from FolderMeta
         explicit_result = await db.execute(
             select(FolderMeta.path)
-            .where(FolderMeta.dataset_id == dataset_id)
+            .where(FolderMeta.data_store_id == data_store_id)
             .where(
                 FolderMeta.path.like(
                     f"{_escape_like(normalized_path)}%", escape="\\"
@@ -206,7 +206,7 @@ class ImageService:
         # batch fetch image counts per folder_path in a single query
         counts_result = await db.execute(
             select(Image.folder_path, func.count().label("cnt"))
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(
                 Image.folder_path.like(
                     f"{_escape_like(normalized_path)}%", escape="\\"
@@ -253,14 +253,14 @@ class ImageService:
         # images directly in the current path (exact folder_path match)
         total_images_result = await db.execute(
             select(func.count())
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(Image.folder_path == normalized_path)
         )
         total_images = total_images_result.scalar_one()
 
         images_result = await db.execute(
             select(Image)
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(Image.folder_path == normalized_path)
             .offset(skip)
             .limit(limit)
@@ -280,7 +280,7 @@ class ImageService:
     async def delete_folder(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         folder_path: str,
         user_id: int,
         storage: StorageBackend,
@@ -294,7 +294,7 @@ class ImageService:
         # Delete explicit folder metadata
         await db.execute(
             sql_delete(FolderMeta)
-            .where(FolderMeta.dataset_id == dataset_id)
+            .where(FolderMeta.data_store_id == data_store_id)
             .where(
                 FolderMeta.path.like(
                     f"{_escape_like(normalized_path)}%", escape="\\"
@@ -305,7 +305,7 @@ class ImageService:
         # fetch all images under this folder path (inclusive of subfolders)
         result = await db.execute(
             select(Image)
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(
                 Image.folder_path.like(
                     f"{_escape_like(normalized_path)}%", escape="\\"
@@ -321,7 +321,7 @@ class ImageService:
         target_ids = {img.id for img in images}
         storage_keys = list({img.storage_key for img in images})
 
-        # for each storage_key, count total references across the entire dataset
+        # for each storage_key, count total references across the entire data store
         # a key can be physically deleted only if all references are within the deletion set
         keys_to_delete: list[str] = []
         for key in storage_keys:
@@ -354,7 +354,7 @@ class ImageService:
     async def update_folder_path(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         old_path: str,
         new_path: str,
     ) -> int:
@@ -381,7 +381,7 @@ class ImageService:
         # Check source exists (images or explicit folder)
         source_img_result = await db.execute(
             select(func.count())
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(
                 Image.folder_path.like(
                     f"{_escape_like(normalized_old)}%", escape="\\"
@@ -390,7 +390,7 @@ class ImageService:
         )
         source_meta_result = await db.execute(
             select(func.count())
-            .where(FolderMeta.dataset_id == dataset_id)
+            .where(FolderMeta.data_store_id == data_store_id)
             .where(
                 FolderMeta.path.like(
                     f"{_escape_like(normalized_old)}%", escape="\\"
@@ -409,7 +409,7 @@ class ImageService:
         # Check target doesn't conflict
         conflict_count_result = await db.execute(
             select(func.count())
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(
                 Image.folder_path.like(
                     f"{_escape_like(normalized_new)}%", escape="\\"
@@ -426,7 +426,7 @@ class ImageService:
         old_prefix_len = len(normalized_old)
         result = await db.execute(
             update(Image)
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(
                 Image.folder_path.like(
                     f"{_escape_like(normalized_old)}%", escape="\\"
@@ -442,7 +442,7 @@ class ImageService:
         # Also update FolderMeta paths
         await db.execute(
             update(FolderMeta)
-            .where(FolderMeta.dataset_id == dataset_id)
+            .where(FolderMeta.data_store_id == data_store_id)
             .where(
                 FolderMeta.path.like(
                     f"{_escape_like(normalized_old)}%", escape="\\"
@@ -461,12 +461,12 @@ class ImageService:
     async def get_all_folder_paths(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
     ) -> list[str]:
-        """Return all unique folder paths in a dataset (including intermediate parents)."""
+        """Return all unique folder paths in a data store (including intermediate parents)."""
         result = await db.execute(
             select(Image.folder_path)
-            .where(Image.dataset_id == dataset_id)
+            .where(Image.data_store_id == data_store_id)
             .where(Image.folder_path != "")
             .distinct()
         )
@@ -475,7 +475,7 @@ class ImageService:
         # Also include explicit folder paths from FolderMeta
         explicit_result = await db.execute(
             select(FolderMeta.path)
-            .where(FolderMeta.dataset_id == dataset_id)
+            .where(FolderMeta.data_store_id == data_store_id)
             .where(FolderMeta.path != "")
         )
         raw_paths.extend(explicit_result.scalars().all())
@@ -492,7 +492,7 @@ class ImageService:
     async def create_folder(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         folder_path: str,
     ) -> str:
         """Create an explicit empty folder. Returns the normalized path."""
@@ -504,7 +504,7 @@ class ImageService:
             )
         existing = await db.execute(
             select(FolderMeta)
-            .where(FolderMeta.dataset_id == dataset_id)
+            .where(FolderMeta.data_store_id == data_store_id)
             .where(FolderMeta.path == normalized)
         )
         if existing.scalar_one_or_none():
@@ -512,7 +512,7 @@ class ImageService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Folder already exists",
             )
-        meta = FolderMeta(dataset_id=dataset_id, path=normalized)
+        meta = FolderMeta(data_store_id=data_store_id, path=normalized)
         db.add(meta)
         await db.commit()
         return normalized
@@ -577,21 +577,21 @@ class ImageService:
     async def batch_delete_folders(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         folder_paths: list[str],
         user_id: int,
         storage: StorageBackend,
     ) -> int:
         total = 0
         for path in folder_paths:
-            count = await self.delete_folder(db, dataset_id, path, user_id, storage)
+            count = await self.delete_folder(db, data_store_id, path, user_id, storage)
             total += count
         return total
 
     async def batch_move_folders(
         self,
         db: AsyncSession,
-        dataset_id: int,
+        data_store_id: int,
         folder_paths: list[str],
         target_folder: str,
     ) -> int:
@@ -602,7 +602,7 @@ class ImageService:
             folder_name = normalized_old.rstrip("/").split("/")[-1]
             normalized_new = normalized_target + folder_name + "/"
             count = await self.update_folder_path(
-                db, dataset_id, normalized_old, normalized_new
+                db, data_store_id, normalized_old, normalized_new
             )
             total += count
         return total

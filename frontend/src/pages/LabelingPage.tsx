@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, MousePointer, Tag, Box } from 'lucide-react'
-import { Stage, Layer, Rect } from 'react-konva'
+import { ArrowLeft, ZoomIn, MousePointer, Tag, Box } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { tasksApi } from '@/api/tasks'
 import { labelClassesApi } from '@/api/label-classes'
+import { annotationsApi } from '@/api/annotations'
 import type { Task } from '@/types/task'
 import type { LabelClass } from '@/types/label-class'
 import type { ImageMeta } from '@/types/image'
 import { useLabelingStore } from '@/stores/labeling-store'
+import { LabelingCanvas, ImageNavigator } from '@/components/labeling'
+
+const TOKEN_KEY = 'auth_token'
 
 export default function LabelingPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>()
@@ -20,6 +23,7 @@ export default function LabelingPage() {
   const [classes, setClasses] = useState<LabelClass[]>([])
   const [images, setImages] = useState<ImageMeta[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | null>(null)
 
   const {
     tool,
@@ -27,8 +31,10 @@ export default function LabelingPage() {
     selectedClassId,
     setSelectedClassId,
     currentImageIndex,
-    setCurrentImageIndex,
     scale,
+    setScale,
+    annotations,
+    setAnnotations,
     isDirty,
     reset,
   } = useLabelingStore()
@@ -36,7 +42,7 @@ export default function LabelingPage() {
   useEffect(() => {
     reset()
     fetchAll()
-  }, [taskIdNum])
+  }, [taskIdNum]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchAll() {
     setLoading(true)
@@ -56,7 +62,7 @@ export default function LabelingPage() {
         ).images ?? (imagesRes.data as { image: ImageMeta }[])
       setImages(rawImages.map((si: { image: ImageMeta }) => si.image))
     } catch {
-      // 에러 처리 — 빈 상태 유지
+      // 에러 처리 -- 빈 상태 유지
     } finally {
       setLoading(false)
     }
@@ -65,14 +71,47 @@ export default function LabelingPage() {
   const totalImages = images.length
   const currentImage = images[currentImageIndex] ?? null
 
-  function handlePrev() {
-    if (currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1)
-  }
+  // 현재 이미지의 파일 URL 구성
+  const imageUrl = currentImage
+    ? `/api/v1/data-stores/${currentImage.data_store_id}/images/${currentImage.id}/file?token=${localStorage.getItem(TOKEN_KEY) ?? ''}`
+    : null
 
-  function handleNext() {
-    if (currentImageIndex < totalImages - 1)
-      setCurrentImageIndex(currentImageIndex + 1)
-  }
+  // 이미지 전환 시 어노테이션 로드
+  useEffect(() => {
+    if (!currentImage) {
+      setAnnotations([])
+      setSelectedAnnotationId(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadAnnotations() {
+      try {
+        const res = await annotationsApi.list(taskIdNum, currentImage!.id)
+        if (!cancelled) {
+          setAnnotations(res.data)
+          setSelectedAnnotationId(null)
+        }
+      } catch {
+        if (!cancelled) {
+          setAnnotations([])
+        }
+      }
+    }
+
+    loadAnnotations()
+    return () => {
+      cancelled = true
+    }
+  }, [currentImage?.id, taskIdNum, setAnnotations]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleScaleChange = useCallback(
+    (newScale: number) => {
+      setScale(newScale)
+    },
+    [setScale],
+  )
 
   const tools: { id: 'select' | 'classification' | 'bbox'; label: string; icon: React.ReactNode }[] = [
     { id: 'select', label: '선택', icon: <MousePointer className="h-4 w-4" /> },
@@ -100,29 +139,7 @@ export default function LabelingPage() {
         <div className="mx-2 h-4 w-px bg-border" />
 
         {/* 이미지 네비게이션 */}
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={handlePrev}
-            disabled={currentImageIndex === 0 || totalImages === 0}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[60px] text-center text-sm tabular-nums text-muted-foreground">
-            {totalImages === 0 ? '0 / 0' : `${currentImageIndex + 1} / ${totalImages}`}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={handleNext}
-            disabled={currentImageIndex >= totalImages - 1 || totalImages === 0}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <ImageNavigator totalImages={totalImages} />
 
         <div className="mx-2 h-4 w-px bg-border" />
 
@@ -210,29 +227,23 @@ export default function LabelingPage() {
         </aside>
 
         {/* 중앙 캔버스 영역 */}
-        <main className="relative flex flex-1 items-center justify-center overflow-hidden bg-neutral-800">
+        <main className="relative flex-1 overflow-hidden bg-neutral-800">
           {!loading && totalImages === 0 ? (
-            <div className="flex flex-col items-center gap-2 text-neutral-400">
-              <p className="text-sm">이미지가 없습니다</p>
-              <p className="text-xs">태스크에 이미지를 추가하세요</p>
+            <div className="flex h-full items-center justify-center">
+              <div className="flex flex-col items-center gap-2 text-neutral-400">
+                <p className="text-sm">이미지가 없습니다</p>
+                <p className="text-xs">태스크에 이미지를 추가하세요</p>
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-2 text-neutral-500">
-              <Stage width={800} height={600}>
-                <Layer>
-                  <Rect
-                    x={0}
-                    y={0}
-                    width={800}
-                    height={600}
-                    fill="#404040"
-                  />
-                </Layer>
-              </Stage>
-              <p className="absolute text-xs text-neutral-400">
-                캔버스 영역 {currentImage ? `— ${currentImage.original_filename}` : ''}
-              </p>
-            </div>
+            <LabelingCanvas
+              imageUrl={imageUrl}
+              annotations={annotations}
+              labelClasses={classes}
+              selectedAnnotationId={selectedAnnotationId}
+              onSelectAnnotation={setSelectedAnnotationId}
+              onScaleChange={handleScaleChange}
+            />
           )}
         </main>
       </div>

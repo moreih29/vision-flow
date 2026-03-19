@@ -18,7 +18,7 @@ class DataStoreService:
     ) -> DataStore:
         # verify project exists and user owns it
         project = await project_service.get_project(db, project_id)
-        await project_service._check_ownership(project, user_id)
+        await project_service.check_ownership(project, user_id)
         data_store = DataStore(
             name=data_store_in.name,
             description=data_store_in.description,
@@ -47,11 +47,11 @@ class DataStoreService:
             )
         return data_store
 
-    async def _check_ownership(
+    async def check_ownership(
         self, db: AsyncSession, data_store: DataStore, user_id: int
     ) -> None:
         project = await project_service.get_project(db, data_store.project_id)
-        await project_service._check_ownership(project, user_id)
+        await project_service.check_ownership(project, user_id)
 
     async def update_data_store(
         self,
@@ -61,7 +61,7 @@ class DataStoreService:
         data_store_in: DataStoreUpdate,
     ) -> DataStore:
         data_store = await self.get_data_store(db, data_store_id)
-        await self._check_ownership(db, data_store, user_id)
+        await self.check_ownership(db, data_store, user_id)
         if data_store_in.name is not None:
             data_store.name = data_store_in.name
         if data_store_in.description is not None:
@@ -74,7 +74,7 @@ class DataStoreService:
         self, db: AsyncSession, data_store_id: int, user_id: int
     ) -> None:
         data_store = await self.get_data_store(db, data_store_id)
-        await self._check_ownership(db, data_store, user_id)
+        await self.check_ownership(db, data_store, user_id)
         await db.delete(data_store)
         await db.commit()
 

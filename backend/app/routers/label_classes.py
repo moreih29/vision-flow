@@ -26,8 +26,7 @@ async def create_class(
     current_user: User = Depends(get_current_user),
 ) -> LabelClassResponse:
     """Create a new label class in a task."""
-    # verify task exists
-    await task_service.get_task(db, task_id)
+    await task_service.check_ownership(db, task_id, current_user.id)
     label_class = await label_class_service.create_class(db, task_id, class_in)
     return LabelClassResponse.model_validate(label_class)
 
@@ -41,7 +40,7 @@ async def list_classes(
     current_user: User = Depends(get_current_user),
 ) -> list[LabelClassResponse]:
     """List all label classes in a task."""
-    await task_service.get_task(db, task_id)
+    await task_service.check_ownership(db, task_id, current_user.id)
     classes = await label_class_service.get_classes(db, task_id)
     return [LabelClassResponse.model_validate(c) for c in classes]
 
@@ -54,6 +53,8 @@ async def update_class(
     current_user: User = Depends(get_current_user),
 ) -> LabelClassResponse:
     """Update a label class."""
+    label_class = await label_class_service.get_class(db, class_id)
+    await task_service.check_ownership(db, label_class.task_id, current_user.id)
     label_class = await label_class_service.update_class(db, class_id, class_in)
     return LabelClassResponse.model_validate(label_class)
 
@@ -65,4 +66,6 @@ async def delete_class(
     current_user: User = Depends(get_current_user),
 ) -> None:
     """Delete a label class."""
+    label_class = await label_class_service.get_class(db, class_id)
+    await task_service.check_ownership(db, label_class.task_id, current_user.id)
     await label_class_service.delete_class(db, class_id)

@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,8 +19,7 @@ class TaskService:
         user_id: int,
         task_in: TaskCreate,
     ) -> Task:
-        project = await project_service.get_project(db, project_id)
-        await project_service._check_ownership(project, user_id)
+        await project_service.get_project_with_ownership(db, project_id, user_id)
         task = Task(
             name=task_in.name,
             description=task_in.description,
@@ -34,11 +33,21 @@ class TaskService:
 
     async def get_tasks_by_project(
         self, db: AsyncSession, project_id: int
-    ) -> list[Task]:
-        result = await db.execute(
-            select(Task).where(Task.project_id == project_id)
+    ) -> list[tuple[Task, int, int]]:
+        """태스크 목록과 image_count, class_count를 한 번의 쿼리로 조회."""
+        stmt = (
+            select(
+                Task,
+                func.count(func.distinct(TaskImage.id)).label("image_count"),
+                func.count(func.distinct(LabelClass.id)).label("class_count"),
+            )
+            .outerjoin(TaskImage, TaskImage.task_id == Task.id)
+            .outerjoin(LabelClass, LabelClass.task_id == Task.id)
+            .where(Task.project_id == project_id)
+            .group_by(Task.id)
         )
-        return list(result.scalars().all())
+        result = await db.execute(stmt)
+        return list(result.all())
 
     async def get_task(self, db: AsyncSession, task_id: int) -> Task:
         result = await db.execute(select(Task).where(Task.id == task_id))
@@ -50,6 +59,15 @@ class TaskService:
             )
         return task
 
+    async def check_ownership(
+        self, db: AsyncSession, task_id: int, user_id: int
+    ) -> Task:
+        """태스크 조회 + 프로젝트 소유권 검증. 태스크를 반환."""
+        task = await self.get_task(db, task_id)
+        project = await project_service.get_project(db, task.project_id)
+        await project_service.check_ownership(project, user_id)
+        return task
+
     async def update_task(
         self,
         db: AsyncSession,
@@ -57,9 +75,7 @@ class TaskService:
         user_id: int,
         task_in: TaskUpdate,
     ) -> Task:
-        task = await self.get_task(db, task_id)
-        project = await project_service.get_project(db, task.project_id)
-        await project_service._check_ownership(project, user_id)
+        task = await self.check_ownership(db, task_id, user_id)
         if task_in.name is not None:
             task.name = task_in.name
         if task_in.description is not None:
@@ -71,9 +87,7 @@ class TaskService:
     async def delete_task(
         self, db: AsyncSession, task_id: int, user_id: int
     ) -> None:
-        task = await self.get_task(db, task_id)
-        project = await project_service.get_project(db, task.project_id)
-        await project_service._check_ownership(project, user_id)
+        task = await self.check_ownership(db, task_id, user_id)
         await db.delete(task)
         await db.commit()
 
@@ -119,15 +133,12 @@ class TaskService:
         self, db: AsyncSession, task_id: int, image_ids: list[int]
     ) -> None:
         await self.get_task(db, task_id)
-        result = await db.execute(
-            select(TaskImage).where(
+        await db.execute(
+            delete(TaskImage).where(
                 TaskImage.task_id == task_id,
                 TaskImage.image_id.in_(image_ids),
             )
         )
-        task_images = result.scalars().all()
-        for ti in task_images:
-            await db.delete(ti)
         await db.commit()
 
     async def get_images(

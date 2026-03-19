@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FolderOpen, LogOut } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth-store'
-import { projectsApi } from '@/api/projects'
-import type { Project } from '@/types/project'
+import { Plus, FolderOpen, Trash2 } from 'lucide-react'
+import { useProjects, useCreateProject, useDeleteProject } from '@/hooks/use-projects'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -25,55 +23,60 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { Project } from '@/types/project'
 
 export default function ProjectsPage() {
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
-  const { confirmDialog, showAlert } = useConfirmDialog()
+  const { confirmDialog, confirm, showAlert } = useConfirmDialog()
 
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: projects = [], isLoading, isError } = useProjects()
+  const createProject = useCreateProject()
+  const deleteProject = useDeleteProject()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const creatingRef = useRef(false)
+  const deletingRef = useRef<number | null>(null)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
 
-  useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  async function fetchProjects() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await projectsApi.list()
-      setProjects(res.data)
-    } catch {
-      setError('\uD504\uB85C\uC81D\uD2B8 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function handleCreate() {
-    if (!newName.trim()) return
+    if (!newName.trim() || creatingRef.current) return
+    creatingRef.current = true
     setCreating(true)
     try {
-      const res = await projectsApi.create({
+      await createProject.mutateAsync({
         name: newName.trim(),
         description: newDesc.trim() || undefined,
       })
-      setProjects((prev) => [res.data, ...prev])
       setDialogOpen(false)
       setNewName('')
       setNewDesc('')
     } catch {
-      await showAlert({ title: '\uD504\uB85C\uC81D\uD2B8 \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.' })
+      await showAlert({ title: '프로젝트 생성에 실패했습니다.' })
     } finally {
+      creatingRef.current = false
       setCreating(false)
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent, project: Project) {
+    e.stopPropagation()
+    if (deletingRef.current === project.id) return
+    const confirmed = await confirm({
+      title: `"${project.name}" 프로젝트를 삭제하시겠습니까?`,
+      description: '프로젝트에 포함된 모든 데이터가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
+      confirmLabel: '삭제',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+    deletingRef.current = project.id
+    try {
+      await deleteProject.mutateAsync(project.id)
+    } catch {
+      await showAlert({ title: '프로젝트 삭제에 실패했습니다.' })
+    } finally {
+      deletingRef.current = null
     }
   }
 
@@ -86,20 +89,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold">Vision Flow</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{user?.name}</span>
-            <Button variant="outline" size="sm" onClick={logout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              로그아웃
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <main className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -113,13 +103,13 @@ export default function ProjectsPage() {
           </Button>
         </div>
 
-        {error && (
+        {isError && (
           <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
+            프로젝트 목록을 불러오지 못했습니다.
           </div>
         )}
 
-        {loading ? (
+        {isLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Card key={i}>
@@ -165,7 +155,17 @@ export default function ProjectsPage() {
                 <CardContent>
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>데이터 저장소 {project.data_store_count}개</span>
-                    <span>{formatDate(project.created_at)}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{formatDate(project.created_at)}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={(e) => handleDelete(e, project)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

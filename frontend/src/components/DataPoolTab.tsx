@@ -4,6 +4,7 @@ import { dataStoresApi } from '@/api/data-stores'
 import { imagesApi } from '@/api/images'
 import type { DataStore } from '@/types/data-store'
 import type { DataPoolItem, FolderInfo, ImageMeta } from '@/types/image'
+import { useDataStores, useCreateDataStore } from '@/hooks/use-data-stores'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -72,12 +73,19 @@ interface DataPoolTabProps {
 }
 
 export default function DataPoolTab({ projectId }: DataPoolTabProps) {
+  const {
+    data: dataStoreList,
+    isLoading: dataStoresLoading,
+    isError: dataStoresError,
+  } = useDataStores(projectId)
+  const createDataStore = useCreateDataStore(projectId)
+  const creatingRef = useRef(false)
+
   const [dataStore, setDataStore] = useState<DataStore | null>(null)
   const [folders, setFolders] = useState<FolderInfo[]>([])
   const [images, setImages] = useState<ImageMeta[]>([])
   const [totalImages, setTotalImages] = useState(0)
   const [currentPath, setCurrentPath] = useState('')
-  const [loading, setLoading] = useState(true)
   const [contentsLoading, setContentsLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -177,34 +185,38 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
   // -- Data fetching --
 
   useEffect(() => {
-    initDataStore()
-  }, [projectId])
+    if (dataStoresLoading) return
+    if (dataStoresError) {
+      setError('데이터를 불러오지 못했습니다.')
+      return
+    }
+    if (!dataStoreList) return
+    if (dataStoreList.length > 0) {
+      setDataStore(dataStoreList[0])
+    } else if (!creatingRef.current) {
+      creatingRef.current = true
+      createDataStore.mutate(
+        { name: 'Default Pool' },
+        {
+          onSuccess: (created) => {
+            setDataStore(created)
+          },
+          onError: () => {
+            setError('데이터를 불러오지 못했습니다.')
+          },
+          onSettled: () => {
+            creatingRef.current = false
+          },
+        },
+      )
+    }
+  }, [dataStoreList, dataStoresLoading, dataStoresError])
 
   useEffect(() => {
     if (dataStore) {
       fetchFolderContents(currentPath)
     }
   }, [dataStore?.id, currentPath])
-
-  async function initDataStore() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await dataStoresApi.list(projectId)
-      if (res.data.length > 0) {
-        setDataStore(res.data[0])
-      } else {
-        const created = await dataStoresApi.create(projectId, {
-          name: 'Default Pool',
-        })
-        setDataStore(created.data)
-      }
-    } catch {
-      setError('데이터를 불러오지 못했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const PAGE_SIZE = 50
 
@@ -638,7 +650,7 @@ export default function DataPoolTab({ projectId }: DataPoolTabProps) {
 
   // -- Render --
 
-  if (loading) {
+  if (dataStoresLoading || createDataStore.isPending) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-32 w-full" />

@@ -1,16 +1,16 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LabelClassCreate(BaseModel):
-    name: str
-    color: str
+    name: str = Field(min_length=1, max_length=100)
+    color: str = Field(min_length=1, max_length=30)
 
 
 class LabelClassUpdate(BaseModel):
-    name: str | None = None
-    color: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    color: str | None = Field(default=None, min_length=1, max_length=30)
 
 
 class LabelClassResponse(BaseModel):

@@ -28,7 +28,13 @@ const registerSchema = z
   .object({
     name: z.string().min(1, '\uC774\uB984\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'),
     email: z.string().email('\uC720\uD6A8\uD55C \uC774\uBA54\uC77C\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'),
-    password: z.string().min(8, '\uBE44\uBC00\uBC88\uD638\uB294 \uCD5C\uC18C 8\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4'),
+    password: z
+      .string()
+      .min(8, '비밀번호는 최소 8자 이상이어야 합니다')
+      .regex(/[A-Z]/, '영문 대문자를 1개 이상 포함해야 합니다')
+      .regex(/[a-z]/, '영문 소문자를 1개 이상 포함해야 합니다')
+      .regex(/[0-9]/, '숫자를 1개 이상 포함해야 합니다')
+      .regex(/[^A-Za-z0-9]/, '특수문자를 1개 이상 포함해야 합니다'),
     confirmPassword: z.string().min(1, '\uBE44\uBC00\uBC88\uD638 \uD655\uC778\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'),
   })
   .refine((data) => data.password === data.confirmPassword, {

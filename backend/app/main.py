@@ -4,12 +4,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
+from app.error_handler import register_error_handlers
+from app.logging_config import setup_logging
 from app.routers import auth, data_stores, images, label_classes, projects, tasks
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
+    setup_logging()
     yield
     # Shutdown
 
@@ -20,10 +24,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 공통 에러 핸들러 등록
+register_error_handlers(app)
+
 # CORS -- allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

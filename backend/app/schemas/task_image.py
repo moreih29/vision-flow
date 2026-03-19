@@ -26,3 +26,5 @@ class TaskImageResponse(BaseModel):
 class TaskImageListResponse(BaseModel):
     images: list[TaskImageResponse]
     total: int
+    skip: int
+    limit: int

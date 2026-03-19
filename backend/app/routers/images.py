@@ -92,6 +92,8 @@ async def list_images(
     return ImageListResponse(
         images=[ImageResponse.model_validate(img) for img in images],
         total=total,
+        skip=skip,
+        limit=limit,
     )
 
 

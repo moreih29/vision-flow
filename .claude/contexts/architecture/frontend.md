@@ -6,6 +6,7 @@
 - **Vite 8**: 빌드 도구 (HMR, API 프록시)
 - **Tailwind CSS 4**: 유틸리티 기반 스타일링
 - **shadcn/ui** (radix-nova 스타일, slate 컬러): UI 컴포넌트 라이브러리
+- **@tanstack/react-query**: 서버 상태 관리 (API 캐싱, 자동 무효화)
 - **Zustand 5**: 전역 상태 관리 (인증만)
 - **React Router 7**: 클라이언트 사이드 라우팅
 - **Axios**: HTTP 클라이언트
@@ -28,6 +29,9 @@ frontend/src/
 │   └── label-classes.ts # 라벨 클래스 API
 ├── components/     # 비즈니스 컴포넌트
 │   ├── ui/             # shadcn 프리미티브 (Button, Card, Dialog 등)
+│   ├── layout/         # AppLayout (공통 헤더 + children)
+│   ├── task-detail/    # TaskDetailPage 하위 컴포넌트 (5개)
+│   ├── ErrorBoundary.tsx   # 전역 에러 바운더리
 │   ├── DataPoolTab.tsx     # 데이터 풀 탭 (DataStore 이미지 관리 핵심)
 │   ├── TasksTab.tsx        # Task 목록/생성 탭
 │   ├── FolderTreeView.tsx  # 폴더 트리 네비게이션
@@ -40,8 +44,11 @@ frontend/src/
 │   ├── FolderPickerDialog.tsx # 폴더 선택 다이얼로그
 │   └── ProtectedRoute.tsx  # 인증 가드
 ├── hooks/          # 커스텀 훅
-│   ├── useMultiSelect.ts      # Shift/Ctrl 클릭 다중 선택
-│   └── useConfirmDialog.tsx   # Promise 기반 확인 다이얼로그
+│   ├── use-projects.ts       # React Query: 프로젝트 CRUD hooks
+│   ├── use-tasks.ts          # React Query: 태스크 CRUD hooks
+│   ├── use-data-stores.ts    # React Query: DataStore CRUD hooks
+│   ├── useMultiSelect.ts     # Shift/Ctrl 클릭 다중 선택
+│   └── useConfirmDialog.tsx  # Promise 기반 확인 다이얼로그
 ├── pages/          # 라우트 페이지 컴포넌트
 │   ├── LoginPage.tsx
 │   ├── RegisterPage.tsx
@@ -53,7 +60,7 @@ frontend/src/
 │   └── auth-store.ts  # Zustand 인증 스토어
 ├── types/          # TypeScript 인터페이스
 │   ├── project.ts, data-store.ts, image.ts, task.ts, label-class.ts
-├── lib/            # 유틸리티 (cn() 등)
+├── lib/            # 유틸리티 (cn(), query-client.ts)
 └── assets/         # 정적 에셋
 ```
 
@@ -73,10 +80,12 @@ frontend/src/
 - `auth-store.ts`: login, register, fetchMe, logout, token/user 상태
 - 토큰은 `localStorage`에 저장
 
-### 서버 데이터: 로컬 상태 패턴
-- React Query나 SWR을 사용하지 않음
-- 각 페이지/컴포넌트에서 `useState` + `useEffect`로 직접 API 호출
-- **개선 포인트**: 캐싱, 로딩 상태, 에러 핸들링이 컴포넌트마다 중복됨. 향후 React Query 도입을 고려할 수 있음.
+### 서버 데이터: React Query
+- `@tanstack/react-query`로 서버 상태 관리 (staleTime 30초, retry 1)
+- `use-projects.ts`, `use-tasks.ts`, `use-data-stores.ts` 커스텀 hooks
+- `useMutation` + `invalidateQueries`로 낙관적 캐시 무효화
+- `creatingRef`/`deletingRef`로 동기적 더블 서밋 방지 (React 상태 배칭 우회)
+- 일부 페이지(이미지/폴더)는 아직 `useState` + `useEffect` 패턴 잔존
 
 ## API 레이어 패턴
 
@@ -84,7 +93,7 @@ frontend/src/
 // client.ts - 공통 Axios 인스턴스
 const client = axios.create({ baseURL: '/api/v1' });
 // 요청 인터셉터: Authorization: Bearer <token> 자동 삽입
-// 응답 인터셉터: 401 시 토큰 제거 + /login 리다이렉트
+// 응답 인터셉터: 401 시 토큰 제거 + /login 리다이렉트 (auth 엔드포인트 제외)
 ```
 
 - 모든 API 모듈은 `client`를 import하여 사용

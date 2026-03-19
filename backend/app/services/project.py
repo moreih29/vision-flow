@@ -24,9 +24,16 @@ class ProjectService:
 
     async def get_projects_by_user(
         self, db: AsyncSession, user_id: int
-    ) -> list[Project]:
-        result = await db.execute(select(Project).where(Project.owner_id == user_id))
-        return list(result.scalars().all())
+    ) -> list[tuple[Project, int]]:
+        """프로젝트 목록과 data_store_count를 한 번의 쿼리로 조회."""
+        stmt = (
+            select(Project, func.count(DataStore.id).label("data_store_count"))
+            .outerjoin(DataStore, DataStore.project_id == Project.id)
+            .where(Project.owner_id == user_id)
+            .group_by(Project.id)
+        )
+        result = await db.execute(stmt)
+        return list(result.all())
 
     async def get_project(self, db: AsyncSession, project_id: int) -> Project:
         result = await db.execute(select(Project).where(Project.id == project_id))
@@ -38,12 +45,19 @@ class ProjectService:
             )
         return project
 
-    async def _check_ownership(self, project: Project, user_id: int) -> None:
+    async def check_ownership(self, project: Project, user_id: int) -> None:
         if project.owner_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions",
             )
+
+    async def get_project_with_ownership(
+        self, db: AsyncSession, project_id: int, user_id: int
+    ) -> Project:
+        project = await self.get_project(db, project_id)
+        await self.check_ownership(project, user_id)
+        return project
 
     async def update_project(
         self,
@@ -52,8 +66,7 @@ class ProjectService:
         user_id: int,
         project_in: ProjectUpdate,
     ) -> Project:
-        project = await self.get_project(db, project_id)
-        await self._check_ownership(project, user_id)
+        project = await self.get_project_with_ownership(db, project_id, user_id)
         if project_in.name is not None:
             project.name = project_in.name
         if project_in.description is not None:
@@ -65,8 +78,7 @@ class ProjectService:
     async def delete_project(
         self, db: AsyncSession, project_id: int, user_id: int
     ) -> None:
-        project = await self.get_project(db, project_id)
-        await self._check_ownership(project, user_id)
+        project = await self.get_project_with_ownership(db, project_id, user_id)
         await db.delete(project)
         await db.commit()
 

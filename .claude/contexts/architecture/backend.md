@@ -21,7 +21,9 @@ backend/
 │   ├── config.py           # pydantic-settings 설정 (환경변수)
 │   ├── database.py         # 비동기 엔진 + 세션 팩토리 + Base
 │   ├── dependencies.py     # FastAPI DI (인증, DB, 스토리지)
-│   ├── main.py             # FastAPI 앱 + CORS + 라우터 등록
+│   ├── main.py             # FastAPI 앱 + CORS + 라우터 등록 + 에러 핸들러 + 로깅
+│   ├── error_handler.py    # 공통 에러 핸들러 (표준 JSON 응답)
+│   ├── logging_config.py   # 구조화된 JSON 로깅 (Python 표준 logging)
 │   ├── models/             # SQLAlchemy ORM 모델 (8개)
 │   │   ├── user.py, project.py, data_store.py, image.py
 │   │   ├── task.py, task_image.py, label_class.py
@@ -30,6 +32,7 @@ backend/
 │   ├── schemas/            # Pydantic 요청/응답 DTO
 │   │   ├── user.py, project.py, data_store.py, image.py
 │   │   ├── task.py, task_image.py, label_class.py
+│   │   └── pagination.py   # 공통 페이지네이션 (PaginatedResponse[T])
 │   ├── routers/            # FastAPI 라우트 핸들러 (7개)
 │   │   ├── auth.py, projects.py, data_stores.py, images.py
 │   │   ├── tasks.py, label_classes.py, folders (images.py 내 포함)
@@ -110,9 +113,37 @@ class StorageBackend(ABC):
 - 경로 형식: `{hash[:2]}/{hash[2:4]}/{full_hash}.{ext}`
 - 향후 `S3Storage` 구현으로 확장 가능
 
+## 보안
+
+- **JWT 시크릿**: `.env`에 `JWT_SECRET_KEY` 필수 (기본값 없음, 미설정 시 서버 시작 실패)
+- **소유권 검증**: 전 엔드포인트에서 `check_ownership` 호출 (IDOR 방지)
+- **CORS**: `CORS_ORIGINS` 환경변수로 허용 origin 제한 (기본값 `http://localhost:5273`)
+- **입력 검증**: 전 스키마에 `min_length`/`max_length` Field 제약 적용
+- **비밀번호 강도**: 8자 이상, 대소문자/숫자/특수문자 각 1개 이상 (`@field_validator`)
+
+## 에러 핸들링
+
+- `error_handler.py`에서 3종 예외 일괄 처리:
+  - `HTTPException` → `{"error": {"code": "NOT_FOUND", "message": "...", "details": []}}`
+  - `RequestValidationError` → 필드별 `field`/`message`/`type` 상세
+  - `Exception` → 500 일반 메시지 (스택트레이스는 로그에만)
+
+## 로깅
+
+- `logging_config.py`: Python 표준 logging + JSON 포맷
+- 환경변수 `LOG_LEVEL`로 레벨 제어 (기본 INFO)
+- uvicorn 로거도 동일 JSON 포매터 적용
+
+## 성능 최적화
+
+- `list_projects`, `list_tasks`: JOIN + GROUP BY 단일 쿼리 (N+1 해결)
+- `remove_images`: bulk DELETE 문 (루프 삭제 제거)
+- 생성 직후 count 쿼리 생략 (0 직접 설정)
+- 응답 빌드 헬퍼 함수로 라우터 코드 중복 제거
+
 ## 설계 개선 포인트
 
-1. **에러 핸들링 표준화**: 현재 각 서비스에서 개별적으로 HTTPException을 발생시킴. 공통 에러 핸들러 도입 고려.
-2. **페이지네이션 표준화**: 일부 엔드포인트에만 페이지네이션 적용. 공통 페이지네이션 스키마 도입 고려.
-3. **테스트 부재**: 유닛 테스트, 통합 테스트가 없음. 테스트 프레임워크(pytest + httpx) 도입 필요.
-4. **로깅**: 체계적인 로깅 시스템 미구축. structlog 등 도입 고려.
+1. ~~에러 핸들링 표준화~~ → 완료 (공통 에러 핸들러 도입)
+2. ~~페이지네이션 표준화~~ → 완료 (PaginatedResponse[T] 제네릭 스키마)
+3. **테스트 부재**: 유닛 테스트, 통합 테스트가 부족. 테스트 프레임워크(pytest + httpx) 확충 필요.
+4. ~~로깅~~ → 완료 (JSON 구조화 로깅)

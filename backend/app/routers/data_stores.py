@@ -2,11 +2,19 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
+from app.models.data_store import DataStore
 from app.models.user import User
 from app.schemas.data_store import DataStoreCreate, DataStoreResponse, DataStoreUpdate
 from app.services.data_store import data_store_service
 
 router = APIRouter(tags=["data-stores"])
+
+
+async def _build_response(db: AsyncSession, data_store: DataStore) -> DataStoreResponse:
+    image_count = await data_store_service.get_image_count(db, data_store.id)
+    response = DataStoreResponse.model_validate(data_store)
+    response.image_count = image_count
+    return response
 
 
 @router.post(
@@ -24,9 +32,8 @@ async def create_data_store(
     data_store = await data_store_service.create_data_store(
         db, project_id, current_user.id, data_store_in
     )
-    image_count = await data_store_service.get_image_count(db, data_store.id)
     response = DataStoreResponse.model_validate(data_store)
-    response.image_count = image_count
+    response.image_count = 0
     return response
 
 
@@ -57,10 +64,8 @@ async def get_data_store(
 ) -> DataStoreResponse:
     """DataStore를 ID로 조회합니다."""
     data_store = await data_store_service.get_data_store(db, data_store_id)
-    image_count = await data_store_service.get_image_count(db, data_store.id)
-    response = DataStoreResponse.model_validate(data_store)
-    response.image_count = image_count
-    return response
+    await data_store_service.check_ownership(db, data_store, current_user.id)
+    return await _build_response(db, data_store)
 
 
 @router.put("/data-stores/{data_store_id}", response_model=DataStoreResponse)
@@ -74,10 +79,7 @@ async def update_data_store(
     data_store = await data_store_service.update_data_store(
         db, data_store_id, current_user.id, data_store_in
     )
-    image_count = await data_store_service.get_image_count(db, data_store.id)
-    response = DataStoreResponse.model_validate(data_store)
-    response.image_count = image_count
-    return response
+    return await _build_response(db, data_store)
 
 
 @router.delete("/data-stores/{data_store_id}", status_code=204)

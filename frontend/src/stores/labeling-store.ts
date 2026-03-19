@@ -15,6 +15,9 @@ interface LabelingState {
   annotations: Annotation[]
   isDirty: boolean
 
+  // 선택
+  selectedAnnotationId: number | null
+
   // 줌
   scale: number
 
@@ -22,6 +25,7 @@ interface LabelingState {
   setCurrentImageIndex: (index: number) => void
   setTool: (tool: LabelingTool) => void
   setSelectedClassId: (id: number | null) => void
+  setSelectedAnnotationId: (id: number | null) => void
   setAnnotations: (annotations: Annotation[]) => void
   addAnnotation: (annotation: Annotation) => void
   updateAnnotation: (id: number, data: Partial<Annotation>) => void
@@ -37,6 +41,7 @@ const initialState = {
   selectedClassId: null,
   annotations: [],
   isDirty: false,
+  selectedAnnotationId: null,
   scale: 1,
 }
 
@@ -46,7 +51,8 @@ export const useLabelingStore = create<LabelingState>((set) => ({
   setCurrentImageIndex: (index) => set({ currentImageIndex: index }),
   setTool: (tool) => set({ tool }),
   setSelectedClassId: (id) => set({ selectedClassId: id }),
-  setAnnotations: (annotations) => set({ annotations, isDirty: false }),
+  setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
+  setAnnotations: (annotations) => set({ annotations, isDirty: false, selectedAnnotationId: null }),
   addAnnotation: (annotation) =>
     set((state) => ({
       annotations: [...state.annotations, annotation],

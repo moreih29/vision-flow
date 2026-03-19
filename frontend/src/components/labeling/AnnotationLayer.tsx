@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Group, Rect, Text } from 'react-konva'
+import type Konva from 'konva'
 import type { Annotation } from '@/types/annotation'
 import type { LabelClass } from '@/types/label-class'
 import { normalizedBBoxToRect } from './coord-utils'
@@ -74,6 +76,7 @@ function BBoxRect({
   isSelected: boolean
   onSelect: (id: number | null) => void
 }) {
+  const [hovered, setHovered] = useState(false)
   const { name, color } = getClassInfo(labelClasses, annotation.label_class_id)
   const data = annotation.data as { x: number; y: number; width: number; height: number }
   const rect = normalizedBBoxToRect(
@@ -81,10 +84,22 @@ function BBoxRect({
     imageSize,
   )
 
+  const fillOpacity = isSelected ? '30' : hovered ? '20' : '10'
+
   return (
     <Group
       onClick={() => onSelect(isSelected ? null : annotation.id)}
       onTap={() => onSelect(isSelected ? null : annotation.id)}
+      onMouseEnter={(e: Konva.KonvaEventObject<MouseEvent>) => {
+        setHovered(true)
+        const stage = e.target.getStage()
+        if (stage) stage.container().style.cursor = 'pointer'
+      }}
+      onMouseLeave={(e: Konva.KonvaEventObject<MouseEvent>) => {
+        setHovered(false)
+        const stage = e.target.getStage()
+        if (stage) stage.container().style.cursor = 'default'
+      }}
     >
       <Rect
         x={rect.x}
@@ -93,9 +108,9 @@ function BBoxRect({
         height={rect.height}
         stroke={color}
         strokeWidth={isSelected ? 3 : 2}
-        dash={isSelected ? [6, 3] : undefined}
-        fill={isSelected ? `${color}20` : undefined}
+        fill={`${color}${fillOpacity}`}
       />
+      {/* 클래스명 라벨 */}
       <Rect
         x={rect.x}
         y={rect.y - 18}

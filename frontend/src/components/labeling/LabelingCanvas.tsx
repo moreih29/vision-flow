@@ -4,7 +4,10 @@ import { Loader2 } from 'lucide-react'
 import type { Annotation } from '@/types/annotation'
 import type { LabelClass } from '@/types/label-class'
 import { useCanvasTransform } from '@/hooks/use-canvas-transform'
+import { useLabelingStore } from '@/stores/labeling-store'
 import AnnotationLayer from './AnnotationLayer'
+import BBoxDrawTool from './tools/BBoxDrawTool'
+import BBoxSelectTool from './tools/BBoxSelectTool'
 
 interface LabelingCanvasProps {
   imageUrl: string | null
@@ -28,7 +31,8 @@ export default function LabelingCanvas({
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
 
-  const { stageRef, handleWheel, fitToScreen } = useCanvasTransform(onScaleChange)
+  const tool = useLabelingStore((s) => s.tool)
+  const { stageRef, isPanning, handleWheel, fitToScreen } = useCanvasTransform(onScaleChange)
 
   // ResizeObserver로 컨테이너 크기 감지
   useEffect(() => {
@@ -111,18 +115,47 @@ export default function LabelingCanvas({
           {image && <KonvaImage image={image} />}
         </Layer>
 
-        {/* 어노테이션 레이어 */}
-        <Layer>
-          {image && (
+        {/* 어노테이션 레이어 -- select 도구가 아닐 때 기본 렌더링 */}
+        {tool !== 'select' && (
+          <Layer>
+            {image && (
+              <AnnotationLayer
+                annotations={annotations}
+                labelClasses={labelClasses}
+                imageSize={imageSize}
+                selectedAnnotationId={selectedAnnotationId}
+                onSelect={onSelectAnnotation}
+              />
+            )}
+          </Layer>
+        )}
+
+        {/* select 도구: BBoxSelectTool이 bbox를 직접 렌더링 + 상호작용 */}
+        {tool === 'select' && image && (
+          <Layer>
+            {/* classification 등 non-bbox 어노테이션은 AnnotationLayer로 렌더링 */}
             <AnnotationLayer
-              annotations={annotations}
+              annotations={annotations.filter((a) => a.annotation_type !== 'bbox')}
               labelClasses={labelClasses}
               imageSize={imageSize}
               selectedAnnotationId={selectedAnnotationId}
               onSelect={onSelectAnnotation}
             />
-          )}
-        </Layer>
+            <BBoxSelectTool
+              annotations={annotations}
+              labelClasses={labelClasses}
+              imageSize={imageSize}
+              isPanning={isPanning}
+            />
+          </Layer>
+        )}
+
+        {/* bbox 그리기 도구 */}
+        {tool === 'bbox' && image && (
+          <Layer>
+            <BBoxDrawTool imageSize={imageSize} isPanning={isPanning} />
+          </Layer>
+        )}
       </Stage>
     </div>
   )

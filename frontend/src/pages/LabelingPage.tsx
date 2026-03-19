@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ZoomIn, MousePointer, Tag, Box } from 'lucide-react'
+import { ArrowLeft, ZoomIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { tasksApi } from '@/api/tasks'
 import { labelClassesApi } from '@/api/label-classes'
@@ -9,7 +9,7 @@ import type { Task } from '@/types/task'
 import type { LabelClass } from '@/types/label-class'
 import type { ImageMeta } from '@/types/image'
 import { useLabelingStore } from '@/stores/labeling-store'
-import { LabelingCanvas, ImageNavigator } from '@/components/labeling'
+import { LabelingCanvas, ImageNavigator, ClassPanel, ToolPanel } from '@/components/labeling'
 
 const TOKEN_KEY = 'auth_token'
 
@@ -23,18 +23,20 @@ export default function LabelingPage() {
   const [classes, setClasses] = useState<LabelClass[]>([])
   const [images, setImages] = useState<ImageMeta[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedAnnotationId, setSelectedAnnotationId] = useState<number | null>(null)
 
   const {
     tool,
-    setTool,
     selectedClassId,
     setSelectedClassId,
+    selectedAnnotationId,
+    setSelectedAnnotationId,
     currentImageIndex,
     scale,
     setScale,
     annotations,
     setAnnotations,
+    addAnnotation,
+    updateAnnotation,
     isDirty,
     reset,
   } = useLabelingStore()
@@ -113,11 +115,46 @@ export default function LabelingPage() {
     [setScale],
   )
 
-  const tools: { id: 'select' | 'classification' | 'bbox'; label: string; icon: React.ReactNode }[] = [
-    { id: 'select', label: '선택', icon: <MousePointer className="h-4 w-4" /> },
-    { id: 'classification', label: '분류', icon: <Tag className="h-4 w-4" /> },
-    { id: 'bbox', label: '박스', icon: <Box className="h-4 w-4" /> },
-  ]
+  // classification 모드에서 클래스 선택 시 호출
+  const handleClassifyImage = useCallback(
+    async (classId: number) => {
+      if (!currentImage) return
+
+      // 이미 있는 classification annotation 확인
+      const existing = annotations.find((a) => a.annotation_type === 'classification')
+
+      if (existing) {
+        // 이미 같은 클래스면 아무것도 하지 않음
+        if (existing.label_class_id === classId) return
+
+        // 기존 annotation label_class_id 업데이트
+        try {
+          await annotationsApi.update(existing.id, { label_class_id: classId })
+          updateAnnotation(existing.id, { label_class_id: classId })
+        } catch {
+          // 에러 무시 — 상태는 변경하지 않음
+        }
+      } else {
+        // 새 classification annotation 생성
+        try {
+          const res = await annotationsApi.create(taskIdNum, currentImage.id, {
+            label_class_id: classId,
+            annotation_type: 'classification',
+            data: {},
+          })
+          addAnnotation(res.data)
+        } catch {
+          // 에러 무시
+        }
+      }
+
+      // 선택된 클래스도 업데이트
+      setSelectedClassId(classId)
+    },
+    [currentImage, annotations, taskIdNum, updateAnnotation, addAnnotation, setSelectedClassId],
+  )
+
+  const taskType = task?.task_type ?? null
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -164,65 +201,18 @@ export default function LabelingPage() {
           {/* 도구 선택 */}
           <div className="border-b p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">도구</p>
-            <div className="flex flex-col gap-1">
-              {tools.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTool(t.id)}
-                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
-                    tool === t.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-accent hover:text-accent-foreground'
-                  }`}
-                >
-                  {t.icon}
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            <ToolPanel taskType={taskType} />
           </div>
 
           {/* 라벨 클래스 목록 */}
           <div className="flex-1 overflow-y-auto p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              라벨 클래스
-            </p>
-            {loading ? (
-              <div className="space-y-1.5">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-8 animate-pulse rounded-md bg-muted" />
-                ))}
-              </div>
-            ) : classes.length === 0 ? (
-              <p className="text-xs text-muted-foreground">클래스가 없습니다.</p>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {classes.map((cls) => (
-                  <button
-                    key={cls.id}
-                    onClick={() =>
-                      setSelectedClassId(
-                        selectedClassId === cls.id ? null : cls.id,
-                      )
-                    }
-                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                      selectedClassId === cls.id
-                        ? 'bg-accent text-accent-foreground ring-1 ring-primary'
-                        : 'hover:bg-accent hover:text-accent-foreground'
-                    }`}
-                  >
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: cls.color }}
-                    />
-                    <span className="flex-1 truncate text-left">{cls.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {cls.label_count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <p className="mb-2 text-xs font-medium text-muted-foreground">라벨 클래스</p>
+            <ClassPanel
+              classes={classes}
+              annotations={annotations}
+              loading={loading}
+              onClassifyImage={tool === 'classification' ? handleClassifyImage : undefined}
+            />
           </div>
         </aside>
 

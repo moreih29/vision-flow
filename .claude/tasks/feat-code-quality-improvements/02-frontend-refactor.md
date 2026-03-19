@@ -7,13 +7,13 @@
 
 ### React Query 도입
 - [ ] React Query 설정 (QueryClient, QueryProvider)
-- [ ] 프로젝트/데이터셋 API를 React Query hooks로 전환
+- [ ] 프로젝트/DataStore API를 React Query hooks로 전환
 - [ ] 이미지/폴더 API를 React Query hooks로 전환
 
 ### 대형 컴포넌트 분할
 - [ ] DataPoolTab (~800줄) → 컨테이너 + 하위 컴포넌트
 - [ ] FolderTreeView (~1000줄) → 트리 + 노드 + 컨텍스트메뉴 + 훅
-- [ ] SubsetDetailPage (~480줄) → 헤더 + 이미지그리드 + 클래스패널
+- [ ] TaskDetailPage (~480줄) → 헤더 + 이미지그리드 + 클래스패널
 
 ### 타입 시스템
 - [ ] 로그인 폼 react-hook-form + zod 검증 강화

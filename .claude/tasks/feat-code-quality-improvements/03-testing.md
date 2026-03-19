@@ -7,8 +7,8 @@
 
 ### Backend 추가 테스트
 - [ ] Images API 테스트 (업로드, 중복 제거, 폴더, 배치)
-- [ ] Subsets API 테스트 (CRUD + 이미지 멤버십)
-- [ ] Label Classes API 테스트 (CRUD + Subset 소속)
+- [ ] Tasks API 테스트 (CRUD + 이미지 멤버십)
+- [ ] Label Classes API 테스트 (CRUD + Task 소속)
 - [ ] 서비스 레이어 단위 테스트
 - [ ] 스토리지 단위 테스트 (LocalStorage)
 
@@ -20,7 +20,7 @@
 
 ### E2E 테스트 (선택)
 - [ ] Playwright 설정
-- [ ] 핵심 사용자 흐름 (회원가입 → 로그인 → 프로젝트 → 업로드 → Subset)
+- [ ] 핵심 사용자 흐름 (회원가입 → 로그인 → 프로젝트 → 업로드 → Task)
 
 ### 품질 도구
 - [ ] mypy 설정 (Backend 타입 체크)

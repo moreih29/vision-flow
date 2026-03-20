@@ -3,5 +3,8 @@
 # Frontend
 cd frontend && npx lint-staged
 
-# Backend
-cd ../backend && source .venv/bin/activate && ruff check app/ tests/ && ruff format --check app/ tests/
+# Backend (skip if ruff not installed)
+cd ../backend
+if [ -x .venv/bin/ruff ]; then
+  .venv/bin/ruff check app/ tests/ && .venv/bin/ruff format --check app/ tests/
+fi

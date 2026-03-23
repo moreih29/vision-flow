@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.folder_meta import FolderMeta
 from app.models.image import Image
-from app.schemas.image import FolderContentsResponse, FolderInfo, ImageResponse
+from app.schemas.image import FolderContentsResponse, FolderImageIdsResponse, FolderInfo, ImageResponse
 from app.storage.base import StorageBackend
 
 
@@ -509,6 +509,20 @@ class ImageService:
             count = await self.delete_folder(db, data_store_id, path, user_id, storage)
             total += count
         return total
+
+    async def get_folder_image_ids(
+        self,
+        db: AsyncSession,
+        data_store_id: int,
+        path: str = "",
+    ) -> FolderImageIdsResponse:
+        normalized_path = _normalize_folder_path(path)
+        query = select(Image.id).where(Image.data_store_id == data_store_id)
+        if normalized_path:
+            query = query.where(Image.folder_path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
+        result = await db.execute(query)
+        ids = list(result.scalars().all())
+        return FolderImageIdsResponse(image_ids=ids, total=len(ids))
 
     async def batch_move_folders(
         self,

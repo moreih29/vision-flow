@@ -91,7 +91,7 @@ export default function VirtualImageList({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 52,
+    estimateSize: (index) => (items[index]?.type === "parent" ? 0 : 52),
     overscan: 10,
   });
 
@@ -302,290 +302,308 @@ export default function VirtualImageList({
   return (
     <>
       <div
-        ref={parentRef}
-        className="overflow-y-auto rounded-md border select-none"
+        className="flex flex-col rounded-md border select-none"
         style={{ height: "100%" }}
-        onContextMenu={handleBgContextMenu}
-        onClick={handleBgClick}
       >
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex border-b bg-muted/50 text-sm font-medium">
-          <div className="w-10 shrink-0 px-3 py-2" />
-          <div className="w-12 shrink-0 px-3 py-2" />
-          <div className="flex-1 px-3 py-2">파일명</div>
-          <div className="w-24 shrink-0 px-3 py-2">크기</div>
-          <div className="w-28 shrink-0 px-3 py-2">해상도</div>
-          <div className="w-16 shrink-0 px-3 py-2" />
+        {/* Header — 스크롤 밖 고정 */}
+        <div className="shrink-0 bg-background">
+          {/* 컬럼 헤더 */}
+          <div className="flex border-b bg-muted/80 text-sm font-medium">
+            <div className="w-10 shrink-0 px-3 py-2" />
+            <div className="w-12 shrink-0 px-3 py-2" />
+            <div className="flex-1 px-3 py-2">파일명</div>
+            <div className="w-24 shrink-0 px-3 py-2">크기</div>
+            <div className="w-28 shrink-0 px-3 py-2">해상도</div>
+            <div className="w-16 shrink-0 px-3 py-2" />
+          </div>
+          {/* 상위 폴더 이동 */}
+          {items.length > 0 && items[0].type === "parent" && (
+            <div
+              className="flex items-center border-b cursor-pointer hover:bg-muted/30"
+              onClick={() => onNavigateUp?.()}
+            >
+              <div className="w-10 shrink-0" />
+              <div className="w-12 shrink-0 px-3 py-1.5 flex items-center justify-center">
+                <ArrowUpLeft className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="flex-1 px-3 py-1.5 text-sm font-medium text-muted-foreground">
+                ..
+              </div>
+              <div className="w-24 shrink-0" />
+              <div className="w-28 shrink-0" />
+              <div className="w-16 shrink-0" />
+            </div>
+          )}
         </div>
 
+        {/* 스크롤 영역 */}
         <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: "100%",
-            position: "relative",
-          }}
+          ref={parentRef}
+          className="flex-1 min-h-0 overflow-y-auto"
+          onContextMenu={handleBgContextMenu}
+          onClick={handleBgClick}
         >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const isLoaderRow = virtualRow.index >= items.length;
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const isLoaderRow = virtualRow.index >= items.length;
 
-            if (isLoaderRow) {
-              return (
-                <div
-                  key={virtualRow.key}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className="flex items-center justify-center"
-                >
-                  <span className="text-sm text-muted-foreground">
-                    {loadingMore ? "\uB85C\uB529 \uC911..." : ""}
-                  </span>
-                </div>
-              );
-            }
-
-            const item = items[virtualRow.index];
-            const isSelected = selectedKeys.has(item.key);
-
-            if (item.type === "parent") {
-              return (
-                <div
-                  key={virtualRow.key}
-                  data-pool-item
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className="flex items-center border-b cursor-pointer hover:bg-muted/30"
-                  onClick={() => onNavigateUp?.()}
-                >
-                  <div className="w-10 shrink-0" />
-                  <div className="w-12 shrink-0 px-3 py-1.5 flex items-center justify-center">
-                    <ArrowUpLeft className="h-5 w-5 text-muted-foreground" />
+              if (isLoaderRow) {
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="flex items-center justify-center"
+                  >
+                    <span className="text-sm text-muted-foreground">
+                      {loadingMore ? "\uB85C\uB529 \uC911..." : ""}
+                    </span>
                   </div>
-                  <div className="flex-1 px-3 py-1.5 text-sm font-medium text-muted-foreground">
-                    ..
-                  </div>
-                  <div className="w-24 shrink-0" />
-                  <div className="w-28 shrink-0" />
-                  <div className="w-16 shrink-0" />
-                </div>
-              );
-            }
+                );
+              }
 
-            if (item.type === "folder" && item.folder) {
-              const isRenaming = renamingFolderPath === item.folder.path;
-              const isFolderDropTarget = dragOverFolderKey === item.key;
-              return (
-                <ContextMenu key={virtualRow.key}>
-                  <ContextMenuTrigger>
-                    <div
-                      data-pool-item
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        width: "100%",
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      className={`flex items-center border-b last:border-0 cursor-pointer ${
-                        isFolderDropTarget
-                          ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                          : isSelected
-                            ? "bg-primary/10"
-                            : "hover:bg-muted/30"
-                      }`}
-                      onClick={(e) => onItemClick(virtualRow.index, e)}
-                      onDoubleClick={() => onNavigateFolder(item.folder!.path)}
-                      onContextMenu={() =>
-                        handleContextMenu(item, virtualRow.index)
-                      }
-                      draggable={!isRenaming}
-                      onDragStart={(e) => handleDragStart(e, item)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={(e) => handleFolderDragOver(e, item)}
-                      onDragLeave={handleFolderDragLeave}
-                      onDrop={(e) => handleFolderDrop(e, item)}
-                    >
+              const item = items[virtualRow.index];
+              const isSelected = selectedKeys.has(item.key);
+
+              if (item.type === "parent") {
+                // 상위 폴더는 sticky 헤더에 표시 — 가상 스크롤에서는 빈 공간
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  />
+                );
+              }
+
+              if (item.type === "folder" && item.folder) {
+                const isRenaming = renamingFolderPath === item.folder.path;
+                const isFolderDropTarget = dragOverFolderKey === item.key;
+                return (
+                  <ContextMenu key={virtualRow.key}>
+                    <ContextMenuTrigger>
                       <div
-                        className="w-10 shrink-0 flex items-center justify-center cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCheckboxClick(virtualRow.index);
+                        data-pool-item
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
                         }}
+                        className={`flex items-center border-b last:border-0 cursor-pointer ${
+                          isFolderDropTarget
+                            ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                            : isSelected
+                              ? "bg-primary/10"
+                              : "hover:bg-muted/30"
+                        }`}
+                        onClick={(e) => onItemClick(virtualRow.index, e)}
+                        onDoubleClick={() =>
+                          onNavigateFolder(item.folder!.path)
+                        }
+                        onContextMenu={() =>
+                          handleContextMenu(item, virtualRow.index)
+                        }
+                        draggable={!isRenaming}
+                        onDragStart={(e) => handleDragStart(e, item)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleFolderDragOver(e, item)}
+                        onDragLeave={handleFolderDragLeave}
+                        onDrop={(e) => handleFolderDrop(e, item)}
                       >
                         <div
-                          className={`h-4 w-4 rounded border-2 flex items-center justify-center ${
-                            isSelected
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "border-muted-foreground/40"
-                          }`}
+                          className="w-10 shrink-0 flex items-center justify-center cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCheckboxClick(virtualRow.index);
+                          }}
                         >
-                          {isSelected && <Check className="h-3 w-3" />}
+                          <div
+                            className={`h-4 w-4 rounded border-2 flex items-center justify-center ${
+                              isSelected
+                                ? "bg-primary border-primary text-primary-foreground"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </div>
                         </div>
-                      </div>
-                      <div className="w-12 shrink-0 px-3 py-1.5 flex items-center justify-center">
-                        <Folder className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                      <div
-                        className="flex-1 px-3 py-1.5 truncate text-sm font-medium"
-                        title={item.folder.name}
-                      >
-                        {isRenaming ? (
-                          <input
-                            autoFocus
-                            className="w-full bg-transparent border border-primary rounded px-1 outline-none text-sm"
-                            defaultValue={item.folder.name}
-                            onClick={(e) => e.stopPropagation()}
-                            onDoubleClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                const val = (
-                                  e.target as HTMLInputElement
-                                ).value.trim();
-                                if (val)
+                        <div className="w-12 shrink-0 px-3 py-1.5 flex items-center justify-center">
+                          <Folder className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <div
+                          className="flex-1 px-3 py-1.5 truncate text-sm font-medium"
+                          title={item.folder.name}
+                        >
+                          {isRenaming ? (
+                            <input
+                              autoFocus
+                              className="w-full bg-transparent border border-primary rounded px-1 outline-none text-sm"
+                              defaultValue={item.folder.name}
+                              onClick={(e) => e.stopPropagation()}
+                              onDoubleClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const val = (
+                                    e.target as HTMLInputElement
+                                  ).value.trim();
+                                  if (val)
+                                    onFinishRenameFolder(
+                                      item.folder!.path,
+                                      val,
+                                    );
+                                  else onCancelRenameFolder();
+                                }
+                                if (e.key === "Escape") onCancelRenameFolder();
+                              }}
+                              onBlur={(e) => {
+                                const val = e.target.value.trim();
+                                if (val && val !== item.folder!.name)
                                   onFinishRenameFolder(item.folder!.path, val);
                                 else onCancelRenameFolder();
-                              }
-                              if (e.key === "Escape") onCancelRenameFolder();
+                              }}
+                              onFocus={(e) => e.target.select()}
+                            />
+                          ) : (
+                            item.folder.name
+                          )}
+                        </div>
+                        <div className="w-24 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
+                          {item.folder.image_count}개
+                        </div>
+                        <div className="w-28 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
+                          {item.folder.subfolder_count > 0
+                            ? `${item.folder.subfolder_count}\uAC1C \uD558\uC704\uD3F4\uB354`
+                            : "-"}
+                        </div>
+                        <div className="w-16 shrink-0 px-3 py-1.5 text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteFolder(item.folder!.path);
                             }}
-                            onBlur={(e) => {
-                              const val = e.target.value.trim();
-                              if (val && val !== item.folder!.name)
-                                onFinishRenameFolder(item.folder!.path, val);
-                              else onCancelRenameFolder();
-                            }}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        ) : (
-                          item.folder.name
-                        )}
-                      </div>
-                      <div className="w-24 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
-                        {item.folder.image_count}개
-                      </div>
-                      <div className="w-28 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
-                        {item.folder.subfolder_count > 0
-                          ? `${item.folder.subfolder_count}\uAC1C \uD558\uC704\uD3F4\uB354`
-                          : "-"}
-                      </div>
-                      <div className="w-16 shrink-0 px-3 py-1.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteFolder(item.folder!.path);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </ContextMenuTrigger>
-                  {renderContextMenuContent(item)}
-                </ContextMenu>
-              );
-            }
-
-            if (item.type === "image" && item.image) {
-              const image = item.image;
-              return (
-                <ContextMenu key={virtualRow.key}>
-                  <ContextMenuTrigger>
-                    <div
-                      data-pool-item
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        width: "100%",
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      className={`flex items-center border-b last:border-0 cursor-pointer ${
-                        isSelected ? "bg-primary/10" : "hover:bg-muted/30"
-                      }`}
-                      onClick={(e) => onItemClick(virtualRow.index, e)}
-                      onContextMenu={() =>
-                        handleContextMenu(item, virtualRow.index)
-                      }
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item)}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <div
-                        className="w-10 shrink-0 flex items-center justify-center cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCheckboxClick(virtualRow.index);
-                        }}
-                      >
-                        <div
-                          className={`h-4 w-4 rounded border-2 flex items-center justify-center ${
-                            isSelected
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "border-muted-foreground/40"
-                          }`}
-                        >
-                          {isSelected && <Check className="h-3 w-3" />}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="w-12 shrink-0 px-3 py-1.5">
-                        <img
-                          src={imagesApi.getFileUrl(image.id)}
-                          alt={image.original_filename}
-                          className="h-10 w-10 rounded object-cover"
-                          loading="lazy"
-                        />
-                      </div>
+                    </ContextMenuTrigger>
+                    {renderContextMenuContent(item)}
+                  </ContextMenu>
+                );
+              }
+
+              if (item.type === "image" && item.image) {
+                const image = item.image;
+                return (
+                  <ContextMenu key={virtualRow.key}>
+                    <ContextMenuTrigger>
                       <div
-                        className="flex-1 px-3 py-1.5 truncate text-sm"
-                        title={image.original_filename}
+                        data-pool-item
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                        className={`flex items-center border-b last:border-0 cursor-pointer ${
+                          isSelected ? "bg-primary/10" : "hover:bg-muted/30"
+                        }`}
+                        onClick={(e) => onItemClick(virtualRow.index, e)}
+                        onContextMenu={() =>
+                          handleContextMenu(item, virtualRow.index)
+                        }
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, item)}
+                        onDragEnd={handleDragEnd}
                       >
-                        {image.original_filename}
-                      </div>
-                      <div className="w-24 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
-                        {formatBytes(image.file_size)}
-                      </div>
-                      <div className="w-28 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
-                        {image.width && image.height
-                          ? `${image.width} x ${image.height}`
-                          : "-"}
-                      </div>
-                      <div className="w-16 shrink-0 px-3 py-1.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        <div
+                          className="w-10 shrink-0 flex items-center justify-center cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDeleteImage(image.id);
+                            onCheckboxClick(virtualRow.index);
                           }}
                         >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                          <div
+                            className={`h-4 w-4 rounded border-2 flex items-center justify-center ${
+                              isSelected
+                                ? "bg-primary border-primary text-primary-foreground"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </div>
+                        </div>
+                        <div className="w-12 shrink-0 px-3 py-1.5">
+                          <img
+                            src={imagesApi.getFileUrl(image.id)}
+                            alt={image.original_filename}
+                            className="h-10 w-10 rounded object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div
+                          className="flex-1 px-3 py-1.5 truncate text-sm"
+                          title={image.original_filename}
+                        >
+                          {image.original_filename}
+                        </div>
+                        <div className="w-24 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
+                          {formatBytes(image.file_size)}
+                        </div>
+                        <div className="w-28 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
+                          {image.width && image.height
+                            ? `${image.width} x ${image.height}`
+                            : "-"}
+                        </div>
+                        <div className="w-16 shrink-0 px-3 py-1.5 text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteImage(image.id);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </ContextMenuTrigger>
-                  {renderContextMenuContent(item)}
-                </ContextMenu>
-              );
-            }
+                    </ContextMenuTrigger>
+                    {renderContextMenuContent(item)}
+                  </ContextMenu>
+                );
+              }
 
-            return null;
-          })}
+              return null;
+            })}
+          </div>
         </div>
       </div>
       {bgMenu && (

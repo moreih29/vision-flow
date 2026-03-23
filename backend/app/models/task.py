@@ -32,3 +32,4 @@ class Task(Base):
     project: Mapped["Project"] = relationship(back_populates="tasks")
     task_images: Mapped[list["TaskImage"]] = relationship(back_populates="task", cascade="all, delete-orphan")
     label_classes: Mapped[list["LabelClass"]] = relationship(back_populates="task", cascade="all, delete-orphan")
+    task_folder_meta: Mapped[list["TaskFolderMeta"]] = relationship(cascade="all, delete-orphan")

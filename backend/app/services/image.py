@@ -44,7 +44,8 @@ class ImageService:
     ) -> Image:
         data = await file.read()
         file_hash = hashlib.sha256(data).hexdigest()
-        original_filename = file.filename or "unknown"
+        raw_filename = file.filename or "unknown"
+        original_filename = raw_filename.rsplit("/", 1)[-1] if "/" in raw_filename else raw_filename
         ext = Path(original_filename).suffix.lstrip(".")
         storage_key = (
             f"{file_hash[:2]}/{file_hash[2:4]}/{file_hash}.{ext}"

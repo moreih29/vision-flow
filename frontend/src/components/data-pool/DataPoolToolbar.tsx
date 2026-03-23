@@ -71,7 +71,7 @@ export default function DataPoolToolbar({
         onChange={handleFolderInputChange}
       />
 
-      <div className="mb-4 flex items-center justify-between select-none">
+      <div className="mb-4 flex items-center justify-between select-none shrink-0">
         <div>
           <FolderBreadcrumb
             currentPath={currentPath}

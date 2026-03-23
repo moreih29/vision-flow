@@ -132,7 +132,7 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
+    <div className="flex flex-1 flex-col overflow-hidden">
       <header className="border-b">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4">
           <Button
@@ -162,7 +162,7 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      <main className="px-6 py-4 flex-1 overflow-hidden">
+      <main className="px-6 py-4 flex-1 flex flex-col overflow-hidden min-h-0">
         {error && (
           <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {error}
@@ -172,7 +172,7 @@ export default function ProjectDetailPage() {
         <Tabs
           value={tab}
           onValueChange={handleTabChange}
-          className="flex flex-col h-full"
+          className="flex flex-col flex-1 min-h-0"
         >
           <TabsList className="mb-6">
             <TabsTrigger value="pool">
@@ -193,7 +193,7 @@ export default function ProjectDetailPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pool" className="flex-1 min-h-0">
+          <TabsContent value="pool" className="flex-1 min-h-0 flex flex-col">
             <DataPoolTab
               projectId={projectId}
               currentPath={currentPath}

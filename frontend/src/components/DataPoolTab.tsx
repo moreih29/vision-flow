@@ -220,29 +220,29 @@ export default function DataPoolTab({
     ),
   );
 
-  // -- Auto-create data store --
-  useEffect(() => {
-    if (dataStoresLoading) return;
-    if (dataStoresError) {
-      setError("데이터를 불러오지 못했습니다.");
-      return;
-    } // eslint-disable-line react-hooks/set-state-in-effect
-    if (!dataStoreList) return;
-    if (dataStoreList.length > 0) {
+  // -- Auto-select data store (set state during render pattern) --
+  if (!dataStoresLoading && !dataStoresError && dataStoreList) {
+    if (dataStoreList.length > 0 && dataStore === null) {
       setDataStore(dataStoreList[0]);
-    } else if (!creatingRef.current) {
-      creatingRef.current = true;
-      createDataStore.mutate(
-        { name: "Default Pool" },
-        {
-          onSuccess: (created) => setDataStore(created),
-          onError: () => setError("데이터를 불러오지 못했습니다."),
-          onSettled: () => {
-            creatingRef.current = false;
-          },
-        },
-      );
     }
+  }
+
+  // -- Auto-create data store if none exists --
+  useEffect(() => {
+    if (dataStoresLoading || dataStoresError || !dataStoreList) return;
+    if (dataStoreList.length > 0) return;
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    createDataStore.mutate(
+      { name: "Data Pool" },
+      {
+        onSuccess: (created) => setDataStore(created),
+        onError: () => setError("데이터를 불러오지 못했습니다."),
+        onSettled: () => {
+          creatingRef.current = false;
+        },
+      },
+    );
   }, [dataStoreList, dataStoresLoading, dataStoresError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // -- Keyboard shortcuts --
@@ -320,16 +320,16 @@ export default function DataPoolTab({
       </div>
     );
   }
-  if (error) {
+  if (error || dataStoresError) {
     return (
       <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-        {error}
+        {error || "데이터를 불러오지 못했습니다."}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {dataStore && (
         <div className="mb-4 flex items-center gap-2">
           <Badge variant="secondary">
@@ -337,7 +337,7 @@ export default function DataPoolTab({
             {dataStore.image_count}개
           </Badge>
           <span className="text-sm text-muted-foreground">
-            {dataStore.name}
+            {dataStore.name === "Default Pool" ? "Data Pool" : dataStore.name}
           </span>
         </div>
       )}
@@ -346,11 +346,13 @@ export default function DataPoolTab({
 
       <div className="flex gap-4 flex-1 min-h-0">
         {dataStore && (
-          <div className="w-64 shrink-0 rounded-lg border p-2 overflow-y-auto">
+          <div className="w-64 shrink-0 rounded-lg border p-2 flex flex-col min-h-0">
             <FolderTreeView
               ref={treeRef}
               dataStoreId={dataStore.id}
-              rootLabel={dataStore.name}
+              rootLabel={
+                dataStore.name === "Default Pool" ? "Data Pool" : dataStore.name
+              }
               rootImageCount={dataStore.image_count}
               selectedPath={currentPath}
               onSelectPath={onPathChange}
@@ -364,7 +366,7 @@ export default function DataPoolTab({
           </div>
         )}
 
-        <div className="min-w-0 flex-1 flex flex-col">
+        <div className="min-w-0 flex-1 flex flex-col min-h-0">
           <DataPoolToolbar
             currentPath={currentPath}
             foldersCount={folders.length}

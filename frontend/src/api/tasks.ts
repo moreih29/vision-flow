@@ -1,5 +1,6 @@
-import client from '@/api/client'
-import type { Task, TaskType } from '@/types/task'
+import client from "@/api/client";
+import type { Task, TaskType } from "@/types/task";
+import type { ImageMeta } from "@/types/image";
 
 export const tasksApi = {
   list: (projectId: number) =>
@@ -20,4 +21,24 @@ export const tasksApi = {
     }),
   getImages: (taskId: number, skip?: number, limit?: number) =>
     client.get(`/tasks/${taskId}/images`, { params: { skip, limit } }),
-}
+  getAllImages: async (
+    taskId: number,
+  ): Promise<{ image: ImageMeta; image_id: number }[]> => {
+    const first = await client.get<{
+      images: { image: ImageMeta; image_id: number }[];
+      total: number;
+      skip: number;
+      limit: number;
+    }>(`/tasks/${taskId}/images`, { params: { skip: 0, limit: 500 } });
+    const { total, images } = first.data;
+    if (images.length >= total) return images;
+    const remaining: Promise<typeof first>[] = [];
+    for (let skip = 500; skip < total; skip += 500) {
+      remaining.push(
+        client.get(`/tasks/${taskId}/images`, { params: { skip, limit: 500 } }),
+      );
+    }
+    const results = await Promise.all(remaining);
+    return [...images, ...results.flatMap((r) => r.data.images)];
+  },
+};

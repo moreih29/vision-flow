@@ -5,6 +5,7 @@ from app.models.image import Image
 from app.models.label_class import LabelClass
 from app.models.project import Project
 from app.models.task import Task
+from app.models.task_folder_meta import TaskFolderMeta
 from app.models.task_image import TaskImage
 from app.models.user import User
 
@@ -15,6 +16,7 @@ __all__ = [
     "Image",
     "Task",
     "TaskImage",
+    "TaskFolderMeta",
     "LabelClass",
     "FolderMeta",
     "Annotation",

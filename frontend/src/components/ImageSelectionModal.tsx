@@ -29,6 +29,7 @@ interface ImageSelectionModalProps {
   taskId: number;
   existingImages: ImageMeta[];
   onChanged: (result: { added: number[]; removed: number[] }) => void;
+  targetFolderPath?: string;
 }
 
 interface TreeNode {
@@ -50,6 +51,7 @@ export default function ImageSelectionModal({
   taskId,
   existingImages,
   onChanged,
+  targetFolderPath,
 }: ImageSelectionModalProps) {
   const { confirmDialog, showAlert } = useConfirmDialog();
   const [dataStore, setDataStore] = useState<DataStore | null>(null);
@@ -338,7 +340,8 @@ export default function ImageSelectionModal({
     if (toAdd.length === 0 && toRemove.length === 0) return;
     setAdding(true);
     try {
-      if (toAdd.length > 0) await tasksApi.addImages(taskId, toAdd);
+      if (toAdd.length > 0)
+        await tasksApi.addImages(taskId, toAdd, targetFolderPath ?? "");
       if (toRemove.length > 0) await tasksApi.removeImages(taskId, toRemove);
       onChanged({ added: toAdd, removed: toRemove });
       onOpenChange(false);
@@ -509,6 +512,12 @@ export default function ImageSelectionModal({
       <DialogContent className="w-[90vw] max-w-[90vw] sm:max-w-[90vw] h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>이미지 관리</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            대상 폴더:{" "}
+            <span className="font-medium text-foreground">
+              {targetFolderPath ? targetFolderPath : "/ (루트)"}
+            </span>
+          </p>
         </DialogHeader>
 
         {loading ? (

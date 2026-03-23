@@ -1,41 +1,42 @@
-import { Upload } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
-import VirtualImageGrid from '@/components/VirtualImageGrid'
-import VirtualImageList from '@/components/VirtualImageList'
-import type { DataPoolItem } from '@/types/image'
+import { Upload } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import VirtualImageGrid from "@/components/VirtualImageGrid";
+import VirtualImageList from "@/components/VirtualImageList";
+import type { DataPoolItem } from "@/types/image";
 
 interface DataPoolContentAreaProps {
-  items: DataPoolItem[]
-  contentsLoading: boolean
-  previewMode: 'grid' | 'list'
-  selectedKeys: Set<string>
-  hasMore: boolean
-  loadingMore: boolean
-  currentPath: string
-  renamingFolderPath: string | null
-  isDragOverUpload: boolean
-  onLoadMore: () => void
-  onItemClick: (index: number, event: React.MouseEvent) => void
-  onNavigateFolder: (path: string) => void
-  onNavigateUp: (() => void) | undefined
-  onDeleteImage: (id: number) => void
-  onDeleteFolder: (path: string) => void
-  onCheckboxClick: (index: number) => void
-  onMoveSelected: () => void
-  onDeleteSelected: () => void
-  onRenameFolder: (path: string) => void
-  onCreateFolderHere: () => void
-  onFinishRenameFolder: (oldPath: string, newName: string) => void
-  onCancelRenameFolder: () => void
-  onClearSelection: () => void
+  items: DataPoolItem[];
+  contentsLoading: boolean;
+  previewMode: "grid" | "list";
+  selectedKeys: Set<string>;
+  hasMore: boolean;
+  loadingMore: boolean;
+  currentPath: string;
+  renamingFolderPath: string | null;
+  isDragOverUpload: boolean;
+  onLoadMore: () => void;
+  onItemClick: (index: number, event: React.MouseEvent) => void;
+  onNavigateFolder: (path: string) => void;
+  onNavigateUp: (() => void) | undefined;
+  onDeleteImage: (id: number) => void;
+  onDeleteFolder: (path: string) => void;
+  onCheckboxClick: (index: number) => void;
+  onMoveSelected: () => void;
+  onDeleteSelected: () => void;
+  onRenameFolder: (path: string) => void;
+  onCreateFolderHere: () => void;
+  onFinishRenameFolder: (oldPath: string, newName: string) => void;
+  onCancelRenameFolder: () => void;
+  onClearSelection: () => void;
   onDropItemsOnFolder: (
     imageIds: number[],
     folderPaths: string[],
     targetPath: string,
-  ) => Promise<void>
-  onDragOver: (e: React.DragEvent) => void
-  onDragLeave: (e: React.DragEvent) => void
-  onDrop: (e: React.DragEvent) => void
+  ) => Promise<void>;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  variant?: "data-pool" | "task";
 }
 
 export default function DataPoolContentArea({
@@ -66,6 +67,7 @@ export default function DataPoolContentArea({
   onDragOver,
   onDragLeave,
   onDrop,
+  variant = "data-pool",
 }: DataPoolContentAreaProps) {
   const sharedProps = {
     items,
@@ -88,11 +90,11 @@ export default function DataPoolContentArea({
     onClearSelection,
     onNavigateUp,
     onDropItemsOnFolder,
-  }
+  };
 
   return (
     <div
-      className={`min-w-0 flex-1 flex flex-col relative ${isDragOverUpload ? 'ring-2 ring-primary ring-inset rounded-lg' : ''}`}
+      className={`min-w-0 flex-1 flex flex-col relative ${isDragOverUpload ? "ring-2 ring-primary ring-inset rounded-lg" : ""}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -103,8 +105,8 @@ export default function DataPoolContentArea({
             <Upload className="h-10 w-10" />
             <p className="text-sm font-medium">
               {currentPath
-                ? `"${currentPath.replace(/\/$/, '').split('/').pop()}" 폴더에 업로드`
-                : '현재 위치에 파일 업로드'}
+                ? `"${currentPath.replace(/\/$/, "").split("/").pop()}" 폴더에 업로드`
+                : "현재 위치에 파일 업로드"}
             </p>
           </div>
         </div>
@@ -114,10 +116,7 @@ export default function DataPoolContentArea({
         {contentsLoading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton
-                key={i}
-                className="aspect-square w-full rounded-md"
-              />
+              <Skeleton key={i} className="aspect-square w-full rounded-md" />
             ))}
           </div>
         ) : items.length === 0 ? (
@@ -130,12 +129,12 @@ export default function DataPoolContentArea({
               파일을 드래그하거나 상단 버튼으로 업로드하세요.
             </p>
           </div>
-        ) : previewMode === 'grid' ? (
-          <VirtualImageGrid {...sharedProps} />
+        ) : previewMode === "grid" ? (
+          <VirtualImageGrid {...sharedProps} variant={variant} />
         ) : (
-          <VirtualImageList {...sharedProps} />
+          <VirtualImageList {...sharedProps} variant={variant} />
         )}
       </div>
     </div>
-  )
+  );
 }

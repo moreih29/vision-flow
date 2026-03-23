@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import aiofiles  # type: ignore[import-untyped]
@@ -27,6 +28,12 @@ class LocalStorage(StorageBackend):
             await f.write(data)
         return str(path)
 
+    async def save_from_path(self, key: str, src_path: Path) -> str:
+        """Atomically move a temporary file into storage."""
+        dest = self._key_to_path(key)
+        shutil.move(str(src_path), dest)
+        return str(dest)
+
     async def load(self, key: str) -> bytes:
         path = self._key_to_path(key)
         if not path.exists():
@@ -42,3 +49,6 @@ class LocalStorage(StorageBackend):
     async def exists(self, key: str) -> bool:
         path = self._key_to_path(key)
         return path.exists()
+
+    def get_file_path(self, key: str) -> str:
+        return str(self._key_to_path(key))

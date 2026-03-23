@@ -26,16 +26,12 @@ class AnnotationService:
 
     async def get_annotations(self, db: AsyncSession, task_image_id: int) -> list[Annotation]:
         """이미지별 전체 어노테이션 조회."""
-        result = await db.execute(
-            select(Annotation).where(Annotation.task_image_id == task_image_id)
-        )
+        result = await db.execute(select(Annotation).where(Annotation.task_image_id == task_image_id))
         return list(result.scalars().all())
 
     async def get_annotation(self, db: AsyncSession, annotation_id: int) -> Annotation:
         """단일 어노테이션 조회, 없으면 404."""
-        result = await db.execute(
-            select(Annotation).where(Annotation.id == annotation_id)
-        )
+        result = await db.execute(select(Annotation).where(Annotation.id == annotation_id))
         annotation = result.scalar_one_or_none()
         if annotation is None:
             raise HTTPException(
@@ -91,9 +87,7 @@ class AnnotationService:
         annotations: list[AnnotationCreate],
     ) -> list[Annotation]:
         """기존 전체 삭제 후 새로 삽입 (전체 교체)."""
-        await db.execute(
-            delete(Annotation).where(Annotation.task_image_id == task_image_id)
-        )
+        await db.execute(delete(Annotation).where(Annotation.task_image_id == task_image_id))
         new_annotations = [
             Annotation(
                 task_image_id=task_image_id,

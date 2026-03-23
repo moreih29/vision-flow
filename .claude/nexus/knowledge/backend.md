@@ -85,4 +85,30 @@ users ──1:N──▶ projects ──1:N──▶ data_stores ──1:N──
 - SHA-256 해시 기반 Content-Addressable Storage
 - 경로: `{base}/{hash[0:2]}/{hash[2:4]}/{full_hash}.{ext}` (2단계 샤딩, 65,536 디렉토리)
 - 동일 해시 → 물리 파일 1회 저장, DB 레코드만 추가 (dedup)
-- `StorageBackend` ABC: `save()`, `load()`, `delete()`, `exists()`
+- `StorageBackend` ABC: `save()`, `save_from_path()`, `load()`, `delete()`, `exists()`, `get_file_path()`
+- `save_from_path(key, src_path)`: 임시 파일을 최종 위치로 이동 (복사 아닌 move, I/O 최소화)
+- `get_file_path(key)`: 파일의 실제 경로 반환 (FileResponse용, private `_key_to_path()` 대체)
+
+### 업로드 스트리밍 (OOM 방지)
+
+100MB 파일 대응을 위해 전체 `file.read()` 대신 청크 단위 처리:
+1. 256KB 청크로 읽으면서 해시 계산(`hashlib.sha256().update()`) + 임시 파일 저장 동시 수행
+2. 해시 완료 → dedup 체크 → 신규 시 `save_from_path()`로 이동, 중복 시 임시 파일 삭제
+3. Pillow 크기 추출은 스토리지 경로에서 직접 읽기
+
+### 삭제 시 물리 파일 정리
+
+CAS dedup 구조에서 참조 카운트 기반 orphan 방지:
+- `_resolve_keys_to_delete(db, candidate_keys, target_ids)`: GROUP BY 단일 쿼리로 전체 참조 수 vs 삭제 대상 참조 수 비교
+- 전체 참조 == 삭제 대상일 때만 `storage.delete()` 호출
+- DataStore/Project 삭제, 폴더 삭제, 배치 삭제에서 공통 사용
+
+## 보안 패턴
+
+### 소유권 검증 (IDOR 방지)
+
+모든 리소스 엔드포인트에서 소유권 체인 검증 필수:
+- **Project**: `project_service.check_ownership(project, user_id)`
+- **DataStore**: `data_store_service.check_ownership(db, data_store_id, user_id)` → 내부에서 project 소유권까지 체크
+- **Image**: `image_service.check_image_ownership(db, image_id, user_id)` → `image → data_store → project → owner_id` 전체 체인 검증
+- **새 엔드포인트 추가 시 반드시 해당 패턴 적용** — 누락 시 IDOR 취약점 발생

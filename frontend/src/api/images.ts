@@ -191,6 +191,8 @@ export const imagesApi = {
     ),
 
   getFileUrl: (id: number) => {
+    // TODO: JWT를 URL 쿼리 파라미터로 전달하면 브라우저 히스토리·서버 로그에 노출됨.
+    // 향후 짧은 TTL의 서명 URL(signed URL) 또는 httpOnly 쿠키 방식으로 교체 검토 필요.
     const token = localStorage.getItem("auth_token");
     return `/api/v1/images/${id}/file?token=${token ?? ""}`;
   },

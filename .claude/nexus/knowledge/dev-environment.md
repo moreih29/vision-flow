@@ -14,7 +14,7 @@ cd docker && docker compose -f docker-compose.dev.yml up -d
 
 ### 애플리케이션 실행
 ```bash
-# Backend (포트 8002)
+# Backend (포트 8100)
 cd backend && source .venv/bin/activate && uvicorn app.main:app --port 8100 --reload
 
 # Frontend (포트 5174)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 
-const SCALE_BY = 1.05;
+export const SCALE_BY = 1.05;
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 10;
 const MOMENTUM_FRICTION = 0.92;
@@ -24,8 +24,45 @@ interface CanvasTransform {
   zoomOut: () => void;
 }
 
+// 위치 클램핑 순수 함수 — 이미지가 뷰포트 50% 이상 벗어나지 않도록 제한
+export function clampPosition(
+  pos: { x: number; y: number },
+  currentScale: number,
+  containerWidth: number,
+  containerHeight: number,
+  imageSize?: { width: number; height: number },
+): { x: number; y: number } {
+  if (!imageSize) return pos;
+
+  const scaledW = imageSize.width * currentScale;
+  const scaledH = imageSize.height * currentScale;
+
+  // 이미지가 컨테이너보다 작으면 중앙 정렬
+  if (scaledW <= containerWidth && scaledH <= containerHeight) {
+    return {
+      x: (containerWidth - scaledW) / 2,
+      y: (containerHeight - scaledH) / 2,
+    };
+  }
+
+  // 50% 마진: 이미지가 뷰포트의 50%까지만 벗어날 수 있음
+  const marginX = containerWidth * 0.5;
+  const marginY = containerHeight * 0.5;
+
+  const minX = containerWidth - scaledW - marginX;
+  const maxX = marginX;
+  const minY = containerHeight - scaledH - marginY;
+  const maxY = marginY;
+
+  return {
+    x: Math.min(maxX, Math.max(minX, pos.x)),
+    y: Math.min(maxY, Math.max(minY, pos.y)),
+  };
+}
+
 export function useCanvasTransform(
   onScaleChange?: (scale: number) => void,
+  imageSize?: { width: number; height: number },
 ): CanvasTransform {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [scale, setScale] = useState(1);
@@ -41,6 +78,10 @@ export function useCanvasTransform(
   const lastDragPos = useRef<{ x: number; y: number; time: number } | null>(
     null,
   );
+  const imageSizeRef = useRef(imageSize);
+  useEffect(() => {
+    imageSizeRef.current = imageSize;
+  }, [imageSize]);
 
   const updateScale = useCallback(
     (newScale: number) => {
@@ -49,6 +90,22 @@ export function useCanvasTransform(
     },
     [onScaleChange],
   );
+
+  // 훅 내부에서 클램핑 호출 시 imageSizeRef를 통해 최신 imageSize 반영
+  function clampPositionWithRef(
+    pos: { x: number; y: number },
+    currentScale: number,
+    containerWidth: number,
+    containerHeight: number,
+  ): { x: number; y: number } {
+    return clampPosition(
+      pos,
+      currentScale,
+      containerWidth,
+      containerHeight,
+      imageSizeRef.current,
+    );
+  }
 
   // 줌 적용 헬퍼 (포인터 중심 — 기존 구현 유지, 보간 세분화)
   const applyZoom = useCallback(
@@ -74,10 +131,18 @@ export function useCanvasTransform(
         y: (cy - stage.y()) / oldScale,
       };
 
-      const newPos = {
+      const rawPos = {
         x: cx - mousePointTo.x * newScale,
         y: cy - mousePointTo.y * newScale,
       };
+
+      // 클램핑 적용
+      const newPos = clampPositionWithRef(
+        rawPos,
+        newScale,
+        stage.width(),
+        stage.height(),
+      );
 
       stage.scale({ x: newScale, y: newScale });
       stage.position(newPos);
@@ -95,11 +160,40 @@ export function useCanvasTransform(
       const stage = stageRef.current;
       if (!stage) return;
 
-      const pointer = stage.getPointerPosition();
-      if (!pointer) return;
+      const isCtrl = e.evt.ctrlKey || e.evt.metaKey;
 
-      const direction = e.evt.deltaY > 0 ? -1 : 1;
-      applyZoom(direction as 1 | -1, pointer.x, pointer.y);
+      if (isCtrl) {
+        // Ctrl+휠: 줌인/줌아웃 (기존 동작)
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+        const direction = e.evt.deltaY > 0 ? -1 : 1;
+        applyZoom(direction as 1 | -1, pointer.x, pointer.y);
+      } else {
+        // 일반 휠: 팬
+        const PAN_SPEED = 1;
+        let dx = 0;
+        let dy = 0;
+
+        if (e.evt.shiftKey) {
+          // Shift+휠: 수평 팬
+          dx = -e.evt.deltaY * PAN_SPEED;
+        } else {
+          // 휠: 수직 팬, 수평 deltaX도 반영 (트랙패드 2축 지원)
+          dx = -e.evt.deltaX * PAN_SPEED;
+          dy = -e.evt.deltaY * PAN_SPEED;
+        }
+
+        const pos = stage.position();
+        const newPos = clampPositionWithRef(
+          { x: pos.x + dx, y: pos.y + dy },
+          stage.scaleX(),
+          stage.width(),
+          stage.height(),
+        );
+        stage.position(newPos);
+        stage.batchDraw();
+        setPosition(newPos);
+      }
     },
     [applyZoom],
   );
@@ -173,7 +267,16 @@ export function useCanvasTransform(
       }
 
       const pos = stage.position();
-      const newPos = { x: pos.x + m.vx, y: pos.y + m.vy };
+      const rawPos = { x: pos.x + m.vx, y: pos.y + m.vy };
+      const newPos = clampPositionWithRef(
+        rawPos,
+        stage.scaleX(),
+        stage.width(),
+        stage.height(),
+      );
+      // 클램핑에 걸리면 모멘텀 중단
+      if (newPos.x !== rawPos.x) m.vx = 0;
+      if (newPos.y !== rawPos.y) m.vy = 0;
       stage.position(newPos);
       stage.batchDraw();
       setPosition(newPos);
@@ -310,10 +413,17 @@ export function useCanvasTransform(
     function handleDragEnd() {
       const isPanActive = spacePressed.current || middleMousePanning.current;
       stage!.container().style.cursor = isPanActive ? "grab" : "default";
-      const pos = stage!.position();
-      setPosition(pos);
+      const rawPos = stage!.position();
+      const clampedPos = clampPositionWithRef(
+        rawPos,
+        stage!.scaleX(),
+        stage!.width(),
+        stage!.height(),
+      );
+      stage!.position(clampedPos);
+      stage!.batchDraw();
+      setPosition(clampedPos);
 
-      // 팬 모드에서 드래그 종료 시 모멘텀 시작
       if (
         isPanActive &&
         (Math.abs(momentumRef.current.vx) > MOMENTUM_MIN_VELOCITY ||

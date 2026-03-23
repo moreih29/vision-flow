@@ -7,6 +7,7 @@ import { useCanvasTransform } from "@/hooks/use-canvas-transform";
 import { useCursorManager } from "@/hooks/use-cursor-manager";
 import { useLabelingStore } from "@/stores/labeling-store";
 import AnnotationLayer from "./AnnotationLayer";
+import CanvasScrollbars from "./CanvasScrollbars";
 import ZoomControls from "./ZoomControls";
 import BBoxDrawTool from "./tools/BBoxDrawTool";
 import BBoxSelectTool from "./tools/BBoxSelectTool";
@@ -48,13 +49,19 @@ export default function LabelingCanvas({
   const {
     stageRef,
     scale,
+    position,
     isPanning,
     handleWheel,
     fitToScreen,
     resetTransform,
     zoomIn,
     zoomOut,
-  } = useCanvasTransform(onScaleChange);
+  } = useCanvasTransform(
+    onScaleChange,
+    image
+      ? { width: image.naturalWidth, height: image.naturalHeight }
+      : undefined,
+  );
   const { setCursor, clearCursor, setToolCursor } = useCursorManager(stageRef);
 
   // 도구 변경 시 커서 업데이트
@@ -235,6 +242,16 @@ export default function LabelingCanvas({
           </Layer>
         )}
       </Stage>
+
+      {/* 스크롤바 오버레이 */}
+      {image && (
+        <CanvasScrollbars
+          position={position}
+          scale={scale}
+          imageSize={{ width: image.naturalWidth, height: image.naturalHeight }}
+          containerSize={containerSize}
+        />
+      )}
 
       {/* 줌 컨트롤 오버레이 */}
       <ZoomControls

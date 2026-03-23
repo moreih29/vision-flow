@@ -66,3 +66,8 @@ class BatchFolderDeleteRequest(BaseModel):
 class BatchFolderMoveRequest(BaseModel):
     paths: list[str]
     target_folder: str
+
+
+class FolderImageIdsResponse(BaseModel):
+    image_ids: list[int]
+    total: int

@@ -11,6 +11,7 @@ from app.schemas.image import (
     BatchMoveRequest,
     FolderContentsResponse,
     FolderCreateRequest,
+    FolderImageIdsResponse,
     FolderUpdateRequest,
     ImageListResponse,
     ImageResponse,
@@ -144,6 +145,18 @@ async def create_folder(
     await data_store_service.get_data_store(db, data_store_id)
     path = await image_service.create_folder(db, data_store_id, body.path)
     return {"path": path}
+
+
+@router.get("/data-stores/{data_store_id}/folder-image-ids", response_model=FolderImageIdsResponse)
+async def get_folder_image_ids(
+    data_store_id: int,
+    path: str = Query(default=""),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FolderImageIdsResponse:
+    """Get all image IDs in a folder and its subfolders."""
+    await data_store_service.get_data_store(db, data_store_id)
+    return await image_service.get_folder_image_ids(db, data_store_id, path)
 
 
 @router.get("/data-stores/{data_store_id}/folders/tree", response_model=list[str])

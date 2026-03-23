@@ -1,11 +1,11 @@
-import { Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { imagesApi } from '@/api/images'
-import type { ImageMeta } from '@/types/image'
+import { Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { imagesApi } from "@/api/images";
+import type { ImageMeta } from "@/types/image";
 
 interface TaskImageCardProps {
-  image: ImageMeta
-  onRemove: () => void
+  image: ImageMeta;
+  onRemove: () => void;
 }
 
 export function TaskImageCard({ image, onRemove }: TaskImageCardProps) {
@@ -30,9 +30,12 @@ export function TaskImageCard({ image, onRemove }: TaskImageCardProps) {
           0개 라벨
         </div>
       </div>
-      <p className="truncate text-xs font-medium" title={image.original_filename}>
+      <p
+        className="truncate text-xs font-medium select-text"
+        title={image.original_filename}
+      >
         {image.original_filename}
       </p>
     </div>
-  )
+  );
 }

@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil } from 'lucide-react'
-import { projectsApi } from '@/api/projects'
-import { tasksApi } from '@/api/tasks'
-import { dataStoresApi } from '@/api/data-stores'
-import type { Project } from '@/types/project'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Pencil } from "lucide-react";
+import { projectsApi } from "@/api/projects";
+import { tasksApi } from "@/api/tasks";
+import { dataStoresApi } from "@/api/data-stores";
+import type { Project } from "@/types/project";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -15,47 +15,50 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import DataPoolTab from '@/components/DataPoolTab'
-import TasksTab from '@/components/TasksTab'
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import DataPoolTab from "@/components/DataPoolTab";
+import TasksTab from "@/components/TasksTab";
 
 export default function ProjectDetailPage() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const projectId = Number(id)
-  const { confirmDialog, showAlert } = useConfirmDialog()
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") ?? "pool";
+  const currentPath = searchParams.get("folder") ?? "";
+  const projectId = Number(id);
+  const { confirmDialog, showAlert } = useConfirmDialog();
 
-  const [project, setProject] = useState<Project | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editName, setEditName] = useState('')
-  const [editDesc, setEditDesc] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const [poolImageCount, setPoolImageCount] = useState<number | null>(null)
-  const [taskCount, setTaskCount] = useState<number | null>(null)
+  const [poolImageCount, setPoolImageCount] = useState<number | null>(null);
+  const [taskCount, setTaskCount] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchProject()
-    fetchCounts()
-  }, [projectId])
+    fetchProject();
+    fetchCounts();
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchProject() {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const res = await projectsApi.get(projectId)
-      setProject(res.data)
+      const res = await projectsApi.get(projectId);
+      setProject(res.data);
     } catch {
-      setError('프로젝트를 불러오지 못했습니다.')
+      setError("프로젝트를 불러오지 못했습니다.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -64,39 +67,67 @@ export default function ProjectDetailPage() {
       const [dataStoresRes, tasksRes] = await Promise.all([
         dataStoresApi.list(projectId),
         tasksApi.list(projectId),
-      ])
+      ]);
       const totalImages = dataStoresRes.data.reduce(
         (sum, d) => sum + d.image_count,
         0,
-      )
-      setPoolImageCount(totalImages)
-      setTaskCount(tasksRes.data.length)
+      );
+      setPoolImageCount(totalImages);
+      setTaskCount(tasksRes.data.length);
     } catch {
       // counts are cosmetic
     }
   }
 
+  function handleTabChange(newTab: string | number | null) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newTab === "pool") {
+        next.delete("tab");
+      } else {
+        next.set("tab", newTab as string);
+      }
+      next.delete("folder");
+      return next;
+    });
+  }
+
+  const handlePathChange = useCallback(
+    (path: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (path) {
+          next.set("folder", path);
+        } else {
+          next.delete("folder");
+        }
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   function openEditDialog() {
-    if (!project) return
-    setEditName(project.name)
-    setEditDesc(project.description ?? '')
-    setEditDialogOpen(true)
+    if (!project) return;
+    setEditName(project.name);
+    setEditDesc(project.description ?? "");
+    setEditDialogOpen(true);
   }
 
   async function handleSaveProject() {
-    if (!project || !editName.trim()) return
-    setSaving(true)
+    if (!project || !editName.trim()) return;
+    setSaving(true);
     try {
       const res = await projectsApi.update(project.id, {
         name: editName.trim(),
         description: editDesc.trim() || undefined,
-      })
-      setProject(res.data)
-      setEditDialogOpen(false)
+      });
+      setProject(res.data);
+      setEditDialogOpen(false);
     } catch {
-      await showAlert({ title: '프로젝트 수정에 실패했습니다.' })
+      await showAlert({ title: "프로젝트 수정에 실패했습니다." });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -107,7 +138,7 @@ export default function ProjectDetailPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/projects')}
+            onClick={() => navigate("/projects")}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -138,7 +169,11 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        <Tabs defaultValue="pool" className="flex flex-col h-full">
+        <Tabs
+          value={tab}
+          onValueChange={handleTabChange}
+          className="flex flex-col h-full"
+        >
           <TabsList className="mb-6">
             <TabsTrigger value="pool">
               Data Pool
@@ -159,7 +194,11 @@ export default function ProjectDetailPage() {
           </TabsList>
 
           <TabsContent value="pool" className="flex-1 min-h-0">
-            <DataPoolTab projectId={projectId} />
+            <DataPoolTab
+              projectId={projectId}
+              currentPath={currentPath}
+              onPathChange={handlePathChange}
+            />
           </TabsContent>
 
           <TabsContent value="tasks" className="flex-1 min-h-0 overflow-auto">
@@ -207,12 +246,12 @@ export default function ProjectDetailPage() {
               onClick={handleSaveProject}
               disabled={saving || !editName.trim()}
             >
-              {saving ? '저장 중...' : '저장'}
+              {saving ? "저장 중..." : "저장"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       {confirmDialog}
     </div>
-  )
+  );
 }

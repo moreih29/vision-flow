@@ -1,20 +1,23 @@
-import { Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { imagesApi } from '@/api/images'
-import type { ImageMeta } from '@/types/image'
+import { Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { imagesApi } from "@/api/images";
+import type { ImageMeta } from "@/types/image";
 
 interface TaskImageListViewProps {
-  images: ImageMeta[]
-  onRemove: (id: number) => void
+  images: ImageMeta[];
+  onRemove: (id: number) => void;
 }
 
 function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TaskImageListView({ images, onRemove }: TaskImageListViewProps) {
+export function TaskImageListView({
+  images,
+  onRemove,
+}: TaskImageListViewProps) {
   return (
     <div className="rounded-md border">
       <table className="w-full text-sm">
@@ -44,7 +47,7 @@ export function TaskImageListView({ images, onRemove }: TaskImageListViewProps) 
               </td>
               <td className="px-3 py-1.5">
                 <span
-                  className="truncate block max-w-xs"
+                  className="truncate block max-w-xs select-text"
                   title={image.original_filename}
                 >
                   {image.original_filename}
@@ -56,7 +59,7 @@ export function TaskImageListView({ images, onRemove }: TaskImageListViewProps) 
               <td className="px-3 py-1.5 text-muted-foreground">
                 {image.width && image.height
                   ? `${image.width} x ${image.height}`
-                  : '-'}
+                  : "-"}
               </td>
               <td className="px-3 py-1.5 text-center text-muted-foreground">
                 0
@@ -76,5 +79,5 @@ export function TaskImageListView({ images, onRemove }: TaskImageListViewProps) 
         </tbody>
       </table>
     </div>
-  )
+  );
 }

@@ -1,20 +1,22 @@
-import { Images, LayoutGrid, List, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Progress } from '@/components/ui/progress'
-import type { ImageMeta } from '@/types/image'
-import { TaskImageCard } from './TaskImageCard'
-import { TaskImageListView } from './TaskImageListView'
+import { useRef, useState, useEffect } from "react";
+import { Images, LayoutGrid, List, Plus } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
+import type { ImageMeta } from "@/types/image";
+import { TaskImageCard } from "./TaskImageCard";
+import { TaskImageListView } from "./TaskImageListView";
 
 interface TaskImageGridProps {
-  images: ImageMeta[]
-  loading: boolean
-  labelingProgress: number
-  imageCount: number
-  previewMode: 'grid' | 'list'
-  onPreviewModeChange: (mode: 'grid' | 'list') => void
-  onAddImages: () => void
-  onRemoveImage: (imageId: number) => void
+  images: ImageMeta[];
+  loading: boolean;
+  labelingProgress: number;
+  imageCount: number;
+  previewMode: "grid" | "list";
+  onPreviewModeChange: (mode: "grid" | "list") => void;
+  onAddImages: () => void;
+  onRemoveImage: (imageId: number) => void;
 }
 
 export function TaskImageGrid({
@@ -27,9 +29,35 @@ export function TaskImageGrid({
   onAddImages,
   onRemoveImage,
 }: TaskImageGridProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(5);
+
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0].contentRect.width;
+      if (width >= 1024) setColumns(5);
+      else if (width >= 768) setColumns(4);
+      else if (width >= 640) setColumns(3);
+      else setColumns(2);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const rowCount = Math.ceil(images.length / columns);
+
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 220,
+    overscan: 3,
+  });
+
   return (
-    <div className="min-w-0 flex-1">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="min-w-0 flex-1 flex flex-col select-none">
+      <div className="mb-4 flex items-center justify-between flex-shrink-0 select-none">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">이미지</h2>
           {imageCount > 0 && (
@@ -42,19 +70,19 @@ export function TaskImageGrid({
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-md border p-0.5">
             <Button
-              variant={previewMode === 'grid' ? 'secondary' : 'ghost'}
+              variant={previewMode === "grid" ? "secondary" : "ghost"}
               size="icon"
               className="h-7 w-7"
-              onClick={() => onPreviewModeChange('grid')}
+              onClick={() => onPreviewModeChange("grid")}
               title="격자 보기"
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
             <Button
-              variant={previewMode === 'list' ? 'secondary' : 'ghost'}
+              variant={previewMode === "list" ? "secondary" : "ghost"}
               size="icon"
               className="h-7 w-7"
-              onClick={() => onPreviewModeChange('list')}
+              onClick={() => onPreviewModeChange("list")}
               title="리스트 보기"
             >
               <List className="h-4 w-4" />
@@ -85,19 +113,48 @@ export function TaskImageGrid({
             Pool에서 추가
           </Button>
         </div>
-      ) : previewMode === 'grid' ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {images.map((image) => (
-            <TaskImageCard
-              key={image.id}
-              image={image}
-              onRemove={() => onRemoveImage(image.id)}
-            />
-          ))}
+      ) : previewMode === "grid" ? (
+        <div ref={parentRef} className="flex-1 overflow-y-auto">
+          <div
+            className="relative w-full"
+            style={{ height: `${virtualizer.getTotalSize()}px` }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const startIndex = virtualRow.index * columns;
+              const rowImages = images.slice(startIndex, startIndex + columns);
+              return (
+                <div
+                  key={virtualRow.key}
+                  className="absolute left-0 right-0 flex gap-4"
+                  style={{
+                    top: `${virtualRow.start}px`,
+                    height: `${virtualRow.size}px`,
+                  }}
+                >
+                  {rowImages.map((image) => (
+                    <div key={image.id} className="flex-1 min-w-0">
+                      <TaskImageCard
+                        image={image}
+                        onRemove={() => onRemoveImage(image.id)}
+                      />
+                    </div>
+                  ))}
+                  {rowImages.length < columns &&
+                    Array.from({ length: columns - rowImages.length }).map(
+                      (_, i) => (
+                        <div key={`empty-${i}`} className="flex-1 min-w-0" />
+                      ),
+                    )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
-        <TaskImageListView images={images} onRemove={onRemoveImage} />
+        <div className="flex-1 overflow-y-auto">
+          <TaskImageListView images={images} onRemove={onRemoveImage} />
+        </div>
       )}
     </div>
-  )
+  );
 }

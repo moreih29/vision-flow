@@ -1,4 +1,5 @@
 import { LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 
@@ -7,14 +8,21 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children }: AppLayoutProps) {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b select-none">
+    <div className="flex h-screen flex-col bg-background">
+      <header className="shrink-0 border-b select-none">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold">Vision Flow</h1>
+          <button
+            type="button"
+            className="text-xl font-bold hover:opacity-70 transition-opacity"
+            onClick={() => navigate("/")}
+          >
+            Vision Flow
+          </button>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground select-text">
               {user?.name}
@@ -26,7 +34,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
         </div>
       </header>
-      {children}
+      <div className="flex-1 min-h-0 flex flex-col">{children}</div>
     </div>
   );
 }

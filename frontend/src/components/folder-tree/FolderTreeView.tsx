@@ -6,7 +6,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { Database, FolderPlus, RefreshCw } from "lucide-react";
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Database,
+  FolderPlus,
+  RefreshCw,
+} from "lucide-react";
 import { imagesApi } from "@/api/images";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { TreeNode } from "./TreeNode";
@@ -25,6 +31,8 @@ import type { FolderTreeNode } from "./tree-utils";
 
 export interface FolderTreeRef {
   refresh: () => Promise<void>;
+  expandAll: () => Promise<void>;
+  collapseAll: () => void;
 }
 
 export interface FolderTreeViewProps {
@@ -43,7 +51,7 @@ export interface FolderTreeViewProps {
     targetPath: string,
   ) => Promise<void>;
   onExternalFileDrop?: (entries: FileSystemEntry[], targetPath: string) => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 // -- 메인 컴포넌트 --
@@ -68,6 +76,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
   ) {
     const [rootNodes, setRootNodes] = useState<FolderTreeNode[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [editingPath, setEditingPath] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
     const [editStartTime, setEditStartTime] = useState(0);
@@ -126,6 +135,119 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       loadRoot();
     }, [dataStoreId]);
 
+    // -- 전체 펼치기/접기 --
+    async function handleExpandAll() {
+      try {
+        // API 1회로 전체 폴더 경로 목록 가져오기
+        const res = await imagesApi.getAllFolders(dataStoreId);
+        const allPaths: string[] = res.data;
+
+        // 경로 목록에서 트리 구조 구축
+        function buildTreeFromPaths(parentPath: string): FolderTreeNode[] {
+          const directChildren = new Map<
+            string,
+            { path: string; name: string; subPaths: string[] }
+          >();
+          for (const fp of allPaths) {
+            if (!fp.startsWith(parentPath) || fp === parentPath) continue;
+            const relative = fp.slice(parentPath.length);
+            const firstSegment = relative.split("/")[0];
+            if (!firstSegment) continue;
+            const childPath = parentPath + firstSegment + "/";
+            if (!directChildren.has(childPath)) {
+              directChildren.set(childPath, {
+                path: childPath,
+                name: firstSegment,
+                subPaths: [],
+              });
+            }
+          }
+          // 각 자식의 하위 폴더 수 + 이미지 카운트는 기존 rootNodes에서 찾기
+          return [...directChildren.values()]
+            .sort((a, b) => a.path.localeCompare(b.path))
+            .map(({ path, name }) => {
+              const existing = findNodeInTree(rootNodes, path);
+              const children = buildTreeFromPaths(path);
+              return {
+                path,
+                name,
+                image_count: existing?.image_count ?? 0,
+                subfolder_count: children.length,
+                expanded: true,
+                loaded: true,
+                children: children.length > 0 ? children : undefined,
+              };
+            });
+        }
+
+        const expandedNodes = buildTreeFromPaths("");
+        setRootNodes(expandedNodes);
+
+        // 카운트 업데이트: 펼쳐진 모든 경로에 대해 getFolderContents 병렬 호출
+        const pathsToUpdate = collectExpandedPaths(expandedNodes).sort(
+          (a, b) => a.split("/").length - b.split("/").length,
+        );
+        let updatedNodes = expandedNodes;
+        await Promise.all(
+          pathsToUpdate.map(async (p) => {
+            try {
+              const childRes = await imagesApi.getFolderContents(
+                dataStoreId,
+                p,
+              );
+              const childFolders = childRes.data.folders;
+              updatedNodes = updateNodeInTree(updatedNodes, p, (n) => ({
+                ...n,
+                children: n.children?.map((c) => {
+                  const info = childFolders.find((f) => f.path === c.path);
+                  return info
+                    ? {
+                        ...c,
+                        image_count: info.image_count,
+                        subfolder_count: info.subfolder_count,
+                      }
+                    : c;
+                }),
+              }));
+            } catch {
+              // skip
+            }
+          }),
+        );
+        // 루트 레벨 카운트도 업데이트
+        try {
+          const rootRes = await imagesApi.getFolderContents(dataStoreId, "");
+          updatedNodes = updatedNodes.map((n) => {
+            const info = rootRes.data.folders.find((f) => f.path === n.path);
+            return info
+              ? {
+                  ...n,
+                  image_count: info.image_count,
+                  subfolder_count: info.subfolder_count,
+                }
+              : n;
+          });
+        } catch {
+          // skip
+        }
+        setRootNodes(updatedNodes);
+      } catch {
+        // fallback: 기존 노드 그냥 펼치기
+        setRootNodes((prev) => prev.map((n) => ({ ...n, expanded: true })));
+      }
+    }
+
+    function handleCollapseAll() {
+      function collapseNodes(nodes: FolderTreeNode[]): FolderTreeNode[] {
+        return nodes.map((n) => ({
+          ...n,
+          expanded: false,
+          children: n.children ? collapseNodes(n.children) : undefined,
+        }));
+      }
+      setRootNodes(collapseNodes(rootNodes));
+    }
+
     useImperativeHandle(ref, () => ({
       async refresh() {
         const expandedPaths = collectExpandedPaths(rootNodes).sort(
@@ -155,6 +277,8 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
 
         setRootNodes(newNodes);
       },
+      expandAll: handleExpandAll,
+      collapseAll: handleCollapseAll,
     }));
 
     async function handleToggleExpand(path: string) {
@@ -539,19 +663,51 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
         <span className="shrink-0 text-xs text-muted-foreground">
           ({rootImageCount})
         </span>
-        {onRefresh && (
+        <span className="ml-auto flex items-center gap-0.5">
           <button
             type="button"
-            className="ml-auto shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             onClick={(e) => {
               e.stopPropagation();
-              onRefresh();
+              const hasExpanded = rootNodes.some((n) => n.expanded);
+              if (hasExpanded) {
+                handleCollapseAll();
+              } else {
+                handleExpandAll();
+              }
             }}
-            title="새로고침"
+            title={
+              rootNodes.some((n) => n.expanded) ? "전체 접기" : "전체 펼치기"
+            }
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            {rootNodes.some((n) => n.expanded) ? (
+              <ChevronsDownUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronsUpDown className="h-3.5 w-3.5" />
+            )}
           </button>
-        )}
+          {onRefresh && (
+            <button
+              type="button"
+              className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              disabled={refreshing}
+              onClick={async (e) => {
+                e.stopPropagation();
+                setRefreshing(true);
+                try {
+                  await onRefresh();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              title="새로고침"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+            </button>
+          )}
+        </span>
       </div>
     ) : null;
 
@@ -604,15 +760,17 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
 
     return (
       <>
+        {/* 루트 노드 헤더 — 고정 */}
+        <div className="shrink-0">{rootNodeElement}</div>
+        {/* 트리 목록 — 스크롤 */}
         <div
-          className="space-y-0.5 min-h-full"
+          className="space-y-0.5 flex-1 min-h-0 overflow-y-auto"
           onDragOver={handleRootDragOver}
           onDragLeave={handleRootDragLeave}
           onDrop={handleRootDrop}
           onContextMenu={handleTreeBgContextMenu}
           onClick={handleTreeBgClick}
         >
-          {rootNodeElement}
           {rootNodes.map((node) => (
             <TreeNode
               key={node.path}

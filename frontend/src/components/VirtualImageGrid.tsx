@@ -76,6 +76,7 @@ export default function VirtualImageGrid({
 }: VirtualImageGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
+  const [containerWidth, setContainerWidth] = useState(800);
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
   const draggingKeyRef = useRef<string | null>(null);
   const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(
@@ -85,16 +86,17 @@ export default function VirtualImageGrid({
   useEffect(() => {
     const el = parentRef.current;
     if (!el) return;
-    const updateColumns = () => {
+    const update = () => {
       const width = el.clientWidth;
+      setContainerWidth(width);
       if (width >= 1280) setColumns(6);
       else if (width >= 1024) setColumns(5);
       else if (width >= 768) setColumns(4);
       else if (width >= 640) setColumns(3);
       else setColumns(2);
     };
-    updateColumns();
-    const observer = new ResizeObserver(updateColumns);
+    update();
+    const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
@@ -111,8 +113,15 @@ export default function VirtualImageGrid({
     };
   }, [bgMenu]);
 
-  const rowCount = Math.ceil(items.length / columns) + (hasMore ? 1 : 0);
-  const itemSize = 200;
+  const hasParent = items[0]?.type === "parent";
+  const gridItems = hasParent ? items.slice(1) : items;
+
+  const rowCount = Math.ceil(gridItems.length / columns) + (hasMore ? 1 : 0);
+  const gapSize = 16;
+  const colWidth = Math.floor(
+    (containerWidth - (columns - 1) * gapSize) / columns,
+  );
+  const itemSize = colWidth + 44;
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -323,261 +332,283 @@ export default function VirtualImageGrid({
   return (
     <>
       <div
-        ref={parentRef}
-        className="overflow-y-auto rounded-md select-none"
+        className="flex flex-col rounded-md border select-none"
         style={{ height: "100%" }}
-        onContextMenu={handleBgContextMenu}
-        onClick={handleBgClick}
       >
+        <div className="shrink-0">
+          {hasParent && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent rounded-md cursor-pointer transition-colors mb-1"
+              onClick={() => onNavigateUp?.()}
+            >
+              <ArrowUpLeft className="h-4 w-4" />
+              상위 폴더
+            </div>
+          )}
+        </div>
         <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: "100%",
-            position: "relative",
-          }}
+          ref={parentRef}
+          className="flex-1 min-h-0 overflow-y-auto rounded-md"
+          onContextMenu={handleBgContextMenu}
+          onClick={handleBgClick}
         >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const startIndex = virtualRow.index * columns;
-            const rowItems = items.slice(startIndex, startIndex + columns);
-            const isLoaderRow =
-              virtualRow.index >= Math.ceil(items.length / columns);
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const startIndex = virtualRow.index * columns;
+              const rowItems = gridItems.slice(
+                startIndex,
+                startIndex + columns,
+              );
+              const isLoaderRow =
+                virtualRow.index >= Math.ceil(gridItems.length / columns);
 
-            return (
-              <div
-                key={virtualRow.key}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                {isLoaderRow ? (
-                  <div className="flex h-full items-center justify-center">
-                    <span className="text-sm text-muted-foreground">
-                      {loadingMore ? "\uB85C\uB529 \uC911..." : ""}
-                    </span>
-                  </div>
-                ) : (
-                  <div
-                    className="grid gap-3 pb-3"
-                    style={{
-                      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-                    }}
-                  >
-                    {rowItems.map((item, colIdx) => {
-                      const flatIndex = startIndex + colIdx;
-                      const isSelected = selectedKeys.has(item.key);
+              return (
+                <div
+                  key={virtualRow.key}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {isLoaderRow ? (
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-sm text-muted-foreground">
+                        {loadingMore ? "\uB85C\uB529 \uC911..." : ""}
+                      </span>
+                    </div>
+                  ) : (
+                    <div
+                      className="grid gap-4 pb-4"
+                      style={{
+                        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {rowItems.map((item, colIdx) => {
+                        const flatIndex =
+                          startIndex + colIdx + (hasParent ? 1 : 0);
+                        const isSelected = selectedKeys.has(item.key);
 
-                      if (item.type === "parent") {
-                        return (
-                          <div
-                            key={item.key}
-                            data-pool-item
-                            className="group relative flex flex-col gap-1 cursor-pointer"
-                            onClick={() => onNavigateUp?.()}
-                          >
-                            <div className="relative overflow-hidden rounded-md border bg-muted aspect-square flex flex-col items-center justify-center gap-2 transition-colors hover:bg-accent">
-                              <ArrowUpLeft className="h-10 w-10 text-muted-foreground" />
-                              <span className="text-sm font-medium text-muted-foreground">
-                                상위 폴더
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (item.type === "folder" && item.folder) {
-                        const isRenaming =
-                          renamingFolderPath === item.folder.path;
-                        const isFolderDropTarget =
-                          dragOverFolderKey === item.key;
-                        return (
-                          <ContextMenu key={item.key}>
-                            <ContextMenuTrigger>
-                              <div
-                                data-pool-item
-                                className="group relative flex flex-col gap-1 cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onItemClick(flatIndex, e);
-                                }}
-                                onDoubleClick={() =>
-                                  onNavigateFolder(item.folder!.path)
-                                }
-                                onContextMenu={() =>
-                                  handleContextMenu(item, flatIndex)
-                                }
-                                draggable={!isRenaming}
-                                onDragStart={(e) => handleDragStart(e, item)}
-                                onDragEnd={handleDragEnd}
-                                onDragOver={(e) =>
-                                  handleFolderDragOver(e, item)
-                                }
-                                onDragLeave={handleFolderDragLeave}
-                                onDrop={(e) => handleFolderDrop(e, item)}
-                              >
+                        if (item.type === "folder" && item.folder) {
+                          const isRenaming =
+                            renamingFolderPath === item.folder.path;
+                          const isFolderDropTarget =
+                            dragOverFolderKey === item.key;
+                          return (
+                            <ContextMenu key={item.key}>
+                              <ContextMenuTrigger>
                                 <div
-                                  className={`relative overflow-hidden rounded-md border bg-muted aspect-square flex flex-col items-center justify-center gap-2 transition-colors ${
-                                    isFolderDropTarget
-                                      ? "ring-2 ring-primary border-primary bg-primary/10"
-                                      : isSelected
-                                        ? "ring-2 ring-primary border-primary bg-primary/5"
-                                        : "hover:bg-accent"
-                                  }`}
+                                  data-pool-item
+                                  className="group relative cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onItemClick(flatIndex, e);
+                                  }}
+                                  onDoubleClick={() =>
+                                    onNavigateFolder(item.folder!.path)
+                                  }
+                                  onContextMenu={() =>
+                                    handleContextMenu(item, flatIndex)
+                                  }
+                                  draggable={!isRenaming}
+                                  onDragStart={(e) => handleDragStart(e, item)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) =>
+                                    handleFolderDragOver(e, item)
+                                  }
+                                  onDragLeave={handleFolderDragLeave}
+                                  onDrop={(e) => handleFolderDrop(e, item)}
                                 >
                                   <div
-                                    className={`absolute left-1.5 top-1.5 z-10 h-5 w-5 rounded border-2 flex items-center justify-center transition-opacity cursor-pointer ${
-                                      isSelected
-                                        ? "bg-primary border-primary text-primary-foreground opacity-100"
-                                        : "border-muted-foreground/40 bg-background/60 opacity-0 group-hover:opacity-100"
+                                    className={`overflow-hidden rounded-lg border shadow-sm transition-colors ${
+                                      isFolderDropTarget
+                                        ? "ring-2 ring-primary border-primary"
+                                        : isSelected
+                                          ? "ring-2 ring-primary border-primary"
+                                          : "hover:shadow-md"
                                     }`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onCheckboxClick(flatIndex);
-                                    }}
                                   >
-                                    {isSelected && (
-                                      <Check className="h-3 w-3" />
-                                    )}
+                                    <div
+                                      className={`relative aspect-square bg-muted flex flex-col items-center justify-center gap-2 transition-colors ${
+                                        isFolderDropTarget
+                                          ? "bg-primary/10"
+                                          : isSelected
+                                            ? "bg-primary/5"
+                                            : "hover:bg-accent"
+                                      }`}
+                                    >
+                                      <div
+                                        className={`absolute left-1.5 top-1.5 z-10 h-5 w-5 rounded border-2 flex items-center justify-center transition-opacity cursor-pointer ${
+                                          isSelected
+                                            ? "bg-primary border-primary text-primary-foreground opacity-100"
+                                            : "border-muted-foreground/40 bg-background/60 opacity-0 group-hover:opacity-100"
+                                        }`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onCheckboxClick(flatIndex);
+                                        }}
+                                      >
+                                        {isSelected && (
+                                          <Check className="h-3 w-3" />
+                                        )}
+                                      </div>
+                                      <Folder className="h-12 w-12 text-muted-foreground" />
+                                      {isRenaming ? (
+                                        <input
+                                          autoFocus
+                                          className="text-sm font-medium text-center max-w-[90%] bg-transparent border border-primary rounded px-1 outline-none"
+                                          defaultValue={item.folder.name}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onDoubleClick={(e) =>
+                                            e.stopPropagation()
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              const val = (
+                                                e.target as HTMLInputElement
+                                              ).value.trim();
+                                              if (val)
+                                                onFinishRenameFolder(
+                                                  item.folder!.path,
+                                                  val,
+                                                );
+                                              else onCancelRenameFolder();
+                                            }
+                                            if (e.key === "Escape")
+                                              onCancelRenameFolder();
+                                          }}
+                                          onBlur={(e) => {
+                                            const val = e.target.value.trim();
+                                            if (
+                                              val &&
+                                              val !== item.folder!.name
+                                            )
+                                              onFinishRenameFolder(
+                                                item.folder!.path,
+                                                val,
+                                              );
+                                            else onCancelRenameFolder();
+                                          }}
+                                          onFocus={(e) => e.target.select()}
+                                        />
+                                      ) : (
+                                        <span className="text-sm font-medium truncate max-w-[90%]">
+                                          {item.folder.name}
+                                        </span>
+                                      )}
+                                      <span className="text-xs text-muted-foreground">
+                                        {item.folder.image_count}개 이미지
+                                      </span>
+                                    </div>
                                   </div>
-                                  <Folder className="h-12 w-12 text-muted-foreground" />
-                                  {isRenaming ? (
-                                    <input
-                                      autoFocus
-                                      className="text-sm font-medium text-center max-w-[90%] bg-transparent border border-primary rounded px-1 outline-none"
-                                      defaultValue={item.folder.name}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onDoubleClick={(e) => e.stopPropagation()}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          const val = (
-                                            e.target as HTMLInputElement
-                                          ).value.trim();
-                                          if (val)
-                                            onFinishRenameFolder(
-                                              item.folder!.path,
-                                              val,
-                                            );
-                                          else onCancelRenameFolder();
-                                        }
-                                        if (e.key === "Escape")
-                                          onCancelRenameFolder();
-                                      }}
-                                      onBlur={(e) => {
-                                        const val = e.target.value.trim();
-                                        if (val && val !== item.folder!.name)
-                                          onFinishRenameFolder(
-                                            item.folder!.path,
-                                            val,
-                                          );
-                                        else onCancelRenameFolder();
-                                      }}
-                                      onFocus={(e) => e.target.select()}
-                                    />
-                                  ) : (
-                                    <span className="text-sm font-medium truncate max-w-[90%]">
-                                      {item.folder.name}
-                                    </span>
-                                  )}
-                                  <span className="text-xs text-muted-foreground">
-                                    {item.folder.image_count}개 이미지
-                                  </span>
                                 </div>
-                              </div>
-                            </ContextMenuTrigger>
-                            {renderContextMenuContent(item)}
-                          </ContextMenu>
-                        );
-                      }
+                              </ContextMenuTrigger>
+                              {renderContextMenuContent(item)}
+                            </ContextMenu>
+                          );
+                        }
 
-                      if (item.type === "image" && item.image) {
-                        const image = item.image;
-                        return (
-                          <ContextMenu key={item.key}>
-                            <ContextMenuTrigger>
-                              <div
-                                data-pool-item
-                                className="group relative flex flex-col gap-1 cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onItemClick(flatIndex, e);
-                                }}
-                                onContextMenu={() =>
-                                  handleContextMenu(item, flatIndex)
-                                }
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, item)}
-                                onDragEnd={handleDragEnd}
-                              >
+                        if (item.type === "image" && item.image) {
+                          const image = item.image;
+                          return (
+                            <ContextMenu key={item.key}>
+                              <ContextMenuTrigger>
                                 <div
-                                  className={`relative overflow-hidden rounded-md border bg-muted aspect-square transition-colors ${
-                                    isSelected
-                                      ? "ring-2 ring-primary border-primary"
-                                      : ""
-                                  }`}
+                                  data-pool-item
+                                  className="group relative cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onItemClick(flatIndex, e);
+                                  }}
+                                  onContextMenu={() =>
+                                    handleContextMenu(item, flatIndex)
+                                  }
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, item)}
+                                  onDragEnd={handleDragEnd}
                                 >
                                   <div
-                                    className={`absolute left-1.5 top-1.5 z-10 h-5 w-5 rounded border-2 flex items-center justify-center transition-opacity cursor-pointer ${
+                                    className={`overflow-hidden rounded-lg border shadow-sm transition-colors ${
                                       isSelected
-                                        ? "bg-primary border-primary text-primary-foreground opacity-100"
-                                        : "border-white/70 bg-black/20 opacity-0 group-hover:opacity-100"
+                                        ? "ring-2 ring-primary border-primary"
+                                        : "hover:shadow-md"
                                     }`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onCheckboxClick(flatIndex);
-                                    }}
                                   >
-                                    {isSelected && (
-                                      <Check className="h-3 w-3" />
-                                    )}
+                                    <div className="relative aspect-square bg-muted overflow-hidden">
+                                      <div
+                                        className={`absolute left-1.5 top-1.5 z-10 h-5 w-5 rounded border-2 flex items-center justify-center transition-opacity cursor-pointer ${
+                                          isSelected
+                                            ? "bg-primary border-primary text-primary-foreground opacity-100"
+                                            : "border-white/70 bg-black/20 opacity-0 group-hover:opacity-100"
+                                        }`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onCheckboxClick(flatIndex);
+                                        }}
+                                      >
+                                        {isSelected && (
+                                          <Check className="h-3 w-3" />
+                                        )}
+                                      </div>
+                                      <img
+                                        src={imagesApi.getFileUrl(image.id)}
+                                        alt={image.original_filename}
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                      />
+                                      <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onDeleteImage(image.id);
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <p className="text-xs text-white/90">
+                                          {formatBytes(image.file_size)}
+                                          {image.width && image.height
+                                            ? ` \u00b7 ${image.width}\u00d7${image.height}`
+                                            : ""}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="px-2 py-1.5 bg-background">
+                                      <p
+                                        className="truncate text-xs font-medium"
+                                        title={image.original_filename}
+                                      >
+                                        {image.original_filename}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <img
-                                    src={imagesApi.getFileUrl(image.id)}
-                                    alt={image.original_filename}
-                                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                    loading="lazy"
-                                  />
-                                  <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onDeleteImage(image.id);
-                                    }}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
                                 </div>
-                                <p
-                                  className="truncate text-xs font-medium"
-                                  title={image.original_filename}
-                                >
-                                  {image.original_filename}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatBytes(image.file_size)}
-                                  {image.width && image.height
-                                    ? ` \u00b7 ${image.width}\u00d7${image.height}`
-                                    : ""}
-                                </p>
-                              </div>
-                            </ContextMenuTrigger>
-                            {renderContextMenuContent(item)}
-                          </ContextMenu>
-                        );
-                      }
+                              </ContextMenuTrigger>
+                              {renderContextMenuContent(item)}
+                            </ContextMenu>
+                          );
+                        }
 
-                      return null;
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                        return null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       {bgMenu && (

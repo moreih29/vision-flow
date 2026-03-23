@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FolderPlus, LayoutGrid, List, PlusCircle } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FolderPlus,
+  LayoutGrid,
+  List,
+} from "lucide-react";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
+import { imagesApi } from "@/api/images";
+import { dataStoresApi } from "@/api/data-stores";
 import { labelClassesApi } from "@/api/label-classes";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
 import type { DataPoolItem } from "@/types/image";
+import type { DataStore } from "@/types/data-store";
 import { Button } from "@/components/ui/button";
 import FolderBreadcrumb from "@/components/FolderBreadcrumb";
 import {
@@ -14,7 +23,7 @@ import {
   TaskClassPanel,
   TaskFolderTreeView,
   type TaskFolderTreeRef,
-  PoolSidePanel,
+  PoolFolderCheckTree,
 } from "@/components/task-detail";
 import { DataPoolContentArea } from "@/components/data-pool";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
@@ -44,7 +53,16 @@ export default function TaskDetailPage() {
   const [previewMode, setPreviewMode] = useState<"grid" | "list">(
     () => (localStorage.getItem(VIEW_MODE_KEY) as "grid" | "list") || "grid",
   );
-  const [poolPanelOpen, setPoolPanelOpen] = useState(false);
+  const [poolCollapsed, setPoolCollapsed] = useState(false);
+  const [poolCheckedPaths, setPoolCheckedPaths] = useState<Set<string>>(
+    new Set(),
+  );
+  const [dataStore, setDataStore] = useState<DataStore | null>(null);
+  const [poolAdding, setPoolAdding] = useState(false);
+  const [poolProgress, setPoolProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
   const [renamingFolderPath, setRenamingFolderPath] = useState<string | null>(
     null,
   );
@@ -297,6 +315,148 @@ export default function TaskDetailPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [selectAll, clearSelection, selectedCount, moveDialogOpen]);
 
+  // -- DataStore 로드 --
+  useEffect(() => {
+    dataStoresApi
+      .list(projectId)
+      .then((res) => setDataStore(res.data[0] ?? null))
+      .catch(() => {});
+  }, [projectId]);
+
+  // -- Pool 체크 토글 (상위 폴더 체크 시 하위도 연동) --
+  const handlePoolCheckPath = useCallback((path: string, checked: boolean) => {
+    setPoolCheckedPaths((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(path);
+        // 이미 체크된 경로 중 이 경로의 하위인 것도 추가 (이미 있으면 무시)
+        for (const p of prev) {
+          if (p.startsWith(path) && p !== path) next.add(p);
+        }
+      } else {
+        // 이 경로 및 모든 하위 경로 제거
+        for (const p of next) {
+          if (p === path || p.startsWith(path)) next.delete(p);
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // -- Pool 폴더 → Task 재귀 추가 --
+  async function addPoolFoldersToTask(
+    dsId: number,
+    poolPath: string,
+    taskTargetPath: string,
+    onProgress: (completed: number, total: number) => void,
+    counter: { completed: number; total: number },
+  ): Promise<{ added: number; failed: number }> {
+    let added = 0;
+    let failed = 0;
+
+    try {
+      const res = await imagesApi.getFolderContents(dsId, poolPath);
+      const images = res.data.images ?? [];
+      const subfolders = res.data.folders ?? [];
+
+      counter.total += images.length;
+      onProgress(counter.completed, counter.total);
+
+      // 폴더 생성 (이미지 유무와 무관하게)
+      if (taskTargetPath) {
+        try {
+          await tasksApi.createFolder(taskIdNum, taskTargetPath);
+        } catch {
+          // 이미 존재하면 무시
+        }
+      }
+
+      if (images.length > 0) {
+        try {
+          await tasksApi.addImages(
+            taskIdNum,
+            images.map((img) => img.id),
+            taskTargetPath,
+          );
+          added += images.length;
+        } catch {
+          failed += images.length;
+        }
+        counter.completed += images.length;
+        onProgress(counter.completed, counter.total);
+      }
+
+      for (const sub of subfolders) {
+        const subName = sub.name;
+        const subTaskPath = taskTargetPath
+          ? `${taskTargetPath}${subName}/`
+          : `${subName}/`;
+        const result = await addPoolFoldersToTask(
+          dsId,
+          sub.path,
+          subTaskPath,
+          onProgress,
+          counter,
+        );
+        added += result.added;
+        failed += result.failed;
+      }
+    } catch {
+      failed++;
+    }
+
+    return { added, failed };
+  }
+
+  // -- Pool → Task에 추가 버튼 핸들러 --
+  async function handleAddPoolToTask() {
+    if (!dataStore || poolCheckedPaths.size === 0 || poolAdding) return;
+    setPoolAdding(true);
+    setPoolProgress({ completed: 0, total: poolCheckedPaths.size });
+    let totalAdded = 0;
+    let totalFailed = 0;
+    const counter = { completed: 0, total: 0 };
+    const onProgress = (completed: number, total: number) => {
+      setPoolProgress({ completed, total });
+    };
+    try {
+      // 최상위 체크 폴더만 추출 (하위 폴더는 재귀에서 자동 처리)
+      const topLevelChecked = [...poolCheckedPaths].filter(
+        (p) =>
+          ![...poolCheckedPaths].some(
+            (other) => other !== p && p.startsWith(other),
+          ),
+      );
+      for (const poolPath of topLevelChecked) {
+        const folderName = poolPath.replace(/\/$/, "").split("/").pop()!;
+        const taskTarget = currentPath
+          ? `${currentPath}${folderName}/`
+          : `${folderName}/`;
+        const result = await addPoolFoldersToTask(
+          dataStore.id,
+          poolPath,
+          taskTarget,
+          onProgress,
+          counter,
+        );
+        totalAdded += result.added;
+        totalFailed += result.failed;
+      }
+      setPoolCheckedPaths(new Set());
+      await handleImagesAdded();
+      if (totalFailed > 0) {
+        await showAlert({
+          title: `${totalAdded}개 추가됨, ${totalFailed}개 실패`,
+        });
+      }
+    } catch {
+      await showAlert({ title: "추가 중 오류가 발생했습니다." });
+    } finally {
+      setPoolAdding(false);
+      setPoolProgress(null);
+    }
+  }
+
   // -- Task + Classes 로드 --
   useEffect(() => {
     async function fetchMeta() {
@@ -372,7 +532,7 @@ export default function TaskDetailPage() {
 
   // -- Toolbar --
   const toolbar = (
-    <div className="mb-4 flex items-center justify-between select-none">
+    <div className="mb-4 flex items-center justify-between select-none shrink-0">
       <div>
         <FolderBreadcrumb
           currentPath={currentPath}
@@ -385,14 +545,6 @@ export default function TaskDetailPage() {
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setPoolPanelOpen(true)}
-        >
-          <PlusCircle className="mr-1 h-3.5 w-3.5" />
-          Pool에서 추가
-        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -431,7 +583,7 @@ export default function TaskDetailPage() {
   );
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex flex-1 flex-col">
       <TaskDetailHeader
         task={task}
         loading={taskLoading}
@@ -446,26 +598,85 @@ export default function TaskDetailPage() {
         )}
 
         <div className="flex flex-1 gap-6 min-h-0">
-          {/* 좌측: 폴더 트리 */}
-          <div className="w-56 shrink-0 rounded-lg border p-2 overflow-y-auto">
-            <TaskFolderTreeView
-              ref={treeRef}
-              taskId={taskIdNum}
-              rootLabel={task?.name ?? "Task"}
-              rootImageCount={task?.image_count ?? 0}
-              selectedPath={currentPath}
-              onSelectPath={handleNavigateFolder}
-              onDeleteFolder={handleDeleteFolder}
-              onUpdateFolder={handleUpdateFolder}
-              onCreateFolder={handleCreateFolder}
-              onDropItems={handleDropItemsOnTree}
-              onPoolDrop={handlePoolDropOnTree}
-              onRefresh={refreshAll}
-            />
+          {/* 좌측: Pool + Task 수직 사이드바 */}
+          <div className="w-64 shrink-0 flex flex-col gap-2 min-h-0">
+            {/* Pool 섹션 */}
+            <div
+              className={`rounded-lg border flex flex-col min-h-0 ${poolCollapsed ? "shrink-0" : "flex-1"}`}
+            >
+              {/* Pool 헤더 */}
+              <button
+                type="button"
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors shrink-0 w-full text-left"
+                onClick={() => setPoolCollapsed((v) => !v)}
+              >
+                {poolCollapsed ? (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+                Data Pool
+              </button>
+
+              {!poolCollapsed && (
+                <>
+                  <div className="flex-1 overflow-y-auto px-1 pb-1 min-h-0">
+                    {!dataStore ? (
+                      <p className="py-4 text-center text-xs text-muted-foreground">
+                        Data Pool이 없습니다.
+                      </p>
+                    ) : (
+                      <PoolFolderCheckTree
+                        dataStoreId={dataStore.id}
+                        checkedPaths={poolCheckedPaths}
+                        onCheckPath={handlePoolCheckPath}
+                      />
+                    )}
+                  </div>
+
+                  {/* Task에 추가 버튼 */}
+                  <div className="px-2 pb-2 shrink-0">
+                    <Button
+                      size="sm"
+                      className="w-full text-xs h-7"
+                      disabled={poolAdding || poolCheckedPaths.size === 0}
+                      onClick={handleAddPoolToTask}
+                    >
+                      {poolAdding
+                        ? poolProgress
+                          ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
+                          : "추가 중..."
+                        : `↓ Task에 추가 (${poolCheckedPaths.size}개)`}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 구분선 */}
+            <div className="border-t shrink-0" />
+
+            {/* Task 섹션 */}
+            <div className="flex-1 rounded-lg border p-2 overflow-y-auto min-h-0">
+              <TaskFolderTreeView
+                ref={treeRef}
+                taskId={taskIdNum}
+                rootLabel={task?.name ?? "Task"}
+                rootImageCount={task?.image_count ?? 0}
+                selectedPath={currentPath}
+                onSelectPath={handleNavigateFolder}
+                onDeleteFolder={handleDeleteFolder}
+                onUpdateFolder={handleUpdateFolder}
+                onCreateFolder={handleCreateFolder}
+                onDropItems={handleDropItemsOnTree}
+                onPoolDrop={handlePoolDropOnTree}
+                onRefresh={refreshAll}
+              />
+            </div>
           </div>
 
           {/* 중앙: 콘텐츠 영역 */}
-          <div className="min-w-0 flex-1 flex flex-col">
+          <div className="min-w-0 flex-1 flex flex-col min-h-0">
             {toolbar}
             <DataPoolContentArea
               items={items}
@@ -541,14 +752,6 @@ export default function TaskDetailPage() {
         />
       )}
 
-      <PoolSidePanel
-        open={poolPanelOpen}
-        projectId={projectId}
-        taskId={taskIdNum}
-        targetFolderPath={currentPath}
-        onImagesAdded={handleImagesAdded}
-        onClose={() => setPoolPanelOpen(false)}
-      />
       {confirmDialog}
     </div>
   );

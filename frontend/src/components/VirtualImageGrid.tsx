@@ -47,6 +47,7 @@ interface VirtualImageGridProps {
     targetPath: string,
   ) => Promise<void>;
   variant?: "data-pool" | "task";
+  dragSource?: string;
 }
 
 export default function VirtualImageGrid({
@@ -71,6 +72,7 @@ export default function VirtualImageGrid({
   onNavigateUp,
   onDropItemsOnFolder,
   variant = "data-pool",
+  dragSource,
 }: VirtualImageGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
@@ -153,7 +155,7 @@ export default function VirtualImageGrid({
       .map((k) => k.slice(2));
     e.dataTransfer.setData(
       "application/x-datapool-items",
-      JSON.stringify({ imageIds, folderPaths }),
+      JSON.stringify({ imageIds, folderPaths, source: dragSource ?? "task" }),
     );
     e.dataTransfer.effectAllowed = "move";
     const ghost = document.createElement("div");

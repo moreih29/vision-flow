@@ -8,3 +8,5 @@ export type {
   TaskFolderTreeRef,
   TaskFolderTreeViewProps,
 } from "./TaskFolderTreeView";
+export { PoolSidePanel } from "./PoolSidePanel";
+export type { PoolSidePanelProps } from "./PoolSidePanel";

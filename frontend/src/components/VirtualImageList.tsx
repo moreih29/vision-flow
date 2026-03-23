@@ -47,6 +47,7 @@ interface VirtualImageListProps {
     targetPath: string,
   ) => Promise<void>;
   variant?: "data-pool" | "task";
+  dragSource?: string;
 }
 
 function formatBytes(bytes: number) {
@@ -77,6 +78,7 @@ export default function VirtualImageList({
   onNavigateUp,
   onDropItemsOnFolder,
   variant = "data-pool",
+  dragSource,
 }: VirtualImageListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
@@ -133,7 +135,7 @@ export default function VirtualImageList({
       .map((k) => k.slice(2));
     e.dataTransfer.setData(
       "application/x-datapool-items",
-      JSON.stringify({ imageIds, folderPaths }),
+      JSON.stringify({ imageIds, folderPaths, source: dragSource ?? "task" }),
     );
     e.dataTransfer.effectAllowed = "move";
     const ghost = document.createElement("div");

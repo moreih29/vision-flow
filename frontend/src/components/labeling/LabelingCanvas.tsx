@@ -46,6 +46,7 @@ export default function LabelingCanvas({
   const imageLoading = !!imageUrl && !image && loadFailed !== imageUrl;
 
   const tool = useLabelingStore((s) => s.tool);
+  const showAnnotations = useLabelingStore((s) => s.showAnnotations);
   const {
     stageRef,
     scale,
@@ -154,21 +155,32 @@ export default function LabelingCanvas({
     }
   }, [image, containerSize.width, containerSize.height, fitToScreen]);
 
-  // 줌 단축키 (Ctrl+0, Ctrl+=, Ctrl+-)
+  // 줌 단축키 (Ctrl+0, Ctrl+=, Ctrl+-) + F (Fit to Screen)
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const isCtrl = e.ctrlKey || e.metaKey;
-      if (!isCtrl) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-      if (e.key === "0") {
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      if (isCtrl) {
+        if (e.key === "0") {
+          e.preventDefault();
+          handleFitToScreen();
+        } else if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          zoomIn();
+        } else if (e.key === "-") {
+          e.preventDefault();
+          zoomOut();
+        }
+        return;
+      }
+
+      // F — Fit to Screen
+      if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         handleFitToScreen();
-      } else if (e.key === "=" || e.key === "+") {
-        e.preventDefault();
-        zoomIn();
-      } else if (e.key === "-") {
-        e.preventDefault();
-        zoomOut();
       }
     }
 
@@ -198,7 +210,7 @@ export default function LabelingCanvas({
         <Layer>{image && <KonvaImage image={image} />}</Layer>
 
         {/* 어노테이션 레이어 -- select 도구가 아닐 때 기본 렌더링 */}
-        {tool !== "select" && (
+        {tool !== "select" && showAnnotations && (
           <Layer>
             {image && (
               <AnnotationLayer
@@ -215,17 +227,19 @@ export default function LabelingCanvas({
         {/* select 도구: BBoxSelectTool이 bbox를 직접 렌더링 + 상호작용 */}
         {tool === "select" && image && (
           <Layer>
-            <AnnotationLayer
-              annotations={annotations.filter(
-                (a) => a.annotation_type !== "bbox",
-              )}
-              labelClasses={labelClasses}
-              imageSize={imageSize}
-              selectedAnnotationId={selectedAnnotationId}
-              onSelect={onSelectAnnotation}
-            />
+            {showAnnotations && (
+              <AnnotationLayer
+                annotations={annotations.filter(
+                  (a) => a.annotation_type !== "bbox",
+                )}
+                labelClasses={labelClasses}
+                imageSize={imageSize}
+                selectedAnnotationId={selectedAnnotationId}
+                onSelect={onSelectAnnotation}
+              />
+            )}
             <BBoxSelectTool
-              annotations={annotations}
+              annotations={showAnnotations ? annotations : []}
               labelClasses={labelClasses}
               imageSize={imageSize}
               isPanning={isPanning}

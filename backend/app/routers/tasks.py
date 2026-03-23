@@ -106,7 +106,6 @@ async def delete_task(
 
 @router.post(
     "/tasks/{task_id}/images",
-    response_model=list[TaskImageResponse],
     status_code=201,
 )
 async def add_images(
@@ -114,11 +113,15 @@ async def add_images(
     body: TaskImageAdd,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[TaskImageResponse]:
+) -> dict:
     """Task에 이미지를 추가합니다. folder_path로 대상 폴더를 지정할 수 있습니다."""
     await task_service.check_ownership(db, task_id, current_user.id)
-    task_images = await task_service.add_images(db, task_id, body.image_ids, body.folder_path)
-    return [TaskImageResponse.model_validate(ti) for ti in task_images]
+    new_images, moved = await task_service.add_images(db, task_id, body.image_ids, body.folder_path)
+    return {
+        "added": len(new_images),
+        "moved": moved,
+        "images": [TaskImageResponse.model_validate(ti) for ti in new_images],
+    }
 
 
 @router.delete("/tasks/{task_id}/images", status_code=204)

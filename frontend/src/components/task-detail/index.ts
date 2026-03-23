@@ -9,3 +9,4 @@ export type {
   TaskFolderTreeViewProps,
 } from "./TaskFolderTreeView";
 export { PoolFolderCheckTree } from "./PoolFolderCheckTree";
+export { VersionPanel } from "./VersionPanel";

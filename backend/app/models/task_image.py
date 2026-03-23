@@ -11,8 +11,8 @@ class TaskImage(Base):
     __table_args__ = (UniqueConstraint("task_id", "image_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False)
-    image_id: Mapped[int] = mapped_column(ForeignKey("images.id"), nullable=False)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    image_id: Mapped[int] = mapped_column(ForeignKey("images.id", ondelete="CASCADE"), nullable=False)
     folder_path: Mapped[str] = mapped_column(String(1000), nullable=False, default="", server_default="")
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

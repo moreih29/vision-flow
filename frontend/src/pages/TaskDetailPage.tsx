@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,7 +15,7 @@ import { dataStoresApi } from "@/api/data-stores";
 import { labelClassesApi } from "@/api/label-classes";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
-import type { DataPoolItem } from "@/types/image";
+import type { DataPoolItem, ImageMeta } from "@/types/image";
 import type { DataStore } from "@/types/data-store";
 import { Button } from "@/components/ui/button";
 import FolderBreadcrumb from "@/components/FolderBreadcrumb";
@@ -24,7 +25,9 @@ import {
   TaskFolderTreeView,
   type TaskFolderTreeRef,
   PoolFolderCheckTree,
+  VersionPanel,
 } from "@/components/task-detail";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPoolContentArea } from "@/components/data-pool";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
@@ -40,9 +43,12 @@ const VIEW_MODE_KEY = "task_preview_mode";
 export default function TaskDetailPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const projectId = Number(id);
   const taskIdNum = Number(taskId);
   const { confirmDialog, confirm, showAlert } = useConfirmDialog();
+  const initialTab =
+    searchParams.get("tab") === "versions" ? "snapshots" : "classes";
 
   // -- Core state --
   const [task, setTask] = useState<Task | null>(null);
@@ -323,21 +329,14 @@ export default function TaskDetailPage() {
       .catch(() => {});
   }, [projectId]);
 
-  // -- Pool 체크 토글 (상위 폴더 체크 시 하위도 연동) --
+  // -- Pool 체크 토글 --
   const handlePoolCheckPath = useCallback((path: string, checked: boolean) => {
     setPoolCheckedPaths((prev) => {
       const next = new Set(prev);
       if (checked) {
         next.add(path);
-        // 이미 체크된 경로 중 이 경로의 하위인 것도 추가 (이미 있으면 무시)
-        for (const p of prev) {
-          if (p.startsWith(path) && p !== path) next.add(p);
-        }
       } else {
-        // 이 경로 및 모든 하위 경로 제거
-        for (const p of next) {
-          if (p === path || p.startsWith(path)) next.delete(p);
-        }
+        next.delete(path);
       }
       return next;
     });
@@ -350,16 +349,31 @@ export default function TaskDetailPage() {
     taskTargetPath: string,
     onProgress: (completed: number, total: number) => void,
     counter: { completed: number; total: number },
-  ): Promise<{ added: number; failed: number }> {
+  ): Promise<{ added: number; moved: number; failed: number }> {
     let added = 0;
+    let moved = 0;
     let failed = 0;
 
     try {
-      const res = await imagesApi.getFolderContents(dsId, poolPath);
-      const images = res.data.images ?? [];
-      const subfolders = res.data.folders ?? [];
+      const allImages: ImageMeta[] = [];
+      let skip = 0;
+      const batchSize = 500;
+      let subfolders: { name: string; path: string }[] = [];
+      while (true) {
+        const res = await imagesApi.getFolderContents(
+          dsId,
+          poolPath,
+          skip,
+          batchSize,
+        );
+        const batch = res.data.images ?? [];
+        if (skip === 0) subfolders = res.data.folders ?? [];
+        allImages.push(...batch);
+        if (batch.length < batchSize) break;
+        skip += batchSize;
+      }
 
-      counter.total += images.length;
+      counter.total += allImages.length;
       onProgress(counter.completed, counter.total);
 
       // 폴더 생성 (이미지 유무와 무관하게)
@@ -371,18 +385,22 @@ export default function TaskDetailPage() {
         }
       }
 
-      if (images.length > 0) {
+      if (allImages.length > 0) {
         try {
-          await tasksApi.addImages(
-            taskIdNum,
-            images.map((img) => img.id),
-            taskTargetPath,
-          );
-          added += images.length;
+          for (let i = 0; i < allImages.length; i += 500) {
+            const batch = allImages.slice(i, i + 500);
+            const res = await tasksApi.addImages(
+              taskIdNum,
+              batch.map((img) => img.id),
+              taskTargetPath,
+            );
+            added += res.data.added ?? batch.length;
+            moved += res.data.moved ?? 0;
+          }
         } catch {
-          failed += images.length;
+          failed += allImages.length;
         }
-        counter.completed += images.length;
+        counter.completed += allImages.length;
         onProgress(counter.completed, counter.total);
       }
 
@@ -399,13 +417,14 @@ export default function TaskDetailPage() {
           counter,
         );
         added += result.added;
+        moved += result.moved;
         failed += result.failed;
       }
     } catch {
       failed++;
     }
 
-    return { added, failed };
+    return { added, moved, failed };
   }
 
   // -- Pool → Task에 추가 버튼 핸들러 --
@@ -414,6 +433,7 @@ export default function TaskDetailPage() {
     setPoolAdding(true);
     setPoolProgress({ completed: 0, total: poolCheckedPaths.size });
     let totalAdded = 0;
+    let totalMoved = 0;
     let totalFailed = 0;
     const counter = { completed: 0, total: 0 };
     const onProgress = (completed: number, total: number) => {
@@ -440,6 +460,7 @@ export default function TaskDetailPage() {
           counter,
         );
         totalAdded += result.added;
+        totalMoved += result.moved;
         totalFailed += result.failed;
       }
       setPoolCheckedPaths(new Set());
@@ -448,6 +469,8 @@ export default function TaskDetailPage() {
         await showAlert({
           title: `${totalAdded}개 추가됨, ${totalFailed}개 실패`,
         });
+      } else if (totalMoved > 0) {
+        toast.info(`${totalAdded}개 추가, ${totalMoved}개 기존 이미지 이동`);
       }
     } catch {
       await showAlert({ title: "추가 중 오류가 발생했습니다." });
@@ -590,7 +613,7 @@ export default function TaskDetailPage() {
         onBack={() => navigate(`/projects/${projectId}`)}
       />
 
-      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0">
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
         {error && (
           <div className="mb-4 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive select-text">
             {error}
@@ -717,21 +740,44 @@ export default function TaskDetailPage() {
             />
           </div>
 
-          {/* 우측: 클래스 패널 */}
-          <TaskClassPanel
-            classes={classes}
-            loading={taskLoading}
-            addingClass={addingClass}
-            newClassName={newClassName}
-            newClassColor={newClassColor}
-            savingClass={savingClass}
-            onStartAdding={() => setAddingClass(true)}
-            onCancelAdding={() => setAddingClass(false)}
-            onNewClassNameChange={setNewClassName}
-            onNewClassColorChange={setNewClassColor}
-            onAddClass={handleAddClass}
-            onDeleteClass={handleDeleteClass}
-          />
+          {/* 우측: 클래스 + 스냅샷 탭 패널 */}
+          <div className="w-64 shrink-0 flex flex-col min-h-0">
+            <Tabs defaultValue={initialTab} className="flex flex-col h-full">
+              <TabsList className="w-full shrink-0">
+                <TabsTrigger value="classes" className="flex-1">
+                  클래스
+                </TabsTrigger>
+                <TabsTrigger value="snapshots" className="flex-1">
+                  버전
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent
+                value="classes"
+                className="flex-1 overflow-y-auto mt-2"
+              >
+                <TaskClassPanel
+                  classes={classes}
+                  loading={taskLoading}
+                  addingClass={addingClass}
+                  newClassName={newClassName}
+                  newClassColor={newClassColor}
+                  savingClass={savingClass}
+                  onStartAdding={() => setAddingClass(true)}
+                  onCancelAdding={() => setAddingClass(false)}
+                  onNewClassNameChange={setNewClassName}
+                  onNewClassColorChange={setNewClassColor}
+                  onAddClass={handleAddClass}
+                  onDeleteClass={handleDeleteClass}
+                />
+              </TabsContent>
+              <TabsContent
+                value="snapshots"
+                className="flex-1 overflow-hidden mt-2"
+              >
+                <VersionPanel taskId={taskIdNum} />
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </main>
 

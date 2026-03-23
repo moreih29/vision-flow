@@ -11,14 +11,23 @@ export const tasksApi = {
     client.get<Task[]>(`/projects/${projectId}/tasks`),
   create: (
     projectId: number,
-    data: { name: string; description?: string; task_type: TaskType },
+    data: {
+      name: string;
+      description?: string;
+      task_type: TaskType;
+      classes: Array<{ name: string; color: string }>;
+    },
   ) => client.post<Task>(`/projects/${projectId}/tasks`, data),
   get: (id: number) => client.get<Task>(`/tasks/${id}`),
   update: (id: number, data: { name?: string; description?: string }) =>
     client.put<Task>(`/tasks/${id}`, data),
   delete: (id: number) => client.delete(`/tasks/${id}`),
   addImages: (taskId: number, imageIds: number[], folderPath: string = "") =>
-    client.post<TaskImageResponse[]>(`/tasks/${taskId}/images`, {
+    client.post<{
+      added: number;
+      skipped: number;
+      images: TaskImageResponse[];
+    }>(`/tasks/${taskId}/images`, {
       image_ids: imageIds,
       folder_path: folderPath,
     }),

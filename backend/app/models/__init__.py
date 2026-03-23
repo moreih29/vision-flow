@@ -7,6 +7,8 @@ from app.models.project import Project
 from app.models.task import Task
 from app.models.task_folder_meta import TaskFolderMeta
 from app.models.task_image import TaskImage
+from app.models.task_snapshot import TaskSnapshot
+from app.models.task_snapshot_item import TaskSnapshotItem
 from app.models.user import User
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "LabelClass",
     "FolderMeta",
     "Annotation",
+    "TaskSnapshot",
+    "TaskSnapshotItem",
 ]

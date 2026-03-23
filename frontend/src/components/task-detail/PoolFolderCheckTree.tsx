@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight, ChevronDown, Folder } from "lucide-react";
 import { imagesApi } from "@/api/images";
 import {
@@ -11,6 +11,71 @@ interface PoolFolderCheckTreeProps {
   dataStoreId: number;
   checkedPaths: Set<string>;
   onCheckPath: (path: string, checked: boolean) => void;
+}
+
+// indeterminate 지원 체크박스
+function IndeterminateCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  onClick,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (checked: boolean) => void;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = !!indeterminate && !checked;
+    }
+  }, [indeterminate, checked]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="h-3.5 w-3.5 shrink-0 accent-primary cursor-pointer"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      onClick={onClick}
+    />
+  );
+}
+
+// 노드 및 하위 노드의 모든 path 수집 (로드된 것만)
+function collectAllLoadedPaths(node: FolderTreeNode): string[] {
+  const paths = [node.path];
+  if (node.children) {
+    for (const child of node.children) {
+      paths.push(...collectAllLoadedPaths(child));
+    }
+  }
+  return paths;
+}
+
+// 노드의 체크 상태 계산: checked / indeterminate / unchecked
+function getNodeCheckState(
+  node: FolderTreeNode,
+  checkedPaths: Set<string>,
+): "checked" | "indeterminate" | "unchecked" {
+  const isChecked = checkedPaths.has(node.path);
+  if (isChecked) return "checked";
+
+  // 로드된 하위 중 체크된 게 있으면 indeterminate
+  if (node.children && node.children.length > 0) {
+    const childStates = node.children.map((c) =>
+      getNodeCheckState(c, checkedPaths),
+    );
+    const anyChecked = childStates.some(
+      (s) => s === "checked" || s === "indeterminate",
+    );
+    if (anyChecked) return "indeterminate";
+  }
+
+  return "unchecked";
 }
 
 function CheckTreeNode({
@@ -30,7 +95,9 @@ function CheckTreeNode({
   nodes: FolderTreeNode[];
   setNodes: React.Dispatch<React.SetStateAction<FolderTreeNode[]>>;
 }) {
-  const isChecked = checkedPaths.has(node.path);
+  const checkState = getNodeCheckState(node, checkedPaths);
+  const isChecked = checkState === "checked";
+  const isIndeterminate = checkState === "indeterminate";
   const hasChildren = node.subfolder_count > 0;
 
   async function handleToggleExpand(e: React.MouseEvent) {
@@ -44,14 +111,21 @@ function CheckTreeNode({
     if (!node.loaded) {
       try {
         const res = await imagesApi.getFolderContents(dataStoreId, node.path);
+        const children = (res.data.folders ?? []).map(buildNode);
         setNodes((prev) =>
           updateNodeInTree(prev, node.path, (n) => ({
             ...n,
             expanded: true,
             loaded: true,
-            children: (res.data.folders ?? []).map(buildNode),
+            children,
           })),
         );
+        // 상위가 체크된 상태면 새로 로드된 하위도 체크
+        if (checkedPaths.has(node.path)) {
+          for (const child of children) {
+            onCheckPath(child.path, true);
+          }
+        }
       } catch {
         // silently fail
       }
@@ -59,6 +133,24 @@ function CheckTreeNode({
       setNodes((prev) =>
         updateNodeInTree(prev, node.path, (n) => ({ ...n, expanded: true })),
       );
+    }
+  }
+
+  function handleCheck(checked: boolean) {
+    onCheckPath(node.path, checked);
+    // 체크 시 로드된 하위도 재귀 체크
+    if (checked && node.children) {
+      const allPaths = collectAllLoadedPaths(node);
+      for (const p of allPaths) {
+        if (p !== node.path) onCheckPath(p, true);
+      }
+    }
+    // 해제 시 로드된 하위도 재귀 해제
+    if (!checked && node.children) {
+      const allPaths = collectAllLoadedPaths(node);
+      for (const p of allPaths) {
+        if (p !== node.path) onCheckPath(p, false);
+      }
     }
   }
 
@@ -83,11 +175,10 @@ function CheckTreeNode({
         </span>
 
         {/* 체크박스 */}
-        <input
-          type="checkbox"
-          className="h-3.5 w-3.5 shrink-0 accent-primary cursor-pointer"
+        <IndeterminateCheckbox
           checked={isChecked}
-          onChange={(e) => onCheckPath(node.path, e.target.checked)}
+          indeterminate={isIndeterminate}
+          onChange={handleCheck}
           onClick={(e) => e.stopPropagation()}
         />
 
@@ -150,6 +241,23 @@ export function PoolFolderCheckTree({
     };
   }, [dataStoreId]);
 
+  // 전체 선택 상태 계산
+  const allPaths = nodes.map((n) => n.path);
+  const allChecked =
+    allPaths.length > 0 && allPaths.every((p) => checkedPaths.has(p));
+  const someChecked =
+    !allChecked &&
+    (allPaths.some((p) => checkedPaths.has(p)) || checkedPaths.size > 0);
+
+  function handleSelectAll(checked: boolean) {
+    for (const node of nodes) {
+      const allNodePaths = collectAllLoadedPaths(node);
+      for (const p of allNodePaths) {
+        onCheckPath(p, checked);
+      }
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-1 p-1">
@@ -170,6 +278,18 @@ export function PoolFolderCheckTree({
 
   return (
     <div className="space-y-0.5">
+      {/* 전체 선택 */}
+      <div className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-accent cursor-pointer select-none text-sm border-b mb-0.5 pb-1">
+        <span className="shrink-0 w-4 h-4" />
+        <IndeterminateCheckbox
+          checked={allChecked}
+          indeterminate={someChecked}
+          onChange={handleSelectAll}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <span className="text-xs text-muted-foreground ml-1">전체 선택</span>
+      </div>
+
       {nodes.map((node) => (
         <CheckTreeNode
           key={node.path}

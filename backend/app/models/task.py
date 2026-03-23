@@ -15,7 +15,7 @@ class Task(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     task_type: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=TaskStatus.DRAFT, server_default="draft")
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -33,3 +33,4 @@ class Task(Base):
     task_images: Mapped[list["TaskImage"]] = relationship(back_populates="task", cascade="all, delete-orphan")
     label_classes: Mapped[list["LabelClass"]] = relationship(back_populates="task", cascade="all, delete-orphan")
     task_folder_meta: Mapped[list["TaskFolderMeta"]] = relationship(cascade="all, delete-orphan")
+    snapshots: Mapped[list["TaskSnapshot"]] = relationship(back_populates="task", cascade="all, delete-orphan")

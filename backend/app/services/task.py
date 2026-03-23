@@ -32,6 +32,9 @@ class TaskService:
             project_id=project_id,
         )
         db.add(task)
+        await db.flush()
+        for cls in task_in.classes:
+            db.add(LabelClass(name=cls.name, color=cls.color, task_id=task.id))
         await db.commit()
         await db.refresh(task)
         return task
@@ -112,7 +115,7 @@ class TaskService:
         task_id: int,
         image_ids: list[int],
         folder_path: str = "",
-    ) -> list[TaskImage]:
+    ) -> tuple[list[TaskImage], int]:
         await self.get_task(db, task_id)
         result = await db.execute(select(Image).where(Image.id.in_(image_ids)))
         found_images = result.scalars().all()
@@ -130,7 +133,15 @@ class TaskService:
                 TaskImage.image_id.in_(image_ids),
             )
         )
-        existing_ids = {ti.image_id for ti in existing_result.scalars().all()}
+        existing_images = list(existing_result.scalars().all())
+        existing_ids = {ti.image_id for ti in existing_images}
+
+        moved_count = 0
+        for ti in existing_images:
+            if ti.folder_path != normalized_folder_path:
+                ti.folder_path = normalized_folder_path
+                moved_count += 1
+
         new_ids = [iid for iid in image_ids if iid not in existing_ids]
         task_images = [TaskImage(task_id=task_id, image_id=iid, folder_path=normalized_folder_path) for iid in new_ids]
         db.add_all(task_images)
@@ -144,8 +155,8 @@ class TaskService:
                 )
                 .options(selectinload(TaskImage.image))
             )
-            return list(result.scalars().all())  # type: ignore[arg-type]
-        return []
+            return list(result.scalars().all()), moved_count  # type: ignore[arg-type]
+        return [], moved_count
 
     async def remove_images(self, db: AsyncSession, task_id: int, image_ids: list[int]) -> None:
         await self.get_task(db, task_id)

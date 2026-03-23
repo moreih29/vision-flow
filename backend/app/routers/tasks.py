@@ -154,6 +154,7 @@ async def list_task_images(
 
 # --- 폴더 엔드포인트 ---
 
+
 @router.get("/tasks/{task_id}/image-folders", response_model=TaskFolderContentsResponse)
 async def get_task_folder_contents(
     task_id: int,

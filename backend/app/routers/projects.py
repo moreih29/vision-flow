@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db, get_storage
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.project import project_service
+from app.storage.base import StorageBackend
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -73,6 +74,7 @@ async def delete_project(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    storage: StorageBackend = Depends(get_storage),
 ) -> None:
     """Delete a project."""
-    await project_service.delete_project(db, project_id, current_user.id)
+    await project_service.delete_project(db, project_id, current_user.id, storage)

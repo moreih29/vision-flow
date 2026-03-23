@@ -69,9 +69,7 @@ async def bulk_save_annotations(
     await task_service.check_ownership(db, task_id, current_user.id)
     task_image = await annotation_service.get_task_image(db, task_id, image_id)
     annotations = await annotation_service.bulk_save(db, task_image.id, body.annotations)
-    return BulkSaveResponse(
-        annotations=[AnnotationResponse.model_validate(a) for a in annotations]
-    )
+    return BulkSaveResponse(annotations=[AnnotationResponse.model_validate(a) for a in annotations])
 
 
 @router.put("/labels/{label_id}", response_model=AnnotationResponse)
@@ -83,9 +81,7 @@ async def update_annotation(
 ) -> AnnotationResponse:
     """어노테이션을 수정합니다."""
     annotation = await annotation_service.get_annotation(db, label_id)
-    ti_result = await db.execute(
-        select(TaskImage).where(TaskImage.id == annotation.task_image_id)
-    )
+    ti_result = await db.execute(select(TaskImage).where(TaskImage.id == annotation.task_image_id))
     task_image = ti_result.scalar_one_or_none()
     if task_image is not None:
         await task_service.check_ownership(db, task_image.task_id, current_user.id)
@@ -101,9 +97,7 @@ async def delete_annotation(
 ) -> None:
     """어노테이션을 삭제합니다."""
     annotation = await annotation_service.get_annotation(db, label_id)
-    ti_result = await db.execute(
-        select(TaskImage).where(TaskImage.id == annotation.task_image_id)
-    )
+    ti_result = await db.execute(select(TaskImage).where(TaskImage.id == annotation.task_image_id))
     task_image = ti_result.scalar_one_or_none()
     if task_image is not None:
         await task_service.check_ownership(db, task_image.task_id, current_user.id)

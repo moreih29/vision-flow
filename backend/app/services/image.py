@@ -1,16 +1,21 @@
+import bisect
 import hashlib
-import io
+import tempfile
 from pathlib import Path
 
+import aiofiles  # type: ignore[import-untyped]
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import case, func, select, update
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.data_store import DataStore
 from app.models.folder_meta import FolderMeta
 from app.models.image import Image
 from app.schemas.image import FolderContentsResponse, FolderImageIdsResponse, FolderInfo, ImageResponse
 from app.storage.base import StorageBackend
+
+_CHUNK_SIZE = 256 * 1024  # 256 KB
 
 
 def _normalize_folder_path(path: str) -> str:
@@ -32,7 +37,47 @@ def _escape_like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+async def _resolve_keys_to_delete(
+    db: AsyncSession,
+    candidate_keys: list[str],
+    target_ids: set[int],
+) -> list[str]:
+    """GROUP BY 한 번으로 storage_key별 전체/삭제대상 참조 수를 집계해 물리 삭제 대상을 반환.
+
+    total_refs == target_refs 인 키만 반환 (다른 레코드에서 참조 중인 키는 제외).
+    """
+    if not candidate_keys:
+        return []
+
+    rows = await db.execute(
+        select(
+            Image.storage_key,
+            func.count().label("total_refs"),
+            func.sum(case((Image.id.in_(target_ids), 1), else_=0)).label("target_refs"),
+        )
+        .where(Image.storage_key.in_(candidate_keys))
+        .group_by(Image.storage_key)
+    )
+    return [row.storage_key for row in rows if row.total_refs <= row.target_refs]
+
+
 class ImageService:
+    async def check_image_ownership(self, db: AsyncSession, image: Image, user_id: int) -> None:
+        """image -> data_store -> project -> owner_id 체인으로 소유권 검증."""
+        from app.models.project import Project
+
+        result = await db.execute(
+            select(Project)
+            .join(DataStore, DataStore.project_id == Project.id)
+            .where(DataStore.id == image.data_store_id)
+        )
+        project = result.scalar_one_or_none()
+        if project is None or project.owner_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+
     async def upload_image(
         self,
         db: AsyncSession,
@@ -42,30 +87,50 @@ class ImageService:
         storage: StorageBackend,
         folder_path: str = "",
     ) -> Image:
-        data = await file.read()
-        file_hash = hashlib.sha256(data).hexdigest()
         raw_filename = file.filename or "unknown"
         original_filename = raw_filename.rsplit("/", 1)[-1] if "/" in raw_filename else raw_filename
         ext = Path(original_filename).suffix.lstrip(".")
-        storage_key = (
-            f"{file_hash[:2]}/{file_hash[2:4]}/{file_hash}.{ext}"
-            if ext
-            else f"{file_hash[:2]}/{file_hash[2:4]}/{file_hash}"
-        )
         mime_type = file.content_type or "application/octet-stream"
-        file_size = len(data)
 
-        # dedup: only save physical file if not already stored
-        if not await storage.exists(storage_key):
-            await storage.save(storage_key, data)
+        # 청크 단위로 읽어 해시 계산과 임시 파일 저장을 동시에 수행 (메모리 상주 최소화)
+        hasher = hashlib.sha256()
+        file_size = 0
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp_path = Path(tmp.name)
 
-        # extract image dimensions using Pillow if possible
+        try:
+            async with aiofiles.open(tmp_path, "wb") as tmp_f:
+                while True:
+                    chunk = await file.read(_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+                    file_size += len(chunk)
+                    await tmp_f.write(chunk)
+
+            file_hash = hasher.hexdigest()
+            storage_key = (
+                f"{file_hash[:2]}/{file_hash[2:4]}/{file_hash}.{ext}"
+                if ext
+                else f"{file_hash[:2]}/{file_hash[2:4]}/{file_hash}"
+            )
+
+            # dedup: 동일 해시 파일이 없을 때만 저장 (임시 파일을 이동)
+            if not await storage.exists(storage_key):
+                await storage.save_from_path(storage_key, tmp_path)
+            else:
+                tmp_path.unlink(missing_ok=True)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+        # Pillow로 이미지 크기 추출 (임시 파일에서 직접 읽어 메모리 복사 제거)
         width: int | None = None
         height: int | None = None
         try:
             from PIL import Image as PILImage
 
-            img = PILImage.open(io.BytesIO(data))
+            img = PILImage.open(storage.get_file_path(storage_key))
             width, height = img.size
         except Exception:
             pass
@@ -98,7 +163,13 @@ class ImageService:
     ) -> tuple[list[Image], int]:
         count_result = await db.execute(select(func.count()).where(Image.data_store_id == data_store_id))
         total = count_result.scalar_one()
-        result = await db.execute(select(Image).where(Image.data_store_id == data_store_id).offset(skip).limit(limit))
+        result = await db.execute(
+            select(Image)
+            .where(Image.data_store_id == data_store_id)
+            .order_by(Image.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         images = list(result.scalars().all())
         return images, total
 
@@ -120,11 +191,7 @@ class ImageService:
         storage: StorageBackend,
     ) -> None:
         image = await self.get_image(db, image_id)
-        if image.uploaded_by != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
-            )
+        await self.check_image_ownership(db, image, user_id)
         # only delete physical file if no other image records reference same storage_key
         count_result = await db.execute(select(func.count()).where(Image.storage_key == image.storage_key))
         ref_count = count_result.scalar_one()
@@ -132,16 +199,6 @@ class ImageService:
         await db.commit()
         if ref_count <= 1:
             await storage.delete(image.storage_key)
-
-    async def get_image_file(
-        self,
-        db: AsyncSession,
-        image_id: int,
-        storage: StorageBackend,
-    ) -> tuple[bytes, str]:
-        image = await self.get_image(db, image_id)
-        data = await storage.load(image.storage_key)
-        return data, image.mime_type
 
     async def get_folder_contents(
         self,
@@ -152,43 +209,9 @@ class ImageService:
         limit: int = 100,
     ) -> FolderContentsResponse:
         normalized_path = _normalize_folder_path(path)
+        prefix_len = len(normalized_path)
 
-        # get all distinct folder_paths under the given prefix
-        folder_paths_result = await db.execute(
-            select(Image.folder_path)
-            .where(Image.data_store_id == data_store_id)
-            .where(Image.folder_path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
-            .distinct()
-        )
-        all_folder_paths: list[str] = list(folder_paths_result.scalars().all())
-
-        # find direct child folders only
-        direct_child_folders: set[str] = set()
-        for fp in all_folder_paths:
-            if fp == normalized_path:
-                continue
-            # strip the current path prefix and find the next segment
-            relative = fp[len(normalized_path) :]
-            parts = relative.split("/")
-            if parts[0]:
-                child_path = normalized_path + parts[0] + "/"
-                direct_child_folders.add(child_path)
-
-        # Also include explicit folders from FolderMeta
-        explicit_result = await db.execute(
-            select(FolderMeta.path)
-            .where(FolderMeta.data_store_id == data_store_id)
-            .where(FolderMeta.path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
-            .where(FolderMeta.path != normalized_path)
-        )
-        for explicit_path in explicit_result.scalars():
-            relative = explicit_path[len(normalized_path) :]
-            parts = relative.split("/")
-            if parts[0]:
-                child_path = normalized_path + parts[0] + "/"
-                direct_child_folders.add(child_path)
-
-        # batch fetch image counts per folder_path in a single query
+        # 1) 이미지가 있는 모든 하위 폴더 경로와 카운트를 한 번에 조회 (GROUP BY)
         counts_result = await db.execute(
             select(Image.folder_path, func.count().label("cnt"))
             .where(Image.data_store_id == data_store_id)
@@ -197,44 +220,74 @@ class ImageService:
         )
         path_image_counts: dict[str, int] = {row.folder_path: row.cnt for row in counts_result}
 
-        # build FolderInfo for each direct child using only in-memory data
-        folders: list[FolderInfo] = []
-        for folder_path in sorted(direct_child_folders):
-            # image_count: sum counts for all folder_paths that fall under this child folder
-            image_count = sum(cnt for fp, cnt in path_image_counts.items() if fp.startswith(folder_path))
+        # 2) direct child folders 수집: image 경로 + FolderMeta 경로 모두 포함
+        direct_child_folders: set[str] = set()
 
-            # subfolder_count: count direct children of this folder
+        for fp in path_image_counts:
+            if fp == normalized_path:
+                continue
+            relative = fp[prefix_len:]
+            first_seg = relative.split("/")[0]
+            if first_seg:
+                direct_child_folders.add(normalized_path + first_seg + "/")
+
+        explicit_result = await db.execute(
+            select(FolderMeta.path)
+            .where(FolderMeta.data_store_id == data_store_id)
+            .where(FolderMeta.path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
+            .where(FolderMeta.path != normalized_path)
+        )
+        for explicit_path in explicit_result.scalars():
+            relative = explicit_path[prefix_len:]
+            first_seg = relative.split("/")[0]
+            if first_seg:
+                direct_child_folders.add(normalized_path + first_seg + "/")
+
+        # 3) bisect를 위해 path_image_counts 키를 정렬
+        #    prefix 범위 [child_path, child_path + "\xff") 로 O(log N) 슬라이싱
+        sorted_count_keys = sorted(path_image_counts)
+
+        # 4) 각 direct child의 image_count, subfolder_count를 O(log N + K) 로 집계
+        folders: list[FolderInfo] = []
+        for child_path in sorted(direct_child_folders):
+            child_prefix_len = len(child_path)
+
+            # image_count: child_path 이하 모든 경로의 카운트 합
+            # 상한은 child_path의 마지막 "/" 을 "\xff" 로 교체 — 어떤 폴더명도 이 값을 초과하지 않음
+            lo = bisect.bisect_left(sorted_count_keys, child_path)
+            hi = bisect.bisect_left(sorted_count_keys, child_path[:-1] + "\xff")
+            image_count = sum(path_image_counts[sorted_count_keys[i]] for i in range(lo, hi))
+
+            # subfolder_count: child_path 직하위 폴더 세그먼트만 수집
             sub_children: set[str] = set()
-            for fp in all_folder_paths:
-                if fp == folder_path or not fp.startswith(folder_path):
+            for i in range(lo, hi):
+                fp = sorted_count_keys[i]
+                if fp == child_path:
                     continue
-                relative = fp[len(folder_path) :]
-                parts = relative.split("/")
-                if parts[0]:
-                    sub_children.add(parts[0])
+                relative = fp[child_prefix_len:]
+                first_seg = relative.split("/")[0]
+                if first_seg:
+                    sub_children.add(first_seg)
             subfolder_count = len(sub_children)
 
-            # folder name is the last non-empty segment
-            name = folder_path.rstrip("/").split("/")[-1]
+            name = child_path.rstrip("/").split("/")[-1]
             folders.append(
                 FolderInfo(
-                    path=folder_path,
+                    path=child_path,
                     name=name,
                     image_count=image_count,
                     subfolder_count=subfolder_count,
                 )
             )
 
-        # images directly in the current path (exact folder_path match)
-        total_images_result = await db.execute(
-            select(func.count()).where(Image.data_store_id == data_store_id).where(Image.folder_path == normalized_path)
-        )
-        total_images = total_images_result.scalar_one()
+        # 5) 현재 경로의 이미지 목록 (exact match)
+        total_images = path_image_counts.get(normalized_path, 0)
 
         images_result = await db.execute(
             select(Image)
             .where(Image.data_store_id == data_store_id)
             .where(Image.folder_path == normalized_path)
+            .order_by(Image.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
@@ -268,46 +321,32 @@ class ImageService:
             .where(FolderMeta.path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
         )
 
-        # fetch all images under this folder path (inclusive of subfolders)
-        result = await db.execute(
-            select(Image)
+        # 삭제 대상 이미지의 id와 storage_key만 조회 (ORM 객체 불필요)
+        rows_result = await db.execute(
+            select(Image.id, Image.storage_key)
             .where(Image.data_store_id == data_store_id)
             .where(Image.folder_path.like(f"{_escape_like(normalized_path)}%", escape="\\"))
         )
-        images = list(result.scalars().all())
-        if not images:
+        rows = rows_result.all()
+        if not rows:
             await db.commit()
             return 0
 
-        # collect unique storage_keys from images to be deleted
-        target_ids = {img.id for img in images}
-        storage_keys = list({img.storage_key for img in images})
+        target_ids = {row.id for row in rows}
+        candidate_keys = list({row.storage_key for row in rows})
 
-        # for each storage_key, count total references across the entire data store
-        # a key can be physically deleted only if all references are within the deletion set
-        keys_to_delete: list[str] = []
-        for key in storage_keys:
-            count_result = await db.execute(select(func.count()).where(Image.storage_key == key))
-            total_refs = count_result.scalar_one()
+        # GROUP BY 한 번으로 물리 삭제 대상 결정
+        keys_to_delete = await _resolve_keys_to_delete(db, candidate_keys, target_ids)
 
-            target_refs_result = await db.execute(
-                select(func.count()).where(Image.storage_key == key).where(Image.id.in_(target_ids))
-            )
-            target_refs = target_refs_result.scalar_one()
-
-            if total_refs <= target_refs:
-                keys_to_delete.append(key)
-
-        # bulk delete DB records
-        for img in images:
-            await db.delete(img)
+        # bulk DELETE (ORM 개별 삭제 대신 단일 DELETE 쿼리)
+        await db.execute(sql_delete(Image).where(Image.id.in_(target_ids)))
         await db.commit()
 
         # physically delete files with no remaining references
         for key in keys_to_delete:
             await storage.delete(key)
 
-        return len(images)
+        return len(target_ids)
 
     async def update_folder_path(
         self,
@@ -452,6 +491,7 @@ class ImageService:
         self,
         db: AsyncSession,
         image_ids: list[int],
+        user_id: int,
         storage: StorageBackend,
     ) -> int:
         if not image_ids:
@@ -461,22 +501,18 @@ class ImageService:
         if not images:
             return 0
 
+        # 모든 이미지에 대해 소유권 검증
+        for image in images:
+            await self.check_image_ownership(db, image, user_id)
+
         target_ids = {img.id for img in images}
-        storage_keys = list({img.storage_key for img in images})
-        keys_to_delete: list[str] = []
+        candidate_keys = list({img.storage_key for img in images})
 
-        for key in storage_keys:
-            count_result = await db.execute(select(func.count()).where(Image.storage_key == key))
-            total_refs = count_result.scalar_one()
-            target_refs_result = await db.execute(
-                select(func.count()).where(Image.storage_key == key).where(Image.id.in_(target_ids))
-            )
-            target_refs = target_refs_result.scalar_one()
-            if total_refs <= target_refs:
-                keys_to_delete.append(key)
+        # GROUP BY 한 번으로 물리 삭제 대상 결정
+        keys_to_delete = await _resolve_keys_to_delete(db, candidate_keys, target_ids)
 
-        for img in images:
-            await db.delete(img)
+        # bulk DELETE
+        await db.execute(sql_delete(Image).where(Image.id.in_(target_ids)))
         await db.commit()
 
         for key in keys_to_delete:
@@ -489,13 +525,21 @@ class ImageService:
         db: AsyncSession,
         image_ids: list[int],
         target_folder: str,
+        user_id: int,
     ) -> int:
         if not image_ids:
             return 0
+
+        # 이동할 이미지들의 소유권 검증
+        result = await db.execute(select(Image).where(Image.id.in_(image_ids)))
+        images = list(result.scalars().all())
+        for image in images:
+            await self.check_image_ownership(db, image, user_id)
+
         normalized = _normalize_folder_path(target_folder)
-        result = await db.execute(update(Image).where(Image.id.in_(image_ids)).values(folder_path=normalized))
+        update_result = await db.execute(update(Image).where(Image.id.in_(image_ids)).values(folder_path=normalized))
         await db.commit()
-        return result.rowcount  # type: ignore[attr-defined, no-any-return]
+        return update_result.rowcount  # type: ignore[attr-defined, no-any-return]
 
     async def batch_delete_folders(
         self,

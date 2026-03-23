@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,9 +40,18 @@ async def upload_images(
 ) -> list[ImageResponse]:
     """Upload one or more images to a data store."""
     allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".svg"}
-    # verify data store exists
-    await data_store_service.get_data_store(db, data_store_id)
-    parsed_paths = folder_paths.split(",") if folder_paths else []
+    # verify data store exists and user owns it
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
+    # JSON 배열 파싱 시도 후 fallback으로 comma split (쉼표 포함 폴더명 지원)
+    parsed_paths: list[str] = []
+    if folder_paths:
+        try:
+            parsed_paths = json.loads(folder_paths)
+            if not isinstance(parsed_paths, list):
+                parsed_paths = folder_paths.split(",")
+        except (json.JSONDecodeError, ValueError):
+            parsed_paths = folder_paths.split(",")
     results = []
     for i, file in enumerate(files):
         # Skip non-image files
@@ -64,7 +75,8 @@ async def get_folder_contents(
     current_user: User = Depends(get_current_user),
 ) -> FolderContentsResponse:
     """List folders and images at a given folder path within a data store."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     return await image_service.get_folder_contents(db, data_store_id, path, skip, limit)
 
 
@@ -77,6 +89,8 @@ async def list_images(
     current_user: User = Depends(get_current_user),
 ) -> ImageListResponse:
     """List images in a data store with pagination."""
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     images, total = await image_service.get_images_by_data_store(db, data_store_id, skip, limit)
     return ImageListResponse(
         images=[ImageResponse.model_validate(img) for img in images],
@@ -94,6 +108,7 @@ async def get_image(
 ) -> ImageResponse:
     """Get image metadata by ID."""
     image = await image_service.get_image(db, image_id)
+    await image_service.check_image_ownership(db, image, current_user.id)
     return ImageResponse.model_validate(image)
 
 
@@ -115,10 +130,10 @@ async def get_image_file(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     image = await image_service.get_image(db, image_id)
-    file_path = storage._key_to_path(image.storage_key)  # type: ignore[attr-defined]
-    if not file_path.exists():
+    await image_service.check_image_ownership(db, image, user.id)
+    if not await storage.exists(image.storage_key):
         raise HTTPException(status_code=404, detail="Image file not found")
-    return FileResponse(path=str(file_path), media_type=image.mime_type)
+    return FileResponse(path=storage.get_file_path(image.storage_key), media_type=image.mime_type)
 
 
 @router.patch("/data-stores/{data_store_id}/folders", status_code=200)
@@ -129,7 +144,8 @@ async def update_folder(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Rename or move a folder (updates folder_path prefix for all images)."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     count = await image_service.update_folder_path(db, data_store_id, body.old_path, body.new_path)
     return {"updated_count": count}
 
@@ -142,7 +158,8 @@ async def create_folder(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Create an empty folder."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     path = await image_service.create_folder(db, data_store_id, body.path)
     return {"path": path}
 
@@ -155,7 +172,8 @@ async def get_folder_image_ids(
     current_user: User = Depends(get_current_user),
 ) -> FolderImageIdsResponse:
     """Get all image IDs in a folder and its subfolders."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     return await image_service.get_folder_image_ids(db, data_store_id, path)
 
 
@@ -166,7 +184,8 @@ async def get_all_folders(
     current_user: User = Depends(get_current_user),
 ) -> list[str]:
     """Return all unique folder paths in a data store."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     return await image_service.get_all_folder_paths(db, data_store_id)
 
 
@@ -179,7 +198,8 @@ async def delete_folder(
     storage: StorageBackend = Depends(get_storage),
 ) -> dict:
     """Delete all images in a folder and its subfolders."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     count = await image_service.delete_folder(db, data_store_id, path, current_user.id, storage)
     return {"deleted_count": count}
 
@@ -203,7 +223,7 @@ async def batch_delete_images(
     storage: StorageBackend = Depends(get_storage),
 ) -> dict:
     """Delete multiple images by IDs."""
-    count = await image_service.batch_delete_images(db, body.image_ids, storage)
+    count = await image_service.batch_delete_images(db, body.image_ids, current_user.id, storage)
     return {"deleted_count": count}
 
 
@@ -214,7 +234,7 @@ async def batch_move_images(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Move multiple images to a target folder."""
-    count = await image_service.batch_move_images(db, body.image_ids, body.target_folder)
+    count = await image_service.batch_move_images(db, body.image_ids, body.target_folder, current_user.id)
     return {"updated_count": count}
 
 
@@ -227,7 +247,8 @@ async def batch_delete_folders(
     storage: StorageBackend = Depends(get_storage),
 ) -> dict:
     """Delete multiple folders and their contents."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     count = await image_service.batch_delete_folders(db, data_store_id, body.paths, current_user.id, storage)
     return {"deleted_count": count}
 
@@ -240,6 +261,7 @@ async def batch_move_folders(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Move multiple folders to a target folder."""
-    await data_store_service.get_data_store(db, data_store_id)
+    data_store = await data_store_service.get_data_store(db, data_store_id)
+    await data_store_service.check_ownership(db, data_store, current_user.id)
     count = await image_service.batch_move_folders(db, data_store_id, body.paths, body.target_folder)
     return {"updated_count": count}

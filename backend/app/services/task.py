@@ -9,9 +9,9 @@ from app.models.label_class import LabelClass
 from app.models.task import Task
 from app.models.task_folder_meta import TaskFolderMeta
 from app.models.task_image import TaskImage
+from app.schemas.image import FolderInfo
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.task_image import TaskFolderContentsResponse, TaskImageResponse
-from app.schemas.image import FolderInfo
 from app.services.image import _escape_like, _normalize_folder_path
 from app.services.project import project_service
 
@@ -205,7 +205,7 @@ class TaskService:
         for fp in all_folder_paths:
             if fp == normalized_path:
                 continue
-            relative = fp[len(normalized_path):]
+            relative = fp[len(normalized_path) :]
             parts = relative.split("/")
             if parts[0]:
                 child_path = normalized_path + parts[0] + "/"
@@ -219,7 +219,7 @@ class TaskService:
             .where(TaskFolderMeta.path != normalized_path)
         )
         for explicit_path in explicit_result.scalars():
-            relative = explicit_path[len(normalized_path):]
+            relative = explicit_path[len(normalized_path) :]
             parts = relative.split("/")
             if parts[0]:
                 child_path = normalized_path + parts[0] + "/"
@@ -242,7 +242,7 @@ class TaskService:
             for fp in all_folder_paths:
                 if fp == folder_path or not fp.startswith(folder_path):
                     continue
-                relative = fp[len(folder_path):]
+                relative = fp[len(folder_path) :]
                 parts = relative.split("/")
                 if parts[0]:
                     sub_children.add(parts[0])
@@ -259,9 +259,7 @@ class TaskService:
 
         # 현재 경로의 이미지 (정확히 일치하는 folder_path)
         total_images_result = await db.execute(
-            select(func.count())
-            .where(TaskImage.task_id == task_id)
-            .where(TaskImage.folder_path == normalized_path)
+            select(func.count()).where(TaskImage.task_id == task_id).where(TaskImage.folder_path == normalized_path)
         )
         total_images = total_images_result.scalar_one()
 
@@ -295,9 +293,7 @@ class TaskService:
                 detail="Cannot create root folder",
             )
         existing = await db.execute(
-            select(TaskFolderMeta)
-            .where(TaskFolderMeta.task_id == task_id)
-            .where(TaskFolderMeta.path == normalized)
+            select(TaskFolderMeta).where(TaskFolderMeta.task_id == task_id).where(TaskFolderMeta.path == normalized)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(
@@ -401,9 +397,7 @@ class TaskService:
         raw_paths: list[str] = list(result.scalars().all())
 
         explicit_result = await db.execute(
-            select(TaskFolderMeta.path)
-            .where(TaskFolderMeta.task_id == task_id)
-            .where(TaskFolderMeta.path != "")
+            select(TaskFolderMeta.path).where(TaskFolderMeta.task_id == task_id).where(TaskFolderMeta.path != "")
         )
         raw_paths.extend(explicit_result.scalars().all())
 
@@ -425,9 +419,7 @@ class TaskService:
             return 0
         normalized = _normalize_folder_path(target_folder)
         result = await db.execute(
-            update(TaskImage)
-            .where(TaskImage.id.in_(task_image_ids))
-            .values(folder_path=normalized)
+            update(TaskImage).where(TaskImage.id.in_(task_image_ids)).values(folder_path=normalized)
         )
         await db.commit()
         return result.rowcount  # type: ignore[attr-defined, no-any-return]
@@ -441,9 +433,7 @@ class TaskService:
         if not task_image_ids:
             return 0
         result = await db.execute(
-            delete(TaskImage)
-            .where(TaskImage.task_id == task_id)
-            .where(TaskImage.id.in_(task_image_ids))
+            delete(TaskImage).where(TaskImage.task_id == task_id).where(TaskImage.id.in_(task_image_ids))
         )
         await db.commit()
         return result.rowcount  # type: ignore[attr-defined, no-any-return]

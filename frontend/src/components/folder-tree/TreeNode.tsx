@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -7,41 +7,42 @@ import {
   FolderPlus,
   Pencil,
   Trash2,
-} from 'lucide-react'
-import { Input } from '@/components/ui/input'
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from '@/components/ui/context-menu'
-import type { FolderTreeNode } from './tree-utils'
+} from "@/components/ui/context-menu";
+import type { FolderTreeNode } from "./tree-utils";
 
 // -- 타입 정의 --
 
 export interface TreeNodeProps {
-  node: FolderTreeNode
-  depth: number
-  selectedPath: string
-  editingPath: string | null
-  editName: string
-  draggingPath: string | null
-  dragOverPath: string | null
-  editStartTime: number
-  onSelectPath: (path: string) => void
-  onToggleExpand: (path: string) => void
-  onDeleteFolder: (path: string) => void
-  onCreateFolder: (parentPath: string) => void
-  onStartRename: (path: string, name: string) => void
-  onEditNameChange: (value: string) => void
-  onFinishRename: () => void
-  onCancelRename: () => void
-  onDragStart: (path: string) => void
-  onDragEnd: () => void
-  onDragOver: (e: React.DragEvent, path: string) => void
-  onDragLeave: () => void
-  onDrop: (e: React.DragEvent, targetPath: string) => void
+  node: FolderTreeNode;
+  depth: number;
+  selectedPath: string;
+  editingPath: string | null;
+  editName: string;
+  draggingPath: string | null;
+  dragOverPath: string | null;
+  editStartTime: number;
+  readOnly?: boolean;
+  onSelectPath: (path: string) => void;
+  onToggleExpand: (path: string) => void;
+  onDeleteFolder: (path: string) => void;
+  onCreateFolder: (parentPath: string) => void;
+  onStartRename: (path: string, name: string) => void;
+  onEditNameChange: (value: string) => void;
+  onFinishRename: () => void;
+  onCancelRename: () => void;
+  onDragStart: (path: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent, path: string) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent, targetPath: string) => void;
 }
 
 // -- 컴포넌트 --
@@ -55,6 +56,7 @@ export function TreeNode({
   draggingPath,
   dragOverPath,
   editStartTime,
+  readOnly = false,
   onSelectPath,
   onToggleExpand,
   onDeleteFolder,
@@ -69,118 +71,134 @@ export function TreeNode({
   onDragLeave,
   onDrop,
 }: TreeNodeProps) {
-  const isSelected = selectedPath === node.path
-  const hasChildren = node.subfolder_count > 0
-  const isEditing = editingPath === node.path
-  const isDragging = draggingPath === node.path
-  const isDragOver = dragOverPath === node.path
-  const inputRef = useRef<HTMLInputElement>(null)
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isSelected = selectedPath === node.path;
+  const hasChildren = node.subfolder_count > 0;
+  const isEditing = editingPath === node.path;
+  const isDragging = draggingPath === node.path;
+  const isDragOver = dragOverPath === node.path;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
-      if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
-    }
-  }, [])
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
 
   const isValidDropTarget =
     draggingPath !== null &&
     draggingPath !== node.path &&
-    !node.path.startsWith(draggingPath)
+    !node.path.startsWith(draggingPath);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [isEditing])
+  }, [isEditing]);
 
   function handleSingleClick() {
-    onSelectPath(node.path)
-    if (hasChildren && !node.expanded) onToggleExpand(node.path)
+    onSelectPath(node.path);
+    if (hasChildren && !node.expanded) onToggleExpand(node.path);
   }
 
   function handleClick() {
     if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current)
-      clickTimerRef.current = null
-      if (isSelected) {
-        onStartRename(node.path, node.name)
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      if (isSelected && !readOnly) {
+        onStartRename(node.path, node.name);
       }
-      return
+      return;
     }
-    handleSingleClick()
+    handleSingleClick();
     clickTimerRef.current = setTimeout(() => {
-      clickTimerRef.current = null
-    }, 300)
+      clickTimerRef.current = null;
+    }, 300);
   }
 
   function handleBlur() {
-    if (Date.now() - editStartTime < 300) return
-    onCancelRename()
+    if (Date.now() - editStartTime < 300) return;
+    onCancelRename();
   }
 
   const rowContent = (
     <div
       data-tree-node
       className={`group flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors
-        ${isSelected ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-accent hover:text-accent-foreground'}
-        ${isDragging ? 'opacity-40' : ''}
-        ${isDragOver && (isValidDropTarget || draggingPath === null) ? 'ring-2 ring-primary bg-primary/10' : ''}
+        ${isSelected ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent hover:text-accent-foreground"}
+        ${isDragging ? "opacity-40" : ""}
+        ${isDragOver && (isValidDropTarget || draggingPath === null) ? "ring-2 ring-primary bg-primary/10" : ""}
       `}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
-      draggable={!isEditing}
+      draggable={!isEditing && !readOnly}
       onContextMenu={() => onSelectPath(node.path)}
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', node.path)
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart(node.path)
-      }}
-      onDragEnd={onDragEnd}
-      onDragOver={(e) => {
-        const types = Array.from(e.dataTransfer.types)
-        const hasExternalItems = types.includes(
-          'application/x-datapool-items',
-        )
-        const hasExternalFiles =
-          types.includes('Files') && !hasExternalItems
+      onDragStart={
+        readOnly
+          ? undefined
+          : (e) => {
+              e.dataTransfer.setData("text/plain", node.path);
+              e.dataTransfer.effectAllowed = "move";
+              onDragStart(node.path);
+            }
+      }
+      onDragEnd={readOnly ? undefined : onDragEnd}
+      onDragOver={
+        readOnly
+          ? undefined
+          : (e) => {
+              const types = Array.from(e.dataTransfer.types);
+              const hasExternalItems = types.includes(
+                "application/x-datapool-items",
+              );
+              const hasExternalFiles =
+                types.includes("Files") && !hasExternalItems;
 
-        if (isValidDropTarget || hasExternalItems) {
-          e.preventDefault()
-          e.stopPropagation()
-          e.dataTransfer.dropEffect = 'move'
-          onDragOver(e, node.path)
-        } else if (hasExternalFiles) {
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'copy'
-          onDragOver(e, node.path)
-        }
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          onDragLeave()
-        }
-      }}
-      onDrop={(e) => {
-        const types = Array.from(e.dataTransfer.types)
-        const hasExternalItems = types.includes(
-          'application/x-datapool-items',
-        )
-        const hasExternalFiles =
-          types.includes('Files') && !hasExternalItems
+              if (isValidDropTarget || hasExternalItems) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = "move";
+                onDragOver(e, node.path);
+              } else if (hasExternalFiles) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+                onDragOver(e, node.path);
+              }
+            }
+      }
+      onDragLeave={
+        readOnly
+          ? undefined
+          : (e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                onDragLeave();
+              }
+            }
+      }
+      onDrop={
+        readOnly
+          ? undefined
+          : (e) => {
+              const types = Array.from(e.dataTransfer.types);
+              const hasExternalItems = types.includes(
+                "application/x-datapool-items",
+              );
+              const hasExternalFiles =
+                types.includes("Files") && !hasExternalItems;
 
-        if (isValidDropTarget || hasExternalItems || hasExternalFiles) {
-          e.preventDefault()
-          e.stopPropagation()
-          onDrop(e, node.path)
-        }
-      }}
+              if (isValidDropTarget || hasExternalItems || hasExternalFiles) {
+                e.preventDefault();
+                e.stopPropagation();
+                onDrop(e, node.path);
+              }
+            }
+      }
     >
       <button
         type="button"
         className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
         onClick={() => hasChildren && onToggleExpand(node.path)}
-        aria-label={node.expanded ? '축소' : '확장'}
+        aria-label={node.expanded ? "축소" : "확장"}
       >
         {hasChildren ? (
           node.expanded ? (
@@ -203,8 +221,8 @@ export function TreeNode({
             value={editName}
             onChange={(e) => onEditNameChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') onFinishRename()
-              if (e.key === 'Escape') onCancelRename()
+              if (e.key === "Enter") onFinishRename();
+              if (e.key === "Escape") onCancelRename();
             }}
             onBlur={handleBlur}
             className="h-6 px-1 py-0 text-sm"
@@ -230,11 +248,11 @@ export function TreeNode({
         </button>
       )}
     </div>
-  )
+  );
 
   return (
     <div>
-      {isEditing ? (
+      {isEditing || readOnly ? (
         rowContent
       ) : (
         <ContextMenu>
@@ -274,6 +292,7 @@ export function TreeNode({
               draggingPath={draggingPath}
               dragOverPath={dragOverPath}
               editStartTime={editStartTime}
+              readOnly={readOnly}
               onSelectPath={onSelectPath}
               onToggleExpand={onToggleExpand}
               onDeleteFolder={onDeleteFolder}
@@ -292,5 +311,5 @@ export function TreeNode({
         </div>
       )}
     </div>
-  )
+  );
 }

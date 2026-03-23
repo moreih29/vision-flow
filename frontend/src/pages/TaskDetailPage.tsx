@@ -9,12 +9,12 @@ import type { LabelClass } from "@/types/label-class";
 import type { DataPoolItem } from "@/types/image";
 import { Button } from "@/components/ui/button";
 import FolderBreadcrumb from "@/components/FolderBreadcrumb";
-import ImageSelectionModal from "@/components/ImageSelectionModal";
 import {
   TaskDetailHeader,
   TaskClassPanel,
   TaskFolderTreeView,
   type TaskFolderTreeRef,
+  PoolSidePanel,
 } from "@/components/task-detail";
 import { DataPoolContentArea } from "@/components/data-pool";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
@@ -44,7 +44,7 @@ export default function TaskDetailPage() {
   const [previewMode, setPreviewMode] = useState<"grid" | "list">(
     () => (localStorage.getItem(VIEW_MODE_KEY) as "grid" | "list") || "grid",
   );
-  const [addImageModalOpen, setAddImageModalOpen] = useState(false);
+  const [poolPanelOpen, setPoolPanelOpen] = useState(false);
   const [renamingFolderPath, setRenamingFolderPath] = useState<string | null>(
     null,
   );
@@ -250,6 +250,16 @@ export default function TaskDetailPage() {
     [dropItems],
   );
 
+  const handlePoolDropOnTree = useCallback(
+    async (imageIds: number[], targetPath: string) => {
+      await tasksApi.addImages(taskIdNum, imageIds, targetPath);
+      await refreshAll();
+      const res = await tasksApi.get(taskIdNum);
+      setTask(res.data);
+    },
+    [taskIdNum, refreshAll],
+  );
+
   // -- Bulk remove --
   async function handleBulkRemove() {
     if (selectedCount === 0) return;
@@ -354,17 +364,10 @@ export default function TaskDetailPage() {
     }
   }
 
-  function handleImagesAdded(result: { added: number[]; removed: number[] }) {
-    setTask((prev) =>
-      prev
-        ? {
-            ...prev,
-            image_count:
-              prev.image_count + result.added.length - result.removed.length,
-          }
-        : prev,
-    );
-    refreshAll();
+  async function handleImagesAdded() {
+    await refreshAll();
+    const res = await tasksApi.get(taskIdNum);
+    setTask(res.data);
   }
 
   // -- Toolbar --
@@ -385,7 +388,7 @@ export default function TaskDetailPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setAddImageModalOpen(true)}
+          onClick={() => setPoolPanelOpen(true)}
         >
           <PlusCircle className="mr-1 h-3.5 w-3.5" />
           Pool에서 추가
@@ -456,6 +459,7 @@ export default function TaskDetailPage() {
               onUpdateFolder={handleUpdateFolder}
               onCreateFolder={handleCreateFolder}
               onDropItems={handleDropItemsOnTree}
+              onPoolDrop={handlePoolDropOnTree}
               onRefresh={refreshAll}
             />
           </div>
@@ -537,14 +541,13 @@ export default function TaskDetailPage() {
         />
       )}
 
-      <ImageSelectionModal
-        open={addImageModalOpen}
-        onOpenChange={setAddImageModalOpen}
+      <PoolSidePanel
+        open={poolPanelOpen}
         projectId={projectId}
         taskId={taskIdNum}
-        existingImages={taskImages.map((ti) => ti.image)}
-        onChanged={handleImagesAdded}
         targetFolderPath={currentPath}
+        onImagesAdded={handleImagesAdded}
+        onClose={() => setPoolPanelOpen(false)}
       />
       {confirmDialog}
     </div>

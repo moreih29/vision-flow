@@ -40,6 +40,7 @@ export interface TaskFolderTreeViewProps {
     folderPaths: string[],
     targetPath: string,
   ) => Promise<void>;
+  onPoolDrop?: (imageIds: number[], targetPath: string) => Promise<void>;
   onRefresh?: () => void;
 }
 
@@ -59,6 +60,7 @@ export const TaskFolderTreeView = forwardRef<
     onUpdateFolder,
     onCreateFolder,
     onDropItems,
+    onPoolDrop,
     onRefresh,
   },
   ref,
@@ -271,12 +273,17 @@ export const TaskFolderTreeView = forwardRef<
     if (itemsData) {
       setDragOverPath(null);
       try {
-        const { taskImageIds, imageIds, folderPaths } = JSON.parse(itemsData);
-        await onDropItems?.(
-          taskImageIds ?? imageIds ?? [],
-          folderPaths ?? [],
-          targetPath,
-        );
+        const { taskImageIds, imageIds, folderPaths, source } =
+          JSON.parse(itemsData);
+        if (source === "pool" && onPoolDrop) {
+          await onPoolDrop(imageIds ?? [], targetPath);
+        } else {
+          await onDropItems?.(
+            taskImageIds ?? imageIds ?? [],
+            folderPaths ?? [],
+            targetPath,
+          );
+        }
       } catch {
         /* handled by parent */
       }
@@ -363,12 +370,17 @@ export const TaskFolderTreeView = forwardRef<
     if (itemsData) {
       setDragOverPath(null);
       try {
-        const { taskImageIds, imageIds, folderPaths } = JSON.parse(itemsData);
-        await onDropItems?.(
-          taskImageIds ?? imageIds ?? [],
-          folderPaths ?? [],
-          "",
-        );
+        const { taskImageIds, imageIds, folderPaths, source } =
+          JSON.parse(itemsData);
+        if (source === "pool" && onPoolDrop) {
+          await onPoolDrop(imageIds ?? [], "");
+        } else {
+          await onDropItems?.(
+            taskImageIds ?? imageIds ?? [],
+            folderPaths ?? [],
+            "",
+          );
+        }
       } catch {
         /* handled by parent */
       }

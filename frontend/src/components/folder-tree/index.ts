@@ -1,3 +1,7 @@
-export { FolderTreeView } from './FolderTreeView'
-export type { FolderTreeRef, FolderTreeViewProps } from './FolderTreeView'
-export type { FolderTreeNode } from './tree-utils'
+export { FolderTreeView } from "./FolderTreeView";
+export type {
+  FolderTreeRef,
+  FolderTreeViewProps,
+  FolderContentsResult,
+} from "./FolderTreeView";
+export type { FolderTreeNode } from "./tree-utils";

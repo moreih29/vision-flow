@@ -1,10 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ZoomIn } from "lucide-react";
+import { ArrowLeft, Keyboard, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { tasksApi } from "@/api/tasks";
 import { labelClassesApi } from "@/api/label-classes";
 import { annotationsApi } from "@/api/annotations";
+import { snapshotsApi } from "@/api/snapshots";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
 import type { ImageMeta } from "@/types/image";
@@ -14,6 +25,10 @@ import {
   ImageNavigator,
   ClassPanel,
   ToolPanel,
+  FilmStrip,
+  LabelingProgressBar,
+  LabelingFilter,
+  KeyboardShortcutsOverlay,
 } from "@/components/labeling";
 
 const TOKEN_KEY = "auth_token";
@@ -29,6 +44,9 @@ export default function LabelingPage() {
   const [images, setImages] = useState<ImageMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [showShortcutsOverlay, setShowShortcutsOverlay] = useState(false);
+  const [dirtyDialogOpen, setDirtyDialogOpen] = useState(false);
+  const [checkingDirty, setCheckingDirty] = useState(false);
 
   const {
     tool,
@@ -49,6 +67,12 @@ export default function LabelingPage() {
     redo,
     canUndo,
     canRedo,
+    filter,
+    labeledImageIds,
+    setLabeledImageId,
+    toggleAnnotations,
+    selectedClassId,
+    setCurrentImageIndex,
   } = useLabelingStore();
 
   // 현재 이미지 ref (saveCurrentAnnotations 클로저용)
@@ -90,6 +114,22 @@ export default function LabelingPage() {
 
   const totalImages = images.length;
   const currentImage = images[currentImageIndex] ?? null;
+
+  // 필터에 따른 이미지 인덱스 배열
+  const filteredIndices = useMemo(() => {
+    if (filter === "all") return images.map((_, i) => i);
+    return images
+      .map((img, i) => ({ img, i }))
+      .filter(({ img }) =>
+        filter === "labeled"
+          ? labeledImageIds.has(img.id)
+          : !labeledImageIds.has(img.id),
+      )
+      .map(({ i }) => i);
+  }, [filter, images, labeledImageIds]);
+
+  // 라벨링된 이미지 수
+  const labeledCount = labeledImageIds.size;
 
   useEffect(() => {
     currentImageRef.current = currentImage;
@@ -144,6 +184,8 @@ export default function LabelingPage() {
         if (!cancelled) {
           setAnnotations(res.data);
           setSelectedAnnotationId(null);
+          // 라벨링 상태 갱신
+          setLabeledImageId(currentImage!.id, res.data.length > 0);
         }
       } catch {
         if (!cancelled) {
@@ -158,11 +200,32 @@ export default function LabelingPage() {
     };
   }, [currentImage?.id, taskIdNum, setAnnotations]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 어노테이션 변경 시 현재 이미지의 라벨링 상태 실시간 반영
+  useEffect(() => {
+    if (!currentImage) return;
+    setLabeledImageId(currentImage.id, annotations.length > 0);
+  }, [annotations.length, currentImage?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ImageNavigator의 이미지 전환을 가로채기 위한 래퍼
   // ImageNavigator는 store의 setCurrentImageIndex를 직접 호출하므로,
   // 이미지 전환 전 저장을 위해 별도 핸들러를 사용할 수 없음.
   // 대신 currentImageIndex 변경을 감지하되, 저장은 navigateImage로 처리.
   // 여기서는 beforeunload와 Ctrl+S 저장만 처리.
+
+  // 현재 이미지 인덱스의 ref (키보드 핸들러 클로저용)
+  const currentImageIndexRef = useRef(currentImageIndex);
+  const totalImagesRef = useRef(totalImages);
+  const selectedClassIdRef = useRef(selectedClassId);
+
+  useEffect(() => {
+    currentImageIndexRef.current = currentImageIndex;
+  }, [currentImageIndex]);
+  useEffect(() => {
+    totalImagesRef.current = totalImages;
+  }, [totalImages]);
+  useEffect(() => {
+    selectedClassIdRef.current = selectedClassId;
+  }, [selectedClassId]);
 
   // 키보드 단축키
   useEffect(() => {
@@ -196,11 +259,113 @@ export default function LabelingPage() {
         saveCurrentAnnotations();
         return;
       }
+
+      // Ctrl 없는 단일 키 처리
+      if (isCtrl) return;
+
+      // H — 어노테이션 표시/숨기기
+      if (e.key === "h" || e.key === "H") {
+        e.preventDefault();
+        toggleAnnotations();
+        return;
+      }
+
+      // ? — 단축키 도움말
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowShortcutsOverlay((v) => !v);
+        return;
+      }
+
+      // Escape — 선택 해제
+      if (e.key === "Escape") {
+        setSelectedAnnotationId(null);
+        return;
+      }
+
+      // Tab — 다음 어노테이션 순환
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const anns = annotationsRef.current;
+        if (anns.length === 0) return;
+        const currentSel = useLabelingStore.getState().selectedAnnotationId;
+        const idx = anns.findIndex((a) => a.id === currentSel);
+        const nextIdx = (idx + 1) % anns.length;
+        setSelectedAnnotationId(anns[nextIdx].id);
+        return;
+      }
+
+      // Space — classification: 현재 클래스 적용 + 다음 이미지
+      if (e.key === " ") {
+        e.preventDefault();
+        const classId = selectedClassIdRef.current;
+        if (classId == null) return;
+        // handleClassifyImage는 최신 ref 값을 사용하는 비동기 함수가 필요 — 직접 호출
+        const anns = annotationsRef.current;
+        const imageAtKey = currentImageRef.current;
+        if (!imageAtKey) return;
+        const existing = anns.find(
+          (a) => a.annotation_type === "classification",
+        );
+        const doNext = () => {
+          const idx = currentImageIndexRef.current;
+          const total = totalImagesRef.current;
+          if (idx < total - 1) setCurrentImageIndex(idx + 1);
+        };
+        if (existing) {
+          if (existing.label_class_id !== classId) {
+            annotationsApi
+              .update(existing.id, { label_class_id: classId })
+              .then(() => {
+                updateAnnotation(existing.id, { label_class_id: classId });
+                doNext();
+              })
+              .catch(() => doNext());
+          } else {
+            doNext();
+          }
+        } else {
+          annotationsApi
+            .create(taskIdNum, imageAtKey.id, {
+              label_class_id: classId,
+              annotation_type: "classification",
+              data: {},
+            })
+            .then((res) => {
+              addAnnotation(res.data);
+              doNext();
+            })
+            .catch(() => doNext());
+        }
+        return;
+      }
+
+      // D — 현재 이미지 완료 표시 + 다음 이미지
+      if (e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        saveCurrentAnnotations();
+        const idx = currentImageIndexRef.current;
+        const total = totalImagesRef.current;
+        if (idx < total - 1) setCurrentImageIndex(idx + 1);
+        return;
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo, canUndo, canRedo, saveCurrentAnnotations]);
+  }, [
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    saveCurrentAnnotations,
+    toggleAnnotations,
+    setSelectedAnnotationId,
+    setCurrentImageIndex,
+    updateAnnotation,
+    addAnnotation,
+    taskIdNum,
+  ]);
 
   // 페이지 이탈 경고
   useEffect(() => {
@@ -214,6 +379,36 @@ export default function LabelingPage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
+
+  const taskDetailPath = `/projects/${projectId}/tasks/${taskIdNum}`;
+
+  async function handleBack() {
+    if (checkingDirty) return;
+    setCheckingDirty(true);
+    try {
+      const res = await snapshotsApi.getVersionStatus(taskIdNum);
+      if (res.data.is_dirty) {
+        setDirtyDialogOpen(true);
+      } else {
+        navigate(taskDetailPath);
+      }
+    } catch {
+      // API 실패 시 그냥 이동
+      navigate(taskDetailPath);
+    } finally {
+      setCheckingDirty(false);
+    }
+  }
+
+  function handleLeaveAnyway() {
+    setDirtyDialogOpen(false);
+    navigate(taskDetailPath);
+  }
+
+  function handleCommitAndLeave() {
+    setDirtyDialogOpen(false);
+    navigate(`${taskDetailPath}?tab=versions`);
+  }
 
   const handleScaleChange = useCallback(
     (newScale: number) => {
@@ -285,13 +480,45 @@ export default function LabelingPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      <KeyboardShortcutsOverlay
+        open={showShortcutsOverlay}
+        onOpenChange={setShowShortcutsOverlay}
+      />
+
+      {/* dirty 프롬프트 */}
+      <AlertDialog open={dirtyDialogOpen} onOpenChange={setDirtyDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              확정되지 않은 변경사항이 있습니다
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              라벨링 데이터는 저장되었지만, 아직 버전으로 확정되지 않았습니다.
+              버전을 확정한 후 나가거나, 그냥 나갈 수 있습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDirtyDialogOpen(false)}>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction variant="outline" onClick={handleLeaveAnyway}>
+              그냥 나가기
+            </AlertDialogAction>
+            <AlertDialogAction onClick={handleCommitAndLeave}>
+              버전 확정 후 나가기
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* 상단 바 */}
       <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-background px-4 select-none">
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => navigate(`/projects/${projectId}/tasks/${taskIdNum}`)}
+          onClick={handleBack}
+          disabled={checkingDirty}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -307,6 +534,16 @@ export default function LabelingPage() {
 
         <div className="mx-2 h-4 w-px bg-border" />
 
+        {/* 진행 바 */}
+        <LabelingProgressBar labeled={labeledCount} total={totalImages} />
+
+        <div className="mx-2 h-4 w-px bg-border" />
+
+        {/* 필터 */}
+        <LabelingFilter />
+
+        <div className="mx-2 h-4 w-px bg-border" />
+
         {/* 줌 표시 */}
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
           <ZoomIn className="h-3.5 w-3.5" />
@@ -317,6 +554,17 @@ export default function LabelingPage() {
 
         {/* 저장 상태 */}
         <SaveStatus />
+
+        {/* 단축키 도움말 버튼 */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setShowShortcutsOverlay((v) => !v)}
+          title="키보드 단축키 (?)"
+        >
+          <Keyboard className="h-4 w-4" />
+        </Button>
       </header>
 
       {/* 본문 */}
@@ -347,26 +595,34 @@ export default function LabelingPage() {
           </div>
         </aside>
 
-        {/* 중앙 캔버스 영역 */}
-        <main className="relative flex-1 overflow-hidden bg-neutral-800">
-          {!loading && totalImages === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="flex flex-col items-center gap-2 text-neutral-400">
-                <p className="text-sm">이미지가 없습니다</p>
-                <p className="text-xs">태스크에 이미지를 추가하세요</p>
+        {/* 우측: 캔버스 + 필름스트립 */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* 중앙 캔버스 영역 */}
+          <main className="relative flex-1 overflow-hidden bg-neutral-800">
+            {!loading && totalImages === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="flex flex-col items-center gap-2 text-neutral-400">
+                  <p className="text-sm">이미지가 없습니다</p>
+                  <p className="text-xs">태스크에 이미지를 추가하세요</p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <LabelingCanvas
-              imageUrl={imageUrl}
-              annotations={annotations}
-              labelClasses={classes}
-              selectedAnnotationId={selectedAnnotationId}
-              onSelectAnnotation={setSelectedAnnotationId}
-              onScaleChange={handleScaleChange}
-            />
+            ) : (
+              <LabelingCanvas
+                imageUrl={imageUrl}
+                annotations={annotations}
+                labelClasses={classes}
+                selectedAnnotationId={selectedAnnotationId}
+                onSelectAnnotation={setSelectedAnnotationId}
+                onScaleChange={handleScaleChange}
+              />
+            )}
+          </main>
+
+          {/* 하단 필름스트립 */}
+          {totalImages > 0 && (
+            <FilmStrip images={images} filteredIndices={filteredIndices} />
           )}
-        </main>
+        </div>
       </div>
     </div>
   );

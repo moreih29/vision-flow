@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {
-  ChevronDown,
-  ChevronRight,
-  FolderPlus,
-  LayoutGrid,
-  List,
-} from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
+import { Database, FolderPlus, LayoutGrid, List, ListTodo } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
 import { imagesApi } from "@/api/images";
@@ -14,17 +9,19 @@ import { dataStoresApi } from "@/api/data-stores";
 import { labelClassesApi } from "@/api/label-classes";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
-import type { DataPoolItem } from "@/types/image";
+import type { DataPoolItem, ImageMeta } from "@/types/image";
 import type { DataStore } from "@/types/data-store";
 import { Button } from "@/components/ui/button";
 import FolderBreadcrumb from "@/components/FolderBreadcrumb";
 import {
   TaskDetailHeader,
   TaskClassPanel,
-  TaskFolderTreeView,
-  type TaskFolderTreeRef,
-  PoolFolderCheckTree,
+  VersionPanel,
 } from "@/components/task-detail";
+import FolderTreeView, {
+  type FolderTreeRef,
+} from "@/components/FolderTreeView";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPoolContentArea } from "@/components/data-pool";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
@@ -40,9 +37,12 @@ const VIEW_MODE_KEY = "task_preview_mode";
 export default function TaskDetailPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const projectId = Number(id);
   const taskIdNum = Number(taskId);
   const { confirmDialog, confirm, showAlert } = useConfirmDialog();
+  const initialTab =
+    searchParams.get("tab") === "versions" ? "snapshots" : "classes";
 
   // -- Core state --
   const [task, setTask] = useState<Task | null>(null);
@@ -84,8 +84,34 @@ export default function TaskDetailPage() {
   const nextColor = CLASS_COLORS[classes.length % CLASS_COLORS.length];
   const [newClassColor, setNewClassColor] = useState(nextColor);
   const [savingClass, setSavingClass] = useState(false);
-  const treeRef = useRef<TaskFolderTreeRef>(null);
+  const treeRef = useRef<FolderTreeRef>(null);
   const handleBulkRemoveRef = useRef<() => void>(() => {});
+
+  const fetchTaskFolderContents = useCallback(
+    async (path: string) => {
+      const res = await tasksApi.getFolderContents(taskIdNum, path);
+      return res.data;
+    },
+    [taskIdNum],
+  );
+
+  const fetchTaskAllFolders = useCallback(async () => {
+    const res = await tasksApi.getAllFolders(taskIdNum);
+    return res.data;
+  }, [taskIdNum]);
+
+  const fetchPoolFolderContents = useCallback(
+    async (path: string) => {
+      const res = await imagesApi.getFolderContents(dataStore!.id, path);
+      return { folders: res.data.folders ?? [] };
+    },
+    [dataStore],
+  );
+
+  const fetchPoolAllFolders = useCallback(async () => {
+    const res = await imagesApi.getAllFolders(dataStore!.id);
+    return res.data;
+  }, [dataStore]);
 
   // -- Folder contents (React Query) --
   const {
@@ -323,21 +349,14 @@ export default function TaskDetailPage() {
       .catch(() => {});
   }, [projectId]);
 
-  // -- Pool 체크 토글 (상위 폴더 체크 시 하위도 연동) --
+  // -- Pool 체크 토글 --
   const handlePoolCheckPath = useCallback((path: string, checked: boolean) => {
     setPoolCheckedPaths((prev) => {
       const next = new Set(prev);
       if (checked) {
         next.add(path);
-        // 이미 체크된 경로 중 이 경로의 하위인 것도 추가 (이미 있으면 무시)
-        for (const p of prev) {
-          if (p.startsWith(path) && p !== path) next.add(p);
-        }
       } else {
-        // 이 경로 및 모든 하위 경로 제거
-        for (const p of next) {
-          if (p === path || p.startsWith(path)) next.delete(p);
-        }
+        next.delete(path);
       }
       return next;
     });
@@ -350,16 +369,31 @@ export default function TaskDetailPage() {
     taskTargetPath: string,
     onProgress: (completed: number, total: number) => void,
     counter: { completed: number; total: number },
-  ): Promise<{ added: number; failed: number }> {
+  ): Promise<{ added: number; moved: number; failed: number }> {
     let added = 0;
+    let moved = 0;
     let failed = 0;
 
     try {
-      const res = await imagesApi.getFolderContents(dsId, poolPath);
-      const images = res.data.images ?? [];
-      const subfolders = res.data.folders ?? [];
+      const allImages: ImageMeta[] = [];
+      let skip = 0;
+      const batchSize = 500;
+      let subfolders: { name: string; path: string }[] = [];
+      while (true) {
+        const res = await imagesApi.getFolderContents(
+          dsId,
+          poolPath,
+          skip,
+          batchSize,
+        );
+        const batch = res.data.images ?? [];
+        if (skip === 0) subfolders = res.data.folders ?? [];
+        allImages.push(...batch);
+        if (batch.length < batchSize) break;
+        skip += batchSize;
+      }
 
-      counter.total += images.length;
+      counter.total += allImages.length;
       onProgress(counter.completed, counter.total);
 
       // 폴더 생성 (이미지 유무와 무관하게)
@@ -371,18 +405,22 @@ export default function TaskDetailPage() {
         }
       }
 
-      if (images.length > 0) {
+      if (allImages.length > 0) {
         try {
-          await tasksApi.addImages(
-            taskIdNum,
-            images.map((img) => img.id),
-            taskTargetPath,
-          );
-          added += images.length;
+          for (let i = 0; i < allImages.length; i += 500) {
+            const batch = allImages.slice(i, i + 500);
+            const res = await tasksApi.addImages(
+              taskIdNum,
+              batch.map((img) => img.id),
+              taskTargetPath,
+            );
+            added += res.data.added ?? batch.length;
+            moved += res.data.moved ?? 0;
+          }
         } catch {
-          failed += images.length;
+          failed += allImages.length;
         }
-        counter.completed += images.length;
+        counter.completed += allImages.length;
         onProgress(counter.completed, counter.total);
       }
 
@@ -399,13 +437,14 @@ export default function TaskDetailPage() {
           counter,
         );
         added += result.added;
+        moved += result.moved;
         failed += result.failed;
       }
     } catch {
       failed++;
     }
 
-    return { added, failed };
+    return { added, moved, failed };
   }
 
   // -- Pool → Task에 추가 버튼 핸들러 --
@@ -414,6 +453,7 @@ export default function TaskDetailPage() {
     setPoolAdding(true);
     setPoolProgress({ completed: 0, total: poolCheckedPaths.size });
     let totalAdded = 0;
+    let totalMoved = 0;
     let totalFailed = 0;
     const counter = { completed: 0, total: 0 };
     const onProgress = (completed: number, total: number) => {
@@ -440,6 +480,7 @@ export default function TaskDetailPage() {
           counter,
         );
         totalAdded += result.added;
+        totalMoved += result.moved;
         totalFailed += result.failed;
       }
       setPoolCheckedPaths(new Set());
@@ -448,6 +489,8 @@ export default function TaskDetailPage() {
         await showAlert({
           title: `${totalAdded}개 추가됨, ${totalFailed}개 실패`,
         });
+      } else if (totalMoved > 0) {
+        toast.info(`${totalAdded}개 추가, ${totalMoved}개 기존 이미지 이동`);
       }
     } catch {
       await showAlert({ title: "추가 중 오류가 발생했습니다." });
@@ -583,14 +626,14 @@ export default function TaskDetailPage() {
   );
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col min-h-0">
       <TaskDetailHeader
         task={task}
         loading={taskLoading}
         onBack={() => navigate(`/projects/${projectId}`)}
       />
 
-      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0">
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
         {error && (
           <div className="mb-4 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive select-text">
             {error}
@@ -604,52 +647,44 @@ export default function TaskDetailPage() {
             <div
               className={`rounded-lg border flex flex-col min-h-0 ${poolCollapsed ? "shrink-0" : "flex-1"}`}
             >
-              {/* Pool 헤더 */}
-              <button
-                type="button"
-                className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors shrink-0 w-full text-left"
-                onClick={() => setPoolCollapsed((v) => !v)}
-              >
-                {poolCollapsed ? (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-                Data Pool
-              </button>
+              {!dataStore ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">
+                  Data Pool이 없습니다.
+                </p>
+              ) : (
+                <FolderTreeView
+                  checkable
+                  collapsible
+                  collapsed={poolCollapsed}
+                  onCollapsedChange={setPoolCollapsed}
+                  checkedPaths={poolCheckedPaths}
+                  onCheckPath={handlePoolCheckPath}
+                  fetchFolderContents={fetchPoolFolderContents}
+                  fetchAllFolders={fetchPoolAllFolders}
+                  rootLabel="Data Pool"
+                  rootIcon={
+                    <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  }
+                  rootImageCount={dataStore.image_count ?? 0}
+                />
+              )}
 
+              {/* Task에 추가 버튼 */}
               {!poolCollapsed && (
-                <>
-                  <div className="flex-1 overflow-y-auto px-1 pb-1 min-h-0">
-                    {!dataStore ? (
-                      <p className="py-4 text-center text-xs text-muted-foreground">
-                        Data Pool이 없습니다.
-                      </p>
-                    ) : (
-                      <PoolFolderCheckTree
-                        dataStoreId={dataStore.id}
-                        checkedPaths={poolCheckedPaths}
-                        onCheckPath={handlePoolCheckPath}
-                      />
-                    )}
-                  </div>
-
-                  {/* Task에 추가 버튼 */}
-                  <div className="px-2 pb-2 shrink-0">
-                    <Button
-                      size="sm"
-                      className="w-full text-xs h-7"
-                      disabled={poolAdding || poolCheckedPaths.size === 0}
-                      onClick={handleAddPoolToTask}
-                    >
-                      {poolAdding
-                        ? poolProgress
-                          ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
-                          : "추가 중..."
-                        : `↓ Task에 추가 (${poolCheckedPaths.size}개)`}
-                    </Button>
-                  </div>
-                </>
+                <div className="px-2 pb-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="w-full text-xs h-7"
+                    disabled={poolAdding || poolCheckedPaths.size === 0}
+                    onClick={handleAddPoolToTask}
+                  >
+                    {poolAdding
+                      ? poolProgress
+                        ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
+                        : "추가 중..."
+                      : `↓ Task에 추가 (${poolCheckedPaths.size}개)`}
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -658,12 +693,20 @@ export default function TaskDetailPage() {
 
             {/* Task 섹션 */}
             <div className="flex-1 rounded-lg border p-2 overflow-y-auto min-h-0">
-              <TaskFolderTreeView
+              <FolderTreeView
                 ref={treeRef}
-                taskId={taskIdNum}
+                fetchFolderContents={fetchTaskFolderContents}
+                fetchAllFolders={fetchTaskAllFolders}
                 rootLabel={task?.name ?? "Task"}
                 rootImageCount={task?.image_count ?? 0}
+                rootIcon={
+                  <ListTodo className="h-4 w-4 shrink-0 text-muted-foreground" />
+                }
                 selectedPath={currentPath}
+                acceptDropTypes={[
+                  "application/x-task-items",
+                  "application/x-datapool-items",
+                ]}
                 onSelectPath={handleNavigateFolder}
                 onDeleteFolder={handleDeleteFolder}
                 onUpdateFolder={handleUpdateFolder}
@@ -713,25 +756,48 @@ export default function TaskDetailPage() {
               onDragOver={() => {}}
               onDragLeave={() => {}}
               onDrop={() => {}}
-              variant="task"
+              deleteLabel="제거"
             />
           </div>
 
-          {/* 우측: 클래스 패널 */}
-          <TaskClassPanel
-            classes={classes}
-            loading={taskLoading}
-            addingClass={addingClass}
-            newClassName={newClassName}
-            newClassColor={newClassColor}
-            savingClass={savingClass}
-            onStartAdding={() => setAddingClass(true)}
-            onCancelAdding={() => setAddingClass(false)}
-            onNewClassNameChange={setNewClassName}
-            onNewClassColorChange={setNewClassColor}
-            onAddClass={handleAddClass}
-            onDeleteClass={handleDeleteClass}
-          />
+          {/* 우측: 클래스 + 스냅샷 탭 패널 */}
+          <div className="w-64 shrink-0 flex flex-col min-h-0">
+            <Tabs defaultValue={initialTab} className="flex flex-col h-full">
+              <TabsList className="w-full shrink-0">
+                <TabsTrigger value="classes" className="flex-1">
+                  클래스
+                </TabsTrigger>
+                <TabsTrigger value="snapshots" className="flex-1">
+                  버전
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent
+                value="classes"
+                className="flex-1 overflow-y-auto mt-2"
+              >
+                <TaskClassPanel
+                  classes={classes}
+                  loading={taskLoading}
+                  addingClass={addingClass}
+                  newClassName={newClassName}
+                  newClassColor={newClassColor}
+                  savingClass={savingClass}
+                  onStartAdding={() => setAddingClass(true)}
+                  onCancelAdding={() => setAddingClass(false)}
+                  onNewClassNameChange={setNewClassName}
+                  onNewClassColorChange={setNewClassColor}
+                  onAddClass={handleAddClass}
+                  onDeleteClass={handleDeleteClass}
+                />
+              </TabsContent>
+              <TabsContent
+                value="snapshots"
+                className="flex-1 overflow-hidden mt-2"
+              >
+                <VersionPanel taskId={taskIdNum} />
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </main>
 

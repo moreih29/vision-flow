@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db, get_storage
 from app.models.data_store import DataStore
 from app.models.user import User
 from app.schemas.data_store import DataStoreCreate, DataStoreResponse, DataStoreUpdate
 from app.services.data_store import data_store_service
+from app.services.project import project_service
+from app.storage.base import StorageBackend
 
 router = APIRouter(tags=["data-stores"])
 
@@ -42,10 +44,11 @@ async def list_data_stores(
     current_user: User = Depends(get_current_user),
 ) -> list[DataStoreResponse]:
     """프로젝트의 모든 DataStore를 조회합니다."""
-    data_stores = await data_store_service.get_data_stores_by_project(db, project_id)
+    project = await project_service.get_project(db, project_id)
+    await project_service.check_ownership(project, current_user.id)
+    rows = await data_store_service.get_data_stores_by_project(db, project_id)
     result = []
-    for data_store in data_stores:
-        image_count = await data_store_service.get_image_count(db, data_store.id)
+    for data_store, image_count in rows:
         response = DataStoreResponse.model_validate(data_store)
         response.image_count = image_count
         result.append(response)
@@ -81,6 +84,7 @@ async def delete_data_store(
     data_store_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    storage: StorageBackend = Depends(get_storage),
 ) -> None:
     """DataStore를 삭제합니다."""
-    await data_store_service.delete_data_store(db, data_store_id, current_user.id)
+    await data_store_service.delete_data_store(db, data_store_id, current_user.id, storage)

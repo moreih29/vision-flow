@@ -13,7 +13,7 @@ class FolderMeta(Base):
     __table_args__ = (UniqueConstraint("data_store_id", "path"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id"), nullable=False)
+    data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id", ondelete="CASCADE"), nullable=False)
     path: Mapped[str] = mapped_column(String(1000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

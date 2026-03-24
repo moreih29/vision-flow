@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Images } from "lucide-react";
 import { dataStoresApi } from "@/api/data-stores";
+import { imagesApi } from "@/api/images";
 import type { DataStore } from "@/types/data-store";
 import type { DataPoolItem } from "@/types/image";
 import { useDataStores, useCreateDataStore } from "@/hooks/use-data-stores";
@@ -60,6 +61,19 @@ export default function DataPoolTab({
   const treeRef = useRef<FolderTreeRef>(null);
   const handleBulkDeleteRef = useRef<() => void>(() => {});
   const { confirmDialog, confirm, showAlert } = useConfirmDialog();
+
+  const fetchFolderContents = useCallback(
+    async (path: string) => {
+      const res = await imagesApi.getFolderContents(dataStore?.id ?? 0, path);
+      return res.data;
+    },
+    [dataStore?.id],
+  );
+
+  const fetchAllFolders = useCallback(async () => {
+    const res = await imagesApi.getAllFolders(dataStore?.id ?? 0);
+    return res.data;
+  }, [dataStore?.id]);
 
   // -- Folder contents (React Query) --
   const {
@@ -349,12 +363,15 @@ export default function DataPoolTab({
           <div className="w-64 shrink-0 rounded-lg border p-2 flex flex-col min-h-0">
             <FolderTreeView
               ref={treeRef}
-              dataStoreId={dataStore.id}
+              fetchFolderContents={fetchFolderContents}
+              fetchAllFolders={fetchAllFolders}
               rootLabel={
                 dataStore.name === "Default Pool" ? "Data Pool" : dataStore.name
               }
               rootImageCount={dataStore.image_count}
               selectedPath={currentPath}
+              acceptDropTypes={["application/x-datapool-items"]}
+              acceptFileDrop
               onSelectPath={onPathChange}
               onDeleteFolder={handleDeleteFolder}
               onUpdateFolder={handleUpdateFolder}

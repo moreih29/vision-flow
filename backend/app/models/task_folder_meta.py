@@ -13,7 +13,7 @@ class TaskFolderMeta(Base):
     __table_args__ = (UniqueConstraint("task_id", "path"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
     path: Mapped[str] = mapped_column(String(1000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -20,7 +20,7 @@ Browser
   │  HTTP (JWT Auth, /api/v1/*)
   ▼
 Frontend (React 19, Vite 8)
-  │  Proxy /api/* → localhost:8002
+  │  Proxy /api/* → localhost:8100
   ▼
 Backend (FastAPI, uvicorn)
   ├── PostgreSQL (asyncpg) ─── 모든 CRUD
@@ -51,7 +51,7 @@ AI Worker (Celery Consumer)
 | 서비스 | 포트 | 비고 |
 |--------|------|------|
 | Frontend (Vite) | 5174 | 개발 서버 |
-| Backend (uvicorn) | 8002 | API 서버 |
+| Backend (uvicorn) | 8100 | API 서버 |
 | PostgreSQL | 5433 | 기본 포트 충돌 방지 |
 | Redis | 6379 | 기본 포트 |
 

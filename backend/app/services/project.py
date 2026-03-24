@@ -3,9 +3,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.data_store import DataStore
+from app.models.image import Image
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.services.image import _resolve_keys_to_delete
+from app.storage.base import StorageBackend
 
 
 class ProjectService:
@@ -70,10 +73,35 @@ class ProjectService:
         await db.refresh(project)
         return project
 
-    async def delete_project(self, db: AsyncSession, project_id: int, user_id: int) -> None:
+    async def delete_project(
+        self,
+        db: AsyncSession,
+        project_id: int,
+        user_id: int,
+        storage: StorageBackend,
+    ) -> None:
         project = await self.get_project_with_ownership(db, project_id, user_id)
+
+        # 삭제 전 물리 파일 정리: 이 Project 산하 DataStore만 참조하는 storage_key 수집
+        ds_ids_result = await db.execute(select(DataStore.id).where(DataStore.project_id == project_id))
+        ds_ids = list(ds_ids_result.scalars().all())
+
+        keys_to_delete: list[str] = []
+        if ds_ids:
+            candidate_result = await db.execute(
+                select(Image.storage_key).where(Image.data_store_id.in_(ds_ids)).distinct()
+            )
+            candidate_keys = list(candidate_result.scalars().all())
+            target_ids_result = await db.execute(select(Image.id).where(Image.data_store_id.in_(ds_ids)))
+            target_ids = set(target_ids_result.scalars().all())
+
+            keys_to_delete = await _resolve_keys_to_delete(db, candidate_keys, target_ids)
+
         await db.delete(project)
         await db.commit()
+
+        for key in keys_to_delete:
+            await storage.delete(key)
 
     async def get_data_store_count(self, db: AsyncSession, project_id: int) -> int:
         result = await db.execute(select(func.count()).where(DataStore.project_id == project_id))

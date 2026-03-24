@@ -34,7 +34,7 @@ export function TaskClassPanel({
   onDeleteClass,
 }: TaskClassPanelProps) {
   return (
-    <div className="w-64 shrink-0 overflow-y-auto select-none">
+    <div className="overflow-y-auto select-none">
       <div className="rounded-lg border p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">클래스</h3>

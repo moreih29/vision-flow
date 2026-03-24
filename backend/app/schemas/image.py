@@ -6,8 +6,6 @@ from pydantic import BaseModel
 class ImageResponse(BaseModel):
     id: int
     original_filename: str
-    storage_key: str
-    file_hash: str
     file_size: int
     width: int | None
     height: int | None

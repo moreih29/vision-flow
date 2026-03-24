@@ -18,7 +18,7 @@ class Image(Base):
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     folder_path: Mapped[str] = mapped_column(String(1000), nullable=False, default="", server_default="")
-    data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id"), nullable=False)
+    data_store_id: Mapped[int] = mapped_column(ForeignKey("data_stores.id", ondelete="CASCADE"), nullable=False)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

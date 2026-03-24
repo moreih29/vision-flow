@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tasksApi } from "@/api/tasks";
 import type { FolderInfo } from "@/types/image";
@@ -13,6 +13,10 @@ export function useTaskFolderContents(
   const queryClient = useQueryClient();
   const [extraImages, setExtraImages] = useState<TaskImageResponse[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setExtraImages([]);
+  }, [taskId, path]);
 
   const query = useQuery({
     queryKey: ["task-folder-contents", taskId, path],

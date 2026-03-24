@@ -1,26 +1,28 @@
-import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Toaster } from "sonner";
 
-import { useAuthStore } from '@/stores/auth-store'
-import ProtectedRoute from '@/components/ProtectedRoute'
-import { AppLayout } from '@/components/layout'
-import ErrorBoundary from '@/components/ErrorBoundary'
-import LoginPage from '@/pages/LoginPage'
-import RegisterPage from '@/pages/RegisterPage'
-import ProjectsPage from '@/pages/ProjectsPage'
-import ProjectDetailPage from '@/pages/ProjectDetailPage'
-import TaskDetailPage from '@/pages/TaskDetailPage'
-import LabelingPage from '@/pages/LabelingPage'
+import { useAuthStore } from "@/stores/auth-store";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { AppLayout } from "@/components/layout";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
+import ProjectsPage from "@/pages/ProjectsPage";
+import ProjectDetailPage from "@/pages/ProjectDetailPage";
+import TaskDetailPage from "@/pages/TaskDetailPage";
+import LabelingPage from "@/pages/LabelingPage";
 
 function App() {
-  const fetchMe = useAuthStore((s) => s.fetchMe)
+  const fetchMe = useAuthStore((s) => s.fetchMe);
 
   useEffect(() => {
-    fetchMe()
-  }, [fetchMe])
+    fetchMe();
+  }, [fetchMe]);
 
   return (
     <ErrorBoundary>
+      <Toaster position="bottom-right" richColors />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -76,7 +78,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>
-  )
+  );
 }
 
-export default App
+export default App;

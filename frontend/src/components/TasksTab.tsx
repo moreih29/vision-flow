@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Plus, Images, Tag, Trash2 } from 'lucide-react'
-import { useTasks, useCreateTask, useDeleteTask } from '@/hooks/use-tasks'
-import { useConfirmDialog } from '@/hooks/useConfirmDialog'
-import type { Task, TaskType } from '@/types/task'
-import { TASK_LABELS, TASK_COLORS } from '@/types/task'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Images, Tag, Trash2, X } from "lucide-react";
+import { useTasks, useCreateTask, useDeleteTask } from "@/hooks/use-tasks";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import type { Task, TaskType } from "@/types/task";
+import { TASK_LABELS, TASK_COLORS } from "@/types/task";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -14,92 +14,126 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Progress } from '@/components/ui/progress'
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
 interface TasksTabProps {
-  projectId: number
+  projectId: number;
 }
 
 const TASK_TYPES: TaskType[] = [
-  'classification',
-  'object_detection',
-  'instance_segmentation',
-  'pose_estimation',
-]
+  "classification",
+  "object_detection",
+  "instance_segmentation",
+  "pose_estimation",
+];
+
+const CLASS_COLORS = [
+  "#3b82f6",
+  "#ef4444",
+  "#22c55e",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ec4899",
+  "#06b6d4",
+  "#f97316",
+  "#14b8a6",
+  "#6366f1",
+];
+
+function makeInitialClasses() {
+  return [
+    { name: "", color: CLASS_COLORS[0] },
+    { name: "", color: CLASS_COLORS[1] },
+  ];
+}
 
 export default function TasksTab({ projectId }: TasksTabProps) {
-  const navigate = useNavigate()
-  const { confirmDialog, confirm, showAlert } = useConfirmDialog()
+  const navigate = useNavigate();
+  const { confirmDialog, confirm, showAlert } = useConfirmDialog();
 
-  const { data: tasks = [], isLoading, isError } = useTasks(projectId)
-  const createTask = useCreateTask(projectId)
-  const deleteTask = useDeleteTask(projectId)
+  const { data: tasks = [], isLoading, isError } = useTasks(projectId);
+  const createTask = useCreateTask(projectId);
+  const deleteTask = useDeleteTask(projectId);
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newDesc, setNewDesc] = useState('')
-  const [newTaskType, setNewTaskType] = useState<TaskType>('classification')
-  const [creating, setCreating] = useState(false)
-  const creatingRef = useRef(false)
-  const deletingRef = useRef<number | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newTaskType, setNewTaskType] = useState<TaskType>("classification");
+  const [newClasses, setNewClasses] = useState(makeInitialClasses);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const deletingRef = useRef<number | null>(null);
+
+  const isCreateDisabled =
+    !newName.trim() ||
+    newClasses.length < 2 ||
+    newClasses.some((c) => !c.name.trim());
 
   async function handleCreate() {
-    if (!newName.trim() || creatingRef.current) return
-    creatingRef.current = true
-    setCreating(true)
+    if (isCreateDisabled || creatingRef.current) return;
+    creatingRef.current = true;
+    setCreating(true);
     try {
       await createTask.mutateAsync({
         name: newName.trim(),
         description: newDesc.trim() || undefined,
         task_type: newTaskType,
-      })
-      setDialogOpen(false)
-      setNewName('')
-      setNewDesc('')
-      setNewTaskType('classification')
+        classes: newClasses.map((c) => ({
+          name: c.name.trim(),
+          color: c.color,
+        })),
+      });
+      setDialogOpen(false);
+      resetDialog();
     } catch {
-      await showAlert({ title: '태스크 생성에 실패했습니다.' })
+      await showAlert({ title: "태스크 생성에 실패했습니다." });
     } finally {
-      creatingRef.current = false
-      setCreating(false)
+      creatingRef.current = false;
+      setCreating(false);
     }
   }
 
+  function resetDialog() {
+    setNewName("");
+    setNewDesc("");
+    setNewTaskType("classification");
+    setNewClasses(makeInitialClasses());
+  }
+
   async function handleDelete(task: Task) {
-    if (deletingRef.current === task.id) return
+    if (deletingRef.current === task.id) return;
     const confirmed = await confirm({
       title: `"${task.name}" 태스크를 삭제하시겠습니까?`,
-      description: '태스크에 포함된 라벨링 데이터가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
-      confirmLabel: '삭제',
-      variant: 'destructive',
-    })
-    if (!confirmed) return
-    deletingRef.current = task.id
+      description:
+        "태스크에 포함된 라벨링 데이터가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmLabel: "삭제",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
+    deletingRef.current = task.id;
     try {
-      await deleteTask.mutateAsync(task.id)
+      await deleteTask.mutateAsync(task.id);
     } catch {
-      await showAlert({ title: '태스크 삭제에 실패했습니다.' })
+      await showAlert({ title: "태스크 삭제에 실패했습니다." });
     } finally {
-      deletingRef.current = null
+      deletingRef.current = null;
     }
   }
 
   function openDialog() {
-    setNewName('')
-    setNewDesc('')
-    setNewTaskType('classification')
-    setDialogOpen(true)
+    resetDialog();
+    setDialogOpen(true);
   }
 
   return (
@@ -152,12 +186,18 @@ export default function TasksTab({ projectId }: TasksTabProps) {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) resetDialog();
+          setDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>새 태스크</DialogTitle>
             <DialogDescription>
-              태스크 이름, 설명, Task 유형을 입력하세요.
+              태스크 이름, 설명, Task 유형, 클래스를 입력하세요.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
@@ -168,7 +208,7 @@ export default function TasksTab({ projectId }: TasksTabProps) {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="태스크 이름"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -204,49 +244,123 @@ export default function TasksTab({ projectId }: TasksTabProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* 클래스 정의 */}
+            <div className="flex flex-col gap-2">
+              <Label>클래스 정의 (최소 2개) *</Label>
+              <div className="flex flex-col gap-1.5">
+                {newClasses.map((cls, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={cls.name}
+                      onChange={(e) => {
+                        setNewClasses((prev) =>
+                          prev.map((c, i) =>
+                            i === idx ? { ...c, name: e.target.value } : c,
+                          ),
+                        );
+                      }}
+                      placeholder={`클래스 ${idx + 1} 이름`}
+                      className="flex-1 h-8 text-sm"
+                    />
+                    <button
+                      type="button"
+                      title="색상 변경"
+                      className="h-6 w-6 shrink-0 rounded-full border-2 border-border cursor-pointer"
+                      style={{ backgroundColor: cls.color }}
+                      onClick={() => {
+                        const nextColor =
+                          CLASS_COLORS[
+                            (CLASS_COLORS.indexOf(cls.color) + 1) %
+                              CLASS_COLORS.length
+                          ];
+                        setNewClasses((prev) =>
+                          prev.map((c, i) =>
+                            i === idx ? { ...c, color: nextColor } : c,
+                          ),
+                        );
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                      disabled={newClasses.length <= 2}
+                      onClick={() =>
+                        setNewClasses((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        )
+                      }
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full h-7 text-xs"
+                onClick={() =>
+                  setNewClasses((prev) => [
+                    ...prev,
+                    {
+                      name: "",
+                      color: CLASS_COLORS[prev.length % CLASS_COLORS.length],
+                    },
+                  ])
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                클래스 추가
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setDialogOpen(false)}
+              onClick={() => {
+                resetDialog();
+                setDialogOpen(false);
+              }}
               disabled={creating}
             >
               취소
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={creating || !newName.trim()}
+              disabled={creating || isCreateDisabled}
             >
-              {creating ? '생성 중...' : '만들기'}
+              {creating ? "생성 중..." : "만들기"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       {confirmDialog}
     </div>
-  )
+  );
 }
 
 // --- TaskCard ---
 
 interface TaskCardProps {
-  task: Task
-  onClick: () => void
-  onDelete: () => void
+  task: Task;
+  onClick: () => void;
+  onDelete: () => void;
 }
 
 function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
   const labelingProgress =
     task.image_count > 0
       ? Math.round((task.labeled_count / task.image_count) * 100)
-      : 0
+      : 0;
 
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={onClick}
-      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
       className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
     >
       <div className="flex items-start justify-between gap-2">
@@ -287,13 +401,13 @@ function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
           type="button"
           className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive"
           onClick={(e) => {
-            e.stopPropagation()
-            onDelete()
+            e.stopPropagation();
+            onDelete();
           }}
         >
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </div>
-  )
+  );
 }

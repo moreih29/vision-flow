@@ -3,15 +3,15 @@
 Verifies the new FolderImageIdsResponse schema, the service method, and the
 router, including correct filtering by folder path and subfolder inclusion.
 """
+
 import io
 
 import httpx
-import pytest_asyncio
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _create_project(client: httpx.AsyncClient, headers: dict) -> int:
     resp = await client.post(
@@ -69,9 +69,8 @@ async def _upload_image(
 # Tests
 # ---------------------------------------------------------------------------
 
-async def test_folder_image_ids_root_returns_all(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+
+async def test_folder_image_ids_root_returns_all(client: httpx.AsyncClient, auth_headers: dict):
     """Calling with path='' returns all image IDs across all folders."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)
@@ -97,9 +96,7 @@ async def test_folder_image_ids_root_returns_all(
     assert id3 in returned_ids
 
 
-async def test_folder_image_ids_subfolder_included(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+async def test_folder_image_ids_subfolder_included(client: httpx.AsyncClient, auth_headers: dict):
     """path='cats' should include images in 'cats' AND 'cats/kittens'."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)
@@ -123,9 +120,7 @@ async def test_folder_image_ids_subfolder_included(
     assert body["total"] == 2
 
 
-async def test_folder_image_ids_exact_folder_only(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+async def test_folder_image_ids_exact_folder_only(client: httpx.AsyncClient, auth_headers: dict):
     """path='cats/kittens' should return only images in that exact subfolder."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)
@@ -147,9 +142,7 @@ async def test_folder_image_ids_exact_folder_only(
     assert body["total"] == 1
 
 
-async def test_folder_image_ids_nonexistent_folder_returns_empty(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+async def test_folder_image_ids_nonexistent_folder_returns_empty(client: httpx.AsyncClient, auth_headers: dict):
     """Non-existent folder path returns empty list, not 404."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)
@@ -165,9 +158,7 @@ async def test_folder_image_ids_nonexistent_folder_returns_empty(
     assert body["total"] == 0
 
 
-async def test_folder_image_ids_total_matches_image_ids_length(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+async def test_folder_image_ids_total_matches_image_ids_length(client: httpx.AsyncClient, auth_headers: dict):
     """Schema invariant: total must always equal len(image_ids)."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)
@@ -186,9 +177,7 @@ async def test_folder_image_ids_total_matches_image_ids_length(
     assert body["total"] == 3
 
 
-async def test_folder_image_ids_requires_auth(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+async def test_folder_image_ids_requires_auth(client: httpx.AsyncClient, auth_headers: dict):
     """Endpoint must reject unauthenticated requests with 401."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)
@@ -200,9 +189,7 @@ async def test_folder_image_ids_requires_auth(
     assert resp.status_code == 401
 
 
-async def test_folder_image_ids_path_traversal_rejected(
-    client: httpx.AsyncClient, auth_headers: dict
-):
+async def test_folder_image_ids_path_traversal_rejected(client: httpx.AsyncClient, auth_headers: dict):
     """Path traversal attempts (../../) should be rejected with 400."""
     project_id = await _create_project(client, auth_headers)
     ds_id = await _create_data_store(client, auth_headers, project_id)

@@ -653,6 +653,7 @@ export default function TaskDetailPage() {
                 </p>
               ) : (
                 <FolderTreeView
+                  readOnly
                   checkable
                   collapsible
                   collapsed={poolCollapsed}
@@ -692,7 +693,7 @@ export default function TaskDetailPage() {
             <div className="border-t shrink-0" />
 
             {/* Task 섹션 */}
-            <div className="flex-1 rounded-lg border p-2 overflow-y-auto min-h-0">
+            <div className="flex-1 rounded-lg border p-2 flex flex-col overflow-hidden min-h-0">
               <FolderTreeView
                 ref={treeRef}
                 fetchFolderContents={fetchTaskFolderContents}

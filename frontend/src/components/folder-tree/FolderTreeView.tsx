@@ -167,9 +167,6 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       onCollapsedChange?.(next);
     }, [isCollapsed, onCollapsedChange]);
 
-    // checkable 모드에서는 readOnly 강제
-    const effectiveReadOnly = readOnly || checkable;
-
     useEffect(() => {
       if (!bgMenu) return;
       const handler = () => setBgMenu(null);
@@ -184,13 +181,16 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
 
     const handleTreeBgContextMenu = useCallback(
       (e: React.MouseEvent) => {
-        if (effectiveReadOnly) return;
+        if (readOnly) {
+          e.preventDefault();
+          return;
+        }
         if ((e.target as HTMLElement).closest("[data-tree-node]")) return;
         e.preventDefault();
         setBgMenu({ x: e.clientX, y: e.clientY });
         onSelectPath?.("");
       },
-      [onSelectPath, effectiveReadOnly],
+      [onSelectPath, readOnly],
     );
 
     const handleTreeBgClick = useCallback(
@@ -794,12 +794,22 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
             key={node.path}
             node={node}
             depth={depth}
-            readOnly
+            readOnly={readOnly}
             checkable
             checked={checkState === "checked"}
             indeterminate={checkState === "indeterminate"}
             onCheck={(checked) => handleCheckNode(node, checked)}
+            onSelectPath={onSelectPath}
             onToggleExpand={handleToggleExpand}
+            onDeleteFolder={readOnly ? undefined : handleDeleteFolder}
+            onCreateFolder={readOnly ? undefined : handleCreateFolder}
+            onStartRename={readOnly ? undefined : handleStartRename}
+            onEditNameChange={readOnly ? undefined : setEditName}
+            onFinishRename={readOnly ? undefined : handleFinishRename}
+            onCancelRename={readOnly ? undefined : handleCancelRename}
+            editingPath={readOnly ? undefined : editingPath}
+            editName={readOnly ? undefined : editName}
+            editStartTime={readOnly ? undefined : editStartTime}
             renderChildren={(children, childDepth) =>
               renderCheckableNodes(children, childDepth)
             }
@@ -832,9 +842,9 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
               : "hover:bg-accent hover:text-accent-foreground cursor-pointer"
         } ${dragOverPath === "__root__" ? "ring-2 ring-primary bg-primary/10" : ""}`}
         onClick={collapsible ? handleToggleCollapse : () => onSelectPath?.("")}
-        onDragOver={effectiveReadOnly ? undefined : handleRootDragOver}
-        onDragLeave={effectiveReadOnly ? undefined : handleRootDragLeave}
-        onDrop={effectiveReadOnly ? undefined : handleRootDrop}
+        onDragOver={readOnly ? undefined : handleRootDragOver}
+        onDragLeave={readOnly ? undefined : handleRootDragLeave}
+        onDrop={readOnly ? undefined : handleRootDrop}
       >
         {collapsible && (
           <button
@@ -930,7 +940,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
           {!isCollapsed && (
             <div className="flex flex-col items-center gap-2 p-4 text-center">
               <p className="text-sm text-muted-foreground">폴더가 없습니다.</p>
-              {onCreateFolder && !effectiveReadOnly && (
+              {onCreateFolder && !readOnly && (
                 <button
                   type="button"
                   className="text-xs text-primary hover:underline"
@@ -941,7 +951,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
               )}
             </div>
           )}
-          {bgMenu && !effectiveReadOnly && (
+          {bgMenu && !readOnly && (
             <div
               className="fixed z-50 w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
               style={{ left: bgMenu.x, top: bgMenu.y }}
@@ -967,16 +977,19 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     // -- 트리 콘텐츠 --
 
     return (
-      <div className="flex flex-col flex-1 min-h-0">
+      <div
+        className="flex flex-col flex-1 min-h-0"
+        onContextMenu={readOnly ? (e) => e.preventDefault() : undefined}
+      >
         {/* 루트 노드 헤더 — 고정 */}
         <div className="shrink-0">{rootNodeElement}</div>
         {/* 트리 목록 — collapsed이면 숨김 */}
         {!isCollapsed && (
           <div
-            className="space-y-0.5 flex-1 min-h-0 overflow-y-auto"
-            onDragOver={effectiveReadOnly ? undefined : handleRootDragOver}
-            onDragLeave={effectiveReadOnly ? undefined : handleRootDragLeave}
-            onDrop={effectiveReadOnly ? undefined : handleRootDrop}
+            className="space-y-0.5 flex-1 min-h-0 overflow-y-auto select-none"
+            onDragOver={readOnly ? undefined : handleRootDragOver}
+            onDragLeave={readOnly ? undefined : handleRootDragLeave}
+            onDrop={readOnly ? undefined : handleRootDrop}
             onContextMenu={handleTreeBgContextMenu}
             onClick={handleTreeBgClick}
           >
@@ -993,7 +1006,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
                     draggingPath={draggingPath}
                     dragOverPath={dragOverPath}
                     editStartTime={editStartTime}
-                    readOnly={effectiveReadOnly}
+                    readOnly={readOnly}
                     acceptDropTypes={acceptDropTypes}
                     acceptFileDrop={acceptFileDrop}
                     onSelectPath={onSelectPath}
@@ -1011,9 +1024,11 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
                     onDrop={handleDrop}
                   />
                 ))}
+            {/* 빈 공간 — 우클릭 컨텍스트 메뉴 영역 */}
+            <div className="min-h-10 flex-1" />
           </div>
         )}
-        {bgMenu && !effectiveReadOnly && (
+        {bgMenu && !readOnly && (
           <div
             className="fixed z-50 w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
             style={{ left: bgMenu.x, top: bgMenu.y }}

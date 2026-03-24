@@ -1,29 +1,32 @@
-import type { FolderInfo } from '@/types/image'
-
 // -- 타입 정의 --
 
 export interface FolderTreeNode {
-  path: string
-  name: string
-  image_count: number
-  subfolder_count: number
-  children?: FolderTreeNode[]
-  expanded: boolean
-  loaded: boolean
+  path: string;
+  name: string;
+  count: number;
+  subfolder_count: number;
+  children?: FolderTreeNode[];
+  expanded: boolean;
+  loaded: boolean;
 }
 
 // -- 순수 유틸리티 함수 --
 
-export function buildNode(folder: FolderInfo): FolderTreeNode {
+export function buildNode(folder: {
+  path: string;
+  name: string;
+  count: number;
+  subfolder_count: number;
+}): FolderTreeNode {
   return {
     path: folder.path,
     name: folder.name,
-    image_count: folder.image_count,
+    count: folder.count,
     subfolder_count: folder.subfolder_count,
     children: undefined,
     expanded: false,
     loaded: false,
-  }
+  };
 }
 
 export function updateNodeInTree(
@@ -32,14 +35,14 @@ export function updateNodeInTree(
   updater: (node: FolderTreeNode) => FolderTreeNode,
 ): FolderTreeNode[] {
   return nodes.map((node) => {
-    if (node.path === targetPath) return updater(node)
+    if (node.path === targetPath) return updater(node);
     if (node.children)
       return {
         ...node,
         children: updateNodeInTree(node.children, targetPath, updater),
-      }
-    return node
-  })
+      };
+    return node;
+  });
 }
 
 export function findNodeInTree(
@@ -47,13 +50,13 @@ export function findNodeInTree(
   targetPath: string,
 ): FolderTreeNode | undefined {
   for (const node of nodes) {
-    if (node.path === targetPath) return node
+    if (node.path === targetPath) return node;
     if (node.children) {
-      const found = findNodeInTree(node.children, targetPath)
-      if (found) return found
+      const found = findNodeInTree(node.children, targetPath);
+      if (found) return found;
     }
   }
-  return undefined
+  return undefined;
 }
 
 export function removeNodeFromTree(
@@ -63,13 +66,13 @@ export function removeNodeFromTree(
   return nodes
     .filter(
       (node) =>
-        node.path !== targetPath && !node.path.startsWith(targetPath + '/'),
+        node.path !== targetPath && !node.path.startsWith(targetPath + "/"),
     )
     .map((node) =>
       node.children
         ? { ...node, children: removeNodeFromTree(node.children, targetPath) }
         : node,
-    )
+    );
 }
 
 export function updateChildPaths(
@@ -83,7 +86,7 @@ export function updateChildPaths(
     children: node.children
       ? updateChildPaths(node.children, oldPrefix, newPrefix)
       : undefined,
-  }))
+  }));
 }
 
 export function renameNodeInTree(
@@ -101,16 +104,16 @@ export function renameNodeInTree(
         children: node.children
           ? updateChildPaths(node.children, oldPath, newPath)
           : undefined,
-      }
+      };
     }
     if (node.children) {
       return {
         ...node,
         children: renameNodeInTree(node.children, oldPath, newPath, newName),
-      }
+      };
     }
-    return node
-  })
+    return node;
+  });
 }
 
 export function addOrInvalidateChild(
@@ -122,19 +125,19 @@ export function addOrInvalidateChild(
     if (node.expanded && node.loaded && node.children) {
       const newChildren = [...node.children, child].sort((a, b) =>
         a.path.localeCompare(b.path),
-      )
+      );
       return {
         ...node,
         children: newChildren,
         subfolder_count: node.subfolder_count + 1,
-      }
+      };
     }
     return {
       ...node,
       loaded: false,
       children: undefined,
       subfolder_count: node.subfolder_count + 1,
-    }
+    };
   }
   if (node.children) {
     return {
@@ -142,18 +145,18 @@ export function addOrInvalidateChild(
       children: node.children.map((c) =>
         addOrInvalidateChild(c, parentPath, child),
       ),
-    }
+    };
   }
-  return node
+  return node;
 }
 
 export function collectExpandedPaths(nodes: FolderTreeNode[]): string[] {
-  const paths: string[] = []
+  const paths: string[] = [];
   for (const node of nodes) {
     if (node.expanded) {
-      paths.push(node.path)
-      if (node.children) paths.push(...collectExpandedPaths(node.children))
+      paths.push(node.path);
+      if (node.children) paths.push(...collectExpandedPaths(node.children));
     }
   }
-  return paths
+  return paths;
 }

@@ -65,7 +65,12 @@ export default function DataPoolTab({
   const fetchFolderContents = useCallback(
     async (path: string) => {
       const res = await imagesApi.getFolderContents(dataStore?.id ?? 0, path);
-      return res.data;
+      return {
+        folders: (res.data.folders ?? []).map((f) => ({
+          ...f,
+          count: f.image_count,
+        })),
+      };
     },
     [dataStore?.id],
   );
@@ -296,9 +301,12 @@ export default function DataPoolTab({
     handleBulkDeleteRef.current = handleBulkDelete;
   });
 
-  const handleDropItemsOnTree = useCallback(
-    async (imageIds: number[], folderPaths: string[], targetPath: string) => {
-      await dropItems.mutate(imageIds, folderPaths, targetPath);
+  const handleItemDrop = useCallback(
+    async (e: React.DragEvent, targetPath: string) => {
+      const data = e.dataTransfer.getData("application/x-datapool-items");
+      if (!data) return;
+      const { imageIds, folderPaths } = JSON.parse(data);
+      await dropItems.mutate(imageIds ?? [], folderPaths ?? [], targetPath);
     },
     [dropItems],
   );
@@ -368,7 +376,7 @@ export default function DataPoolTab({
               rootLabel={
                 dataStore.name === "Default Pool" ? "Data Pool" : dataStore.name
               }
-              rootImageCount={dataStore.image_count}
+              rootCount={dataStore.image_count}
               selectedPath={currentPath}
               acceptDropTypes={["application/x-datapool-items"]}
               acceptFileDrop
@@ -376,7 +384,7 @@ export default function DataPoolTab({
               onDeleteFolder={handleDeleteFolder}
               onUpdateFolder={handleUpdateFolder}
               onCreateFolder={handleCreateFolder}
-              onDropItems={handleDropItemsOnTree}
+              onItemDrop={handleItemDrop}
               onRefresh={handleTreeRefresh}
               onExternalFileDrop={handleTreeExternalFileDrop}
             />
@@ -422,7 +430,9 @@ export default function DataPoolTab({
             onFinishRenameFolder={handleFinishRenameInViewer}
             onCancelRenameFolder={() => setRenamingFolderPath(null)}
             onClearSelection={clearSelection}
-            onDropItemsOnFolder={handleDropItemsOnTree}
+            onDropItemsOnFolder={async (imageIds, folderPaths, targetPath) => {
+              await dropItems.mutate(imageIds, folderPaths, targetPath);
+            }}
             onDragOver={handleMainDragOver}
             onDragLeave={handleMainDragLeave}
             onDrop={handleMainDrop}

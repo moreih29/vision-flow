@@ -54,8 +54,8 @@ export default function TaskDetailPage() {
     () => (localStorage.getItem(VIEW_MODE_KEY) as "grid" | "list") || "grid",
   );
   const [poolCollapsed, setPoolCollapsed] = useState(false);
-  const [poolCheckedPaths, setPoolCheckedPaths] = useState<Set<string>>(
-    new Set(),
+  const [poolCheckedPaths, setPoolCheckedPaths] = useState<Map<string, number>>(
+    new Map(),
   );
   const [dataStore, setDataStore] = useState<DataStore | null>(null);
   const [poolAdding, setPoolAdding] = useState(false);
@@ -90,7 +90,12 @@ export default function TaskDetailPage() {
   const fetchTaskFolderContents = useCallback(
     async (path: string) => {
       const res = await tasksApi.getFolderContents(taskIdNum, path);
-      return res.data;
+      return {
+        folders: res.data.folders.map((f) => ({
+          ...f,
+          count: f.image_count,
+        })),
+      };
     },
     [taskIdNum],
   );
@@ -103,7 +108,12 @@ export default function TaskDetailPage() {
   const fetchPoolFolderContents = useCallback(
     async (path: string) => {
       const res = await imagesApi.getFolderContents(dataStore!.id, path);
-      return { folders: res.data.folders ?? [] };
+      return {
+        folders: (res.data.folders ?? []).map((f) => ({
+          ...f,
+          count: f.image_count,
+        })),
+      };
     },
     [dataStore],
   );
@@ -283,25 +293,27 @@ export default function TaskDetailPage() {
   }, [currentPath, handleNavigateFolder]);
 
   // -- Tree handlers --
-  const handleDropItemsOnTree = useCallback(
-    async (
-      taskImageIds: number[],
-      folderPaths: string[],
-      targetPath: string,
-    ) => {
-      await dropItems.mutate(taskImageIds, folderPaths, targetPath);
+  const handleItemDrop = useCallback(
+    async (e: React.DragEvent, targetPath: string) => {
+      const data =
+        e.dataTransfer.getData("application/x-task-items") ||
+        e.dataTransfer.getData("application/x-datapool-items");
+      if (!data) return;
+      const { taskImageIds, imageIds, folderPaths, source } = JSON.parse(data);
+      if (source === "pool") {
+        await tasksApi.addImages(taskIdNum, imageIds ?? [], targetPath);
+        await refreshAll();
+        const res = await tasksApi.get(taskIdNum);
+        setTask(res.data);
+      } else {
+        await dropItems.mutate(
+          taskImageIds ?? imageIds ?? [],
+          folderPaths ?? [],
+          targetPath,
+        );
+      }
     },
-    [dropItems],
-  );
-
-  const handlePoolDropOnTree = useCallback(
-    async (imageIds: number[], targetPath: string) => {
-      await tasksApi.addImages(taskIdNum, imageIds, targetPath);
-      await refreshAll();
-      const res = await tasksApi.get(taskIdNum);
-      setTask(res.data);
-    },
-    [taskIdNum, refreshAll],
+    [taskIdNum, refreshAll, dropItems],
   );
 
   // -- Bulk remove --
@@ -350,17 +362,20 @@ export default function TaskDetailPage() {
   }, [projectId]);
 
   // -- Pool 체크 토글 --
-  const handlePoolCheckPath = useCallback((path: string, checked: boolean) => {
-    setPoolCheckedPaths((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(path);
-      } else {
-        next.delete(path);
-      }
-      return next;
-    });
-  }, []);
+  const handlePoolCheckPath = useCallback(
+    (path: string, checked: boolean, count: number) => {
+      setPoolCheckedPaths((prev) => {
+        const next = new Map(prev);
+        if (checked) {
+          next.set(path, count);
+        } else {
+          next.delete(path);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   // -- Pool 폴더 → Task 재귀 추가 --
   async function addPoolFoldersToTask(
@@ -461,9 +476,9 @@ export default function TaskDetailPage() {
     };
     try {
       // 최상위 체크 폴더만 추출 (하위 폴더는 재귀에서 자동 처리)
-      const topLevelChecked = [...poolCheckedPaths].filter(
+      const topLevelChecked = [...poolCheckedPaths.keys()].filter(
         (p) =>
-          ![...poolCheckedPaths].some(
+          ![...poolCheckedPaths.keys()].some(
             (other) => other !== p && p.startsWith(other),
           ),
       );
@@ -483,7 +498,7 @@ export default function TaskDetailPage() {
         totalMoved += result.moved;
         totalFailed += result.failed;
       }
-      setPoolCheckedPaths(new Set());
+      setPoolCheckedPaths(new Map());
       await handleImagesAdded();
       if (totalFailed > 0) {
         await showAlert({
@@ -658,7 +673,7 @@ export default function TaskDetailPage() {
                   collapsible
                   collapsed={poolCollapsed}
                   onCollapsedChange={setPoolCollapsed}
-                  checkedPaths={poolCheckedPaths}
+                  checkedPaths={new Set(poolCheckedPaths.keys())}
                   onCheckPath={handlePoolCheckPath}
                   fetchFolderContents={fetchPoolFolderContents}
                   fetchAllFolders={fetchPoolAllFolders}
@@ -666,7 +681,7 @@ export default function TaskDetailPage() {
                   rootIcon={
                     <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
                   }
-                  rootImageCount={dataStore.image_count ?? 0}
+                  rootCount={dataStore.image_count ?? 0}
                 />
               )}
 
@@ -683,7 +698,7 @@ export default function TaskDetailPage() {
                       ? poolProgress
                         ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
                         : "추가 중..."
-                      : `↓ Task에 추가 (${poolCheckedPaths.size}개)`}
+                      : `↓ Task에 추가 (${[...poolCheckedPaths.values()].reduce((a, b) => a + b, 0)}개)`}
                   </Button>
                 </div>
               )}
@@ -699,7 +714,7 @@ export default function TaskDetailPage() {
                 fetchFolderContents={fetchTaskFolderContents}
                 fetchAllFolders={fetchTaskAllFolders}
                 rootLabel={task?.name ?? "Task"}
-                rootImageCount={task?.image_count ?? 0}
+                rootCount={task?.image_count ?? 0}
                 rootIcon={
                   <ListTodo className="h-4 w-4 shrink-0 text-muted-foreground" />
                 }
@@ -712,8 +727,7 @@ export default function TaskDetailPage() {
                 onDeleteFolder={handleDeleteFolder}
                 onUpdateFolder={handleUpdateFolder}
                 onCreateFolder={handleCreateFolder}
-                onDropItems={handleDropItemsOnTree}
-                onPoolDrop={handlePoolDropOnTree}
+                onItemDrop={handleItemDrop}
                 onRefresh={refreshAll}
               />
             </div>

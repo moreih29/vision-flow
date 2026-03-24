@@ -278,7 +278,7 @@ export function TreeNode({
             {node.name}
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">
-            ({node.image_count})
+            ({node.count})
           </span>
         </button>
       )}

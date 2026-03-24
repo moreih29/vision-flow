@@ -34,7 +34,7 @@ export interface FolderContentsResult {
   folders: Array<{
     path: string;
     name: string;
-    image_count: number;
+    count: number;
     subfolder_count: number;
   }>;
 }
@@ -49,7 +49,7 @@ export interface FolderTreeViewProps {
   fetchFolderContents: (path: string) => Promise<FolderContentsResult>;
   fetchAllFolders?: () => Promise<string[]>;
   rootLabel?: string;
-  rootImageCount?: number;
+  rootCount?: number;
   rootIcon?: React.ReactNode;
   selectedPath?: string;
   readOnly?: boolean;
@@ -59,35 +59,33 @@ export interface FolderTreeViewProps {
   onDeleteFolder?: (path: string) => Promise<void>;
   onUpdateFolder?: (oldPath: string, newPath: string) => Promise<void>;
   onCreateFolder?: (parentPath: string) => Promise<void>;
-  onDropItems?: (
-    imageIds: number[],
-    folderPaths: string[],
-    targetPath: string,
-  ) => Promise<void>;
-  onPoolDrop?: (imageIds: number[], targetPath: string) => Promise<void>;
+  onItemDrop?: (e: React.DragEvent, targetPath: string) => void;
   onExternalFileDrop?: (entries: FileSystemEntry[], targetPath: string) => void;
   onRefresh?: () => void | Promise<void>;
   // checkbox 모드
   checkable?: boolean;
   checkedPaths?: Set<string>;
-  onCheckPath?: (path: string, checked: boolean) => void;
+  onCheckPath?: (path: string, checked: boolean, count: number) => void;
   // 접기/펼치기
   collapsible?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   defaultCollapsed?: boolean;
+  newFolderBaseName?: string;
 }
 
 // -- 헬퍼 함수 --
 
-function collectAllLoadedPaths(node: FolderTreeNode): string[] {
-  const paths = [node.path];
+function collectAllLoadedNodes(
+  node: FolderTreeNode,
+): Array<{ path: string; count: number }> {
+  const nodes = [{ path: node.path, count: node.count }];
   if (node.children) {
     for (const child of node.children) {
-      paths.push(...collectAllLoadedPaths(child));
+      nodes.push(...collectAllLoadedNodes(child));
     }
   }
-  return paths;
+  return nodes;
 }
 
 function getNodeCheckState(
@@ -116,7 +114,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       fetchFolderContents,
       fetchAllFolders,
       rootLabel,
-      rootImageCount,
+      rootCount,
       rootIcon,
       selectedPath = "",
       readOnly = false,
@@ -126,8 +124,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       onDeleteFolder,
       onUpdateFolder,
       onCreateFolder,
-      onDropItems,
-      onPoolDrop,
+      onItemDrop,
       onExternalFileDrop,
       onRefresh,
       checkable = false,
@@ -137,6 +134,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       collapsed: controlledCollapsed,
       onCollapsedChange,
       defaultCollapsed = false,
+      newFolderBaseName,
     },
     ref,
   ) {
@@ -238,20 +236,20 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     function handleSelectAll(checked: boolean) {
       if (!onCheckPath) return;
       for (const node of rootNodes) {
-        const allNodePaths = collectAllLoadedPaths(node);
-        for (const p of allNodePaths) {
-          onCheckPath(p, checked);
+        const allNodes = collectAllLoadedNodes(node);
+        for (const n of allNodes) {
+          onCheckPath(n.path, checked, n.count);
         }
       }
     }
 
     function handleCheckNode(node: FolderTreeNode, checked: boolean) {
       if (!onCheckPath) return;
-      onCheckPath(node.path, checked);
+      onCheckPath(node.path, checked, node.count);
       if (node.children) {
-        const allPaths = collectAllLoadedPaths(node);
-        for (const p of allPaths) {
-          if (p !== node.path) onCheckPath(p, checked);
+        const allNodes = collectAllLoadedNodes(node);
+        for (const n of allNodes) {
+          if (n.path !== node.path) onCheckPath(n.path, checked, n.count);
         }
       }
     }
@@ -293,7 +291,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
               return {
                 path,
                 name,
-                image_count: existing?.image_count ?? 0,
+                count: existing?.count ?? 0,
                 subfolder_count: children.length,
                 expanded: true,
                 loaded: true,
@@ -322,7 +320,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
                   return info
                     ? {
                         ...c,
-                        image_count: info.image_count,
+                        count: info.count,
                         subfolder_count: info.subfolder_count,
                       }
                     : c;
@@ -341,7 +339,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
             return info
               ? {
                   ...n,
-                  image_count: info.image_count,
+                  count: info.count,
                   subfolder_count: info.subfolder_count,
                 }
               : n;
@@ -436,7 +434,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
           // 체크 모드: 상위가 체크된 상태면 새로 로드된 하위도 체크
           if (checkable && onCheckPath && resolvedCheckedPaths.has(path)) {
             for (const child of children) {
-              onCheckPath(child.path, true);
+              onCheckPath(child.path, true, child.count);
             }
           }
         } catch {
@@ -524,7 +522,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       const types = Array.from(_e.dataTransfer.types);
       const hasExternalFiles =
         types.includes("Files") &&
-        !types.includes("application/x-datapool-items");
+        !acceptDropTypes.some((t) => types.includes(t));
 
       if (hasExternalFiles && !draggingPath) {
         setDragOverPath(null);
@@ -540,26 +538,10 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
         return;
       }
 
-      const taskItemsData =
-        _e.dataTransfer.getData("application/x-task-items") ||
-        _e.dataTransfer.getData("application/x-datapool-items");
-      if (taskItemsData) {
+      const hasAcceptedItems = acceptDropTypes.some((t) => types.includes(t));
+      if (hasAcceptedItems) {
         setDragOverPath(null);
-        try {
-          const { taskImageIds, imageIds, folderPaths, source } =
-            JSON.parse(taskItemsData);
-          if (source === "pool" && onPoolDrop) {
-            await onPoolDrop(imageIds ?? [], targetPath);
-          } else {
-            await onDropItems?.(
-              taskImageIds ?? imageIds ?? [],
-              folderPaths ?? [],
-              targetPath,
-            );
-          }
-        } catch {
-          /* handled by parent */
-        }
+        onItemDrop?.(_e, targetPath);
         return;
       }
 
@@ -603,9 +585,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
 
     function handleRootDragOver(e: React.DragEvent) {
       const types = Array.from(e.dataTransfer.types);
-      const hasExternalItems =
-        types.includes("application/x-datapool-items") ||
-        types.includes("application/x-task-items");
+      const hasExternalItems = acceptDropTypes.some((t) => types.includes(t));
       const hasExternalFiles = types.includes("Files") && !hasExternalItems;
 
       if (hasExternalFiles) {
@@ -644,8 +624,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       const types = Array.from(e.dataTransfer.types);
       const hasExternalFiles =
         types.includes("Files") &&
-        !types.includes("application/x-datapool-items") &&
-        !types.includes("application/x-task-items");
+        !acceptDropTypes.some((t) => types.includes(t));
 
       if (hasExternalFiles) {
         const targetPath = fileDropTargetRef.current;
@@ -663,26 +642,10 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
         return;
       }
 
-      const taskItemsData =
-        e.dataTransfer.getData("application/x-task-items") ||
-        e.dataTransfer.getData("application/x-datapool-items");
-      if (taskItemsData) {
+      const hasAcceptedItems = acceptDropTypes.some((t) => types.includes(t));
+      if (hasAcceptedItems) {
         setDragOverPath(null);
-        try {
-          const { taskImageIds, imageIds, folderPaths, source } =
-            JSON.parse(taskItemsData);
-          if (source === "pool" && onPoolDrop) {
-            await onPoolDrop(imageIds ?? [], "");
-          } else {
-            await onDropItems?.(
-              taskImageIds ?? imageIds ?? [],
-              folderPaths ?? [],
-              "",
-            );
-          }
-        } catch {
-          /* handled by parent */
-        }
+        onItemDrop?.(e, "");
         return;
       }
 
@@ -726,7 +689,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     // -- 폴더 생성 --
 
     function generateNewFolderName(parentPath: string): string {
-      const baseName = "새 폴더";
+      const baseName = newFolderBaseName ?? "새 폴더";
       const existingNames = new Set<string>();
       if (parentPath === "") {
         rootNodes.forEach((n) => existingNames.add(n.name));
@@ -751,7 +714,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
         const newNode = buildNode({
           path: newPath,
           name,
-          image_count: 0,
+          count: 0,
           subfolder_count: 0,
         });
         if (parentPath === "") {
@@ -830,6 +793,27 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       );
     }
 
+    // -- bgMenu 엘리먼트 --
+
+    const bgMenuElement = bgMenu && !readOnly && (
+      <div
+        className="fixed z-50 w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        style={{ left: bgMenu.x, top: bgMenu.y }}
+      >
+        <button
+          type="button"
+          className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => {
+            setBgMenu(null);
+            handleCreateFolder("");
+          }}
+        >
+          <FolderPlus className="h-3.5 w-3.5" />새 폴더
+        </button>
+      </div>
+    );
+
     // -- 루트 노드 엘리먼트 --
 
     const rootNodeElement = rootLabel ? (
@@ -876,9 +860,11 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
           <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
         <span className="truncate font-medium">{rootLabel}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          ({rootImageCount})
-        </span>
+        {rootCount !== undefined && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            ({rootCount})
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-0.5">
           <button
             type="button"
@@ -951,24 +937,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
               )}
             </div>
           )}
-          {bgMenu && !readOnly && (
-            <div
-              className="fixed z-50 w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-              style={{ left: bgMenu.x, top: bgMenu.y }}
-            >
-              <button
-                type="button"
-                className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setBgMenu(null);
-                  handleCreateFolder("");
-                }}
-              >
-                <FolderPlus className="h-3.5 w-3.5" />새 폴더
-              </button>
-            </div>
-          )}
+          {bgMenuElement}
           {treeConfirmDialog}
         </div>
       );
@@ -1028,24 +997,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
             <div className="min-h-10 flex-1" />
           </div>
         )}
-        {bgMenu && !readOnly && (
-          <div
-            className="fixed z-50 w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-            style={{ left: bgMenu.x, top: bgMenu.y }}
-          >
-            <button
-              type="button"
-              className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                setBgMenu(null);
-                handleCreateFolder("");
-              }}
-            >
-              <FolderPlus className="h-3.5 w-3.5" />새 폴더
-            </button>
-          </div>
-        )}
+        {bgMenuElement}
         {treeConfirmDialog}
       </div>
     );

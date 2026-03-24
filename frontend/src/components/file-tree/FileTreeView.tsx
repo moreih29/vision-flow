@@ -39,45 +39,9 @@ const TREE_ROW_HEIGHT = 28; // 트리 노드 높이 (py-1 = 4px*2 + text ~20px)
 
 // -- PlaceholderRow 컴포넌트 --
 
-function PlaceholderRow({
-  parentPath,
-  fileIndex,
-  depth,
-  onLoadPage,
-}: {
-  parentPath: string;
-  fileIndex: number;
-  depth: number;
-  onLoadPage: (parentPath: string, skip: number) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const triggeredRef = useRef(false);
-  const isPageStart = fileIndex % FILE_PAGE_SIZE === 0;
-
-  useEffect(() => {
-    if (!isPageStart || triggeredRef.current) return;
-    const el = ref.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !triggeredRef.current) {
-          triggeredRef.current = true;
-          onLoadPage(parentPath, fileIndex);
-        }
-      },
-      { threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [parentPath, fileIndex, isPageStart, onLoadPage]);
-
+function PlaceholderRow({ depth }: { depth: number }) {
   return (
-    <div
-      ref={isPageStart ? ref : undefined}
-      className="px-2 py-1"
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
-    >
+    <div className="px-2 py-1" style={{ paddingLeft: `${depth * 16 + 8}px` }}>
       <div className="h-4 w-32 animate-pulse rounded bg-muted" />
     </div>
   );
@@ -504,13 +468,13 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
 
     // -- 파일 페이지 로드 --
 
-    const loadingPagesRef = useRef<Set<string>>(new Set());
+    const loadedPagesRef = useRef<Set<string>>(new Set());
 
     const handleLoadPage = useCallback(
       async (parentPath: string, skip: number) => {
         const pageKey = `${parentPath}:${skip}`;
-        if (loadingPagesRef.current.has(pageKey)) return;
-        loadingPagesRef.current.add(pageKey);
+        if (loadedPagesRef.current.has(pageKey)) return;
+        loadedPagesRef.current.add(pageKey);
 
         try {
           const result = await fetchFolderContents(
@@ -571,16 +535,42 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
             );
           }
         } catch {
-          // silently fail
-        } finally {
-          loadingPagesRef.current.delete(pageKey);
+          loadedPagesRef.current.delete(pageKey);
         }
       },
       [fetchFolderContents],
     );
 
+    // -- placeholder 자동 fetch: virtualizer 아이템 감시 --
+    const virtualItems = virtualizer.getVirtualItems();
+
+    useEffect(() => {
+      // 뷰포트에 보이는 placeholder의 parentPath 수집
+      const visibleParents = new Set<string>();
+      for (const vr of virtualItems) {
+        const fn = flatNodes[vr.index];
+        if (fn && fn.type === "placeholder") {
+          visibleParents.add(fn.parentPath);
+        }
+      }
+      // 보이는 placeholder가 있는 폴더의 미로드 페이지를 처음부터 순차 로드
+      for (const parentPath of visibleParents) {
+        for (const fn of flatNodes) {
+          if (
+            fn.type === "placeholder" &&
+            fn.parentPath === parentPath &&
+            fn.fileIndex % FILE_PAGE_SIZE === 0
+          ) {
+            handleLoadPage(fn.parentPath, fn.fileIndex);
+            break; // 해당 폴더의 첫 미로드 페이지만 트리거 (순차)
+          }
+        }
+      }
+    }, [virtualItems, flatNodes, handleLoadPage]);
+
     useImperativeHandle(ref, () => ({
       async refresh() {
+        loadedPagesRef.current.clear();
         const expandedPaths = collectExpandedPaths(rootNodes).sort(
           (a, b) => a.split("/").length - b.split("/").length,
         );
@@ -617,8 +607,14 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
 
         setRootNodes(newNodes);
       },
-      expandAll: handleExpandAll,
-      collapseAll: handleCollapseAll,
+      expandAll: async () => {
+        loadedPagesRef.current.clear();
+        await handleExpandAll();
+      },
+      collapseAll: () => {
+        loadedPagesRef.current.clear();
+        handleCollapseAll();
+      },
     }));
 
     async function handleToggleExpand(path: string) {
@@ -1176,12 +1172,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
                     >
-                      <PlaceholderRow
-                        parentPath={flatNode.parentPath}
-                        fileIndex={flatNode.fileIndex}
-                        depth={flatNode.depth}
-                        onLoadPage={handleLoadPage}
-                      />
+                      <PlaceholderRow depth={flatNode.depth} />
                     </div>
                   );
                 }

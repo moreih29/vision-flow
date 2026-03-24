@@ -88,7 +88,7 @@ export function TreeNode({
 }: TreeNodeProps) {
   const isFile = node.type === "file";
   const isSelected = selectedPath === node.path;
-  const hasChildren = !isFile && (node.subfolder_count > 0 || node.count > 0);
+  const hasChildren = !isFile;
   const isEditing = !isFile && editingPath === node.path;
   const isDragging = draggingPath === node.path;
   const isDragOver = dragOverPath === node.path;

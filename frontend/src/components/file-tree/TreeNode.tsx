@@ -5,6 +5,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  ImageIcon,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -16,12 +17,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import type { FolderTreeNode } from "./tree-utils";
+import type { FileTreeNode } from "./tree-utils";
 
 // -- 타입 정의 --
 
 export interface TreeNodeProps {
-  node: FolderTreeNode;
+  node: FileTreeNode;
   depth: number;
   selectedPath?: string;
   editingPath?: string | null;
@@ -49,10 +50,7 @@ export interface TreeNodeProps {
   onDragOver?: (e: React.DragEvent, path: string) => void;
   onDragLeave?: () => void;
   onDrop?: (e: React.DragEvent, targetPath: string) => void;
-  renderChildren?: (
-    children: FolderTreeNode[],
-    depth: number,
-  ) => React.ReactNode;
+  renderChildren?: (children: FileTreeNode[], depth: number) => React.ReactNode;
 }
 
 // -- 컴포넌트 --
@@ -88,9 +86,10 @@ export function TreeNode({
   onDrop,
   renderChildren,
 }: TreeNodeProps) {
+  const isFile = node.type === "file";
   const isSelected = selectedPath === node.path;
-  const hasChildren = node.subfolder_count > 0;
-  const isEditing = editingPath === node.path;
+  const hasChildren = !isFile && (node.subfolder_count > 0 || node.count > 0);
+  const isEditing = !isFile && editingPath === node.path;
   const isDragging = draggingPath === node.path;
   const isDragOver = dragOverPath === node.path;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +129,7 @@ export function TreeNode({
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
-      if (isSelected && !readOnly) {
+      if (isSelected && !readOnly && !isFile) {
         onStartRename?.(node.path, node.name);
       }
       return;
@@ -155,10 +154,10 @@ export function TreeNode({
         ${isDragOver && (isValidDropTarget || draggingPath === null) ? "ring-2 ring-primary bg-primary/10" : ""}
       `}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
-      draggable={!isEditing && !readOnly}
+      draggable={!isFile && !isEditing && !readOnly}
       onContextMenu={() => onSelectPath?.(node.path)}
       onDragStart={
-        readOnly
+        readOnly || isFile
           ? undefined
           : (e) => {
               e.dataTransfer.setData("text/plain", node.path);
@@ -166,7 +165,7 @@ export function TreeNode({
               onDragStart?.(node.path);
             }
       }
-      onDragEnd={readOnly ? undefined : onDragEnd}
+      onDragEnd={readOnly || isFile ? undefined : onDragEnd}
       onDragOver={
         readOnly
           ? undefined
@@ -269,7 +268,9 @@ export function TreeNode({
           className="flex flex-1 items-center gap-1.5 overflow-hidden text-left"
           onClick={handleClick}
         >
-          {node.expanded ? (
+          {isFile ? (
+            <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : node.expanded ? (
             <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : (
             <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -277,9 +278,11 @@ export function TreeNode({
           <span className="truncate" title={node.name}>
             {node.name}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            ({node.count})
-          </span>
+          {!isFile && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              ({node.count})
+            </span>
+          )}
         </button>
       )}
     </div>
@@ -287,7 +290,7 @@ export function TreeNode({
 
   return (
     <div>
-      {isEditing || readOnly ? (
+      {isEditing || readOnly || isFile ? (
         rowContent
       ) : (
         <ContextMenu>
@@ -351,6 +354,14 @@ export function TreeNode({
                   onDrop={onDrop}
                 />
               ))}
+          {node.totalFiles !== undefined && node.totalFiles > 0 && (
+            <div
+              className="px-2 py-1 text-xs text-muted-foreground"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            >
+              외 {node.totalFiles}개 이미지
+            </div>
+          )}
         </div>
       )}
     </div>

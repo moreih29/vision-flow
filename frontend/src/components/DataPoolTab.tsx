@@ -16,9 +16,10 @@ import { useFolderOperations } from "@/hooks/use-folder-operations";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import FolderTreeView, {
-  type FolderTreeRef,
-} from "@/components/FolderTreeView";
+import {
+  FileTreeView as FolderTreeView,
+  type FileTreeRef as FolderTreeRef,
+} from "@/components/file-tree";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import {
   DataPoolToolbar,
@@ -70,6 +71,12 @@ export default function DataPoolTab({
           ...f,
           count: f.image_count,
         })),
+        files: (res.data.images ?? []).map((img) => ({
+          id: img.id,
+          name: img.original_filename,
+          path: (path || "") + img.original_filename,
+        })),
+        totalFiles: res.data.total_images,
       };
     },
     [dataStore?.id],

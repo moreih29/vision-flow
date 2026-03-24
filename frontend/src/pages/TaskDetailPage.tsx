@@ -18,9 +18,10 @@ import {
   TaskClassPanel,
   VersionPanel,
 } from "@/components/task-detail";
-import FolderTreeView, {
-  type FolderTreeRef,
-} from "@/components/FolderTreeView";
+import {
+  FileTreeView as FolderTreeView,
+  type FileTreeRef as FolderTreeRef,
+} from "@/components/file-tree";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPoolContentArea } from "@/components/data-pool";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
@@ -54,9 +55,9 @@ export default function TaskDetailPage() {
     () => (localStorage.getItem(VIEW_MODE_KEY) as "grid" | "list") || "grid",
   );
   const [poolCollapsed, setPoolCollapsed] = useState(false);
-  const [poolCheckedPaths, setPoolCheckedPaths] = useState<Map<string, number>>(
-    new Map(),
-  );
+  const [poolCheckedPaths, setPoolCheckedPaths] = useState<
+    Map<string, { count: number; fileId?: number }>
+  >(new Map());
   const [dataStore, setDataStore] = useState<DataStore | null>(null);
   const [poolAdding, setPoolAdding] = useState(false);
   const [poolProgress, setPoolProgress] = useState<{
@@ -85,6 +86,7 @@ export default function TaskDetailPage() {
   const [newClassColor, setNewClassColor] = useState(nextColor);
   const [savingClass, setSavingClass] = useState(false);
   const treeRef = useRef<FolderTreeRef>(null);
+  const poolTreeRef = useRef<FolderTreeRef>(null);
   const handleBulkRemoveRef = useRef<() => void>(() => {});
 
   const fetchTaskFolderContents = useCallback(
@@ -95,6 +97,12 @@ export default function TaskDetailPage() {
           ...f,
           count: f.image_count,
         })),
+        files: res.data.images.map((img) => ({
+          id: img.image_id,
+          name: img.image.original_filename,
+          path: (path || "") + img.image.original_filename,
+        })),
+        totalFiles: res.data.total_images,
       };
     },
     [taskIdNum],
@@ -113,6 +121,12 @@ export default function TaskDetailPage() {
           ...f,
           count: f.image_count,
         })),
+        files: (res.data.images ?? []).map((img) => ({
+          id: img.id,
+          name: img.original_filename,
+          path: (path || "") + img.original_filename,
+        })),
+        totalFiles: res.data.total_images,
       };
     },
     [dataStore],
@@ -139,6 +153,16 @@ export default function TaskDetailPage() {
     await invalidateAll();
     await treeRef.current?.refresh();
   }, [invalidateAll]);
+
+  const refreshPoolTree = useCallback(async () => {
+    try {
+      const res = await dataStoresApi.list(projectId);
+      setDataStore(res.data[0] ?? null);
+    } catch {
+      // silently fail
+    }
+    await poolTreeRef.current?.refresh();
+  }, [projectId]);
 
   // -- Items + selection --
   // DataPoolItem 매핑: image → TaskImageResponse.image (ImageMeta), id는 task_image_id
@@ -363,11 +387,11 @@ export default function TaskDetailPage() {
 
   // -- Pool 체크 토글 --
   const handlePoolCheckPath = useCallback(
-    (path: string, checked: boolean, count: number) => {
+    (path: string, checked: boolean, count: number, fileId?: number) => {
       setPoolCheckedPaths((prev) => {
         const next = new Map(prev);
         if (checked) {
-          next.set(path, count);
+          next.set(path, { count, fileId });
         } else {
           next.delete(path);
         }
@@ -466,7 +490,11 @@ export default function TaskDetailPage() {
   async function handleAddPoolToTask() {
     if (!dataStore || poolCheckedPaths.size === 0 || poolAdding) return;
     setPoolAdding(true);
-    setPoolProgress({ completed: 0, total: poolCheckedPaths.size });
+    const totalCheckedImages = [...poolCheckedPaths.values()].reduce(
+      (a, b) => a + b.count,
+      0,
+    );
+    setPoolProgress({ completed: 0, total: totalCheckedImages });
     let totalAdded = 0;
     let totalMoved = 0;
     let totalFailed = 0;
@@ -475,14 +503,29 @@ export default function TaskDetailPage() {
       setPoolProgress({ completed, total });
     };
     try {
-      // 최상위 체크 폴더만 추출 (하위 폴더는 재귀에서 자동 처리)
-      const topLevelChecked = [...poolCheckedPaths.keys()].filter(
-        (p) =>
-          ![...poolCheckedPaths.keys()].some(
-            (other) => other !== p && p.startsWith(other),
-          ),
+      // 최상위 체크 항목만 추출 (하위 항목은 재귀에서 자동 처리)
+      const checkedKeys = [...poolCheckedPaths.keys()];
+      const topLevelChecked = checkedKeys.filter(
+        (p) => !checkedKeys.some((other) => other !== p && p.startsWith(other)),
       );
-      for (const poolPath of topLevelChecked) {
+
+      // 폴더와 파일 분리
+      const folderPaths = topLevelChecked.filter((p) => p.endsWith("/"));
+      const filePaths = topLevelChecked.filter((p) => !p.endsWith("/"));
+
+      // 개별 파일 추가
+      if (filePaths.length > 0) {
+        const fileIds = filePaths
+          .map((p) => poolCheckedPaths.get(p)?.fileId)
+          .filter((id): id is number => id !== undefined);
+        if (fileIds.length > 0) {
+          const res = await tasksApi.addImages(taskIdNum, fileIds, currentPath);
+          totalAdded += res.data.added;
+        }
+      }
+
+      // 폴더 재귀 추가
+      for (const poolPath of folderPaths) {
         const folderName = poolPath.replace(/\/$/, "").split("/").pop()!;
         const taskTarget = currentPath
           ? `${currentPath}${folderName}/`
@@ -668,6 +711,7 @@ export default function TaskDetailPage() {
                 </p>
               ) : (
                 <FolderTreeView
+                  ref={poolTreeRef}
                   readOnly
                   checkable
                   collapsible
@@ -682,6 +726,7 @@ export default function TaskDetailPage() {
                     <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
                   }
                   rootCount={dataStore.image_count ?? 0}
+                  onRefresh={refreshPoolTree}
                 />
               )}
 
@@ -698,7 +743,7 @@ export default function TaskDetailPage() {
                       ? poolProgress
                         ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
                         : "추가 중..."
-                      : `↓ Task에 추가 (${[...poolCheckedPaths.values()].reduce((a, b) => a + b, 0)}개)`}
+                      : `↓ Task에 추가 (${[...poolCheckedPaths.values()].reduce((a, b) => a + b.count, 0)}개)`}
                   </Button>
                 </div>
               )}

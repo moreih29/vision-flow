@@ -18,7 +18,8 @@ import {
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { TreeNode } from "./TreeNode";
 import {
-  buildNode,
+  buildFolderNode,
+  buildFileNode,
   updateNodeInTree,
   findNodeInTree,
   removeNodeFromTree,
@@ -26,27 +27,62 @@ import {
   addOrInvalidateChild,
   collectExpandedPaths,
 } from "./tree-utils";
-import type { FolderTreeNode } from "./tree-utils";
+import type { FileTreeNode } from "./tree-utils";
+
+// -- 상수 --
+
+const MAX_FILE_NODES = 50;
+
+// -- 헬퍼: 폴더 먼저, 파일 나중 정렬 --
+
+function sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {
+  const folders = nodes
+    .filter((n) => n.type === "folder")
+    .sort((a, b) => a.path.localeCompare(b.path));
+  const files = nodes
+    .filter((n) => n.type === "file")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [...folders, ...files];
+}
+
+// -- 헬퍼: files → 노드 변환 (최대 MAX_FILE_NODES) --
+
+function buildFileNodes(result: {
+  files?: Array<{ id: number; name: string; path: string }>;
+  totalFiles?: number;
+}): { visibleFiles: FileTreeNode[]; hiddenCount: number } {
+  const allFileNodes = (result.files ?? []).map(buildFileNode);
+  const visibleFiles = allFileNodes.slice(0, MAX_FILE_NODES);
+  const hiddenCount =
+    (result.totalFiles ?? allFileNodes.length) - visibleFiles.length;
+  return { visibleFiles, hiddenCount };
+}
 
 // -- 타입 정의 --
 
-export interface FolderContentsResult {
+export interface FileContentsResult {
   folders: Array<{
     path: string;
     name: string;
     count: number;
     subfolder_count: number;
   }>;
+  files?: Array<{
+    id: number;
+    name: string;
+    path: string;
+  }>;
+  totalFiles?: number;
 }
 
-export interface FolderTreeRef {
+export interface FileTreeRef {
   refresh: () => Promise<void>;
   expandAll: () => Promise<void>;
   collapseAll: () => void;
 }
 
-export interface FolderTreeViewProps {
-  fetchFolderContents: (path: string) => Promise<FolderContentsResult>;
+export interface FileTreeViewProps {
+  fetchFolderContents: (path: string) => Promise<FileContentsResult>;
   fetchAllFolders?: () => Promise<string[]>;
   rootLabel?: string;
   rootCount?: number;
@@ -65,7 +101,12 @@ export interface FolderTreeViewProps {
   // checkbox 모드
   checkable?: boolean;
   checkedPaths?: Set<string>;
-  onCheckPath?: (path: string, checked: boolean, count: number) => void;
+  onCheckPath?: (
+    path: string,
+    checked: boolean,
+    count: number,
+    fileId?: number,
+  ) => void;
   // 접기/펼치기
   collapsible?: boolean;
   collapsed?: boolean;
@@ -77,9 +118,12 @@ export interface FolderTreeViewProps {
 // -- 헬퍼 함수 --
 
 function collectAllLoadedNodes(
-  node: FolderTreeNode,
-): Array<{ path: string; count: number }> {
-  const nodes = [{ path: node.path, count: node.count }];
+  node: FileTreeNode,
+): Array<{ path: string; count: number; fileId?: number }> {
+  const count = node.type === "file" ? 1 : node.count;
+  const nodes: Array<{ path: string; count: number; fileId?: number }> = [
+    { path: node.path, count, fileId: node.fileId },
+  ];
   if (node.children) {
     for (const child of node.children) {
       nodes.push(...collectAllLoadedNodes(child));
@@ -89,7 +133,7 @@ function collectAllLoadedNodes(
 }
 
 function getNodeCheckState(
-  node: FolderTreeNode,
+  node: FileTreeNode,
   checkedPaths: Set<string>,
 ): "checked" | "indeterminate" | "unchecked" {
   const isChecked = checkedPaths.has(node.path);
@@ -108,8 +152,8 @@ function getNodeCheckState(
 
 // -- 메인 컴포넌트 --
 
-export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
-  function FolderTreeView(
+export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
+  function FileTreeView(
     {
       fetchFolderContents,
       fetchAllFolders,
@@ -138,7 +182,8 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     },
     ref,
   ) {
-    const [rootNodes, setRootNodes] = useState<FolderTreeNode[]>([]);
+    const [rootNodes, setRootNodes] = useState<FileTreeNode[]>([]);
+    const [rootHiddenFileCount, setRootHiddenFileCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [editingPath, setEditingPath] = useState<string | null>(null);
@@ -206,7 +251,10 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
         setLoading(true);
         try {
           const result = await fetchFolderContents("");
-          setRootNodes(result.folders.map(buildNode));
+          const folderNodes = result.folders.map(buildFolderNode);
+          const { visibleFiles, hiddenCount } = buildFileNodes(result);
+          setRootNodes(sortNodes([...folderNodes, ...visibleFiles]));
+          setRootHiddenFileCount(hiddenCount);
         } catch {
           // silently fail
         } finally {
@@ -238,18 +286,20 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       for (const node of rootNodes) {
         const allNodes = collectAllLoadedNodes(node);
         for (const n of allNodes) {
-          onCheckPath(n.path, checked, n.count);
+          onCheckPath(n.path, checked, n.count, n.fileId);
         }
       }
     }
 
-    function handleCheckNode(node: FolderTreeNode, checked: boolean) {
+    function handleCheckNode(node: FileTreeNode, checked: boolean) {
       if (!onCheckPath) return;
-      onCheckPath(node.path, checked, node.count);
+      const nodeCount = node.type === "file" ? 1 : node.count;
+      onCheckPath(node.path, checked, nodeCount, node.fileId);
       if (node.children) {
         const allNodes = collectAllLoadedNodes(node);
         for (const n of allNodes) {
-          if (n.path !== node.path) onCheckPath(n.path, checked, n.count);
+          if (n.path !== node.path)
+            onCheckPath(n.path, checked, n.count, n.fileId);
         }
       }
     }
@@ -263,7 +313,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
           : [];
 
         // 경로 목록에서 트리 구조 구축
-        function buildTreeFromPaths(parentPath: string): FolderTreeNode[] {
+        function buildTreeFromPaths(parentPath: string): FileTreeNode[] {
           const directChildren = new Map<
             string,
             { path: string; name: string; subPaths: string[] }
@@ -313,18 +363,24 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
             try {
               const childResult = await fetchFolderContents(p);
               const childFolders = childResult.folders;
+              const childFileNodes = (childResult.files ?? []).map(
+                buildFileNode,
+              );
               updatedNodes = updateNodeInTree(updatedNodes, p, (n) => ({
                 ...n,
-                children: n.children?.map((c) => {
-                  const info = childFolders.find((f) => f.path === c.path);
-                  return info
-                    ? {
-                        ...c,
-                        count: info.count,
-                        subfolder_count: info.subfolder_count,
-                      }
-                    : c;
-                }),
+                children: [
+                  ...(n.children?.map((c) => {
+                    const info = childFolders.find((f) => f.path === c.path);
+                    return info
+                      ? {
+                          ...c,
+                          count: info.count,
+                          subfolder_count: info.subfolder_count,
+                        }
+                      : c;
+                  }) ?? []),
+                  ...childFileNodes,
+                ],
               }));
             } catch {
               // skip
@@ -355,7 +411,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     }
 
     function handleCollapseAll() {
-      function collapseNodes(nodes: FolderTreeNode[]): FolderTreeNode[] {
+      function collapseNodes(nodes: FileTreeNode[]): FileTreeNode[] {
         return nodes.map((n) => ({
           ...n,
           expanded: false,
@@ -372,17 +428,23 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
         );
 
         const rootResult = await fetchFolderContents("");
-        let newNodes = rootResult.folders.map(buildNode);
+        const rootFolderNodes = rootResult.folders.map(buildFolderNode);
+        const { visibleFiles: rootFileNodes } = buildFileNodes(rootResult);
+        let newNodes = sortNodes([...rootFolderNodes, ...rootFileNodes]);
 
         for (const path of expandedPaths) {
           if (!findNodeInTree(newNodes, path)) continue;
           try {
             const childResult = await fetchFolderContents(path);
+            const childFolderNodes = childResult.folders.map(buildFolderNode);
+            const { visibleFiles: childFileNodes, hiddenCount } =
+              buildFileNodes(childResult);
             newNodes = updateNodeInTree(newNodes, path, (n) => ({
               ...n,
               expanded: true,
               loaded: true,
-              children: childResult.folders.map(buildNode),
+              children: sortNodes([...childFolderNodes, ...childFileNodes]),
+              totalFiles: hiddenCount > 0 ? hiddenCount : undefined,
             }));
           } catch {
             // skip failed re-expansions
@@ -396,9 +458,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     }));
 
     async function handleToggleExpand(path: string) {
-      const findNode = (
-        nodes: FolderTreeNode[],
-      ): FolderTreeNode | undefined => {
+      const findNode = (nodes: FileTreeNode[]): FileTreeNode | undefined => {
         for (const n of nodes) {
           if (n.path === path) return n;
           if (n.children) {
@@ -422,13 +482,17 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       if (!node.loaded) {
         try {
           const result = await fetchFolderContents(path);
-          const children = result.folders.map(buildNode);
+          const folderChildren = result.folders.map(buildFolderNode);
+          const { visibleFiles: fileChildren, hiddenCount } =
+            buildFileNodes(result);
+          const children = sortNodes([...folderChildren, ...fileChildren]);
           setRootNodes((prev) =>
             updateNodeInTree(prev, path, (n) => ({
               ...n,
               expanded: true,
               loaded: true,
               children,
+              totalFiles: hiddenCount > 0 ? hiddenCount : undefined,
             })),
           );
           // 체크 모드: 상위가 체크된 상태면 새로 로드된 하위도 체크
@@ -562,7 +626,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
           const movedNode = findNodeInTree(prev, sourcePath);
           let updated = removeNodeFromTree(prev, sourcePath);
           if (movedNode) {
-            const newChild: FolderTreeNode = {
+            const newChild: FileTreeNode = {
               ...movedNode,
               path: newPath,
               name: folderName,
@@ -667,7 +731,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
           const movedNode = findNodeInTree(prev, sourcePath);
           const updated = removeNodeFromTree(prev, sourcePath);
           if (movedNode) {
-            const newRootNode: FolderTreeNode = {
+            const newRootNode: FileTreeNode = {
               ...movedNode,
               path: newPath,
               name: folderName,
@@ -711,7 +775,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
       const newPath = parentPath + name + "/";
       try {
         await onCreateFolder(newPath);
-        const newNode = buildNode({
+        const newNode = buildFolderNode({
           path: newPath,
           name,
           count: 0,
@@ -747,7 +811,7 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
     // -- checkable 모드 노드 렌더 --
 
     function renderCheckableNodes(
-      list: FolderTreeNode[],
+      list: FileTreeNode[],
       depth: number,
     ): React.ReactNode {
       return list.map((node) => {
@@ -993,6 +1057,11 @@ export const FolderTreeView = forwardRef<FolderTreeRef, FolderTreeViewProps>(
                     onDrop={handleDrop}
                   />
                 ))}
+            {rootHiddenFileCount > 0 && (
+              <div className="px-2 py-1 text-xs text-muted-foreground">
+                외 {rootHiddenFileCount}개 이미지
+              </div>
+            )}
             {/* 빈 공간 — 우클릭 컨텍스트 메뉴 영역 */}
             <div className="min-h-10 flex-1" />
           </div>

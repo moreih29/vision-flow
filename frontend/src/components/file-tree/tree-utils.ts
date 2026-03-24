@@ -1,24 +1,28 @@
 // -- 타입 정의 --
 
-export interface FolderTreeNode {
+export interface FileTreeNode {
+  type: "folder" | "file";
   path: string;
   name: string;
   count: number;
   subfolder_count: number;
-  children?: FolderTreeNode[];
+  children?: FileTreeNode[];
   expanded: boolean;
   loaded: boolean;
+  fileId?: number;
+  totalFiles?: number;
 }
 
 // -- 순수 유틸리티 함수 --
 
-export function buildNode(folder: {
+export function buildFolderNode(folder: {
   path: string;
   name: string;
   count: number;
   subfolder_count: number;
-}): FolderTreeNode {
+}): FileTreeNode {
   return {
+    type: "folder",
     path: folder.path,
     name: folder.name,
     count: folder.count,
@@ -29,11 +33,28 @@ export function buildNode(folder: {
   };
 }
 
+export function buildFileNode(file: {
+  id: number;
+  name: string;
+  path: string;
+}): FileTreeNode {
+  return {
+    type: "file",
+    path: file.path,
+    name: file.name,
+    count: 0,
+    subfolder_count: 0,
+    expanded: false,
+    loaded: true,
+    fileId: file.id,
+  };
+}
+
 export function updateNodeInTree(
-  nodes: FolderTreeNode[],
+  nodes: FileTreeNode[],
   targetPath: string,
-  updater: (node: FolderTreeNode) => FolderTreeNode,
-): FolderTreeNode[] {
+  updater: (node: FileTreeNode) => FileTreeNode,
+): FileTreeNode[] {
   return nodes.map((node) => {
     if (node.path === targetPath) return updater(node);
     if (node.children)
@@ -46,9 +67,9 @@ export function updateNodeInTree(
 }
 
 export function findNodeInTree(
-  nodes: FolderTreeNode[],
+  nodes: FileTreeNode[],
   targetPath: string,
-): FolderTreeNode | undefined {
+): FileTreeNode | undefined {
   for (const node of nodes) {
     if (node.path === targetPath) return node;
     if (node.children) {
@@ -60,9 +81,9 @@ export function findNodeInTree(
 }
 
 export function removeNodeFromTree(
-  nodes: FolderTreeNode[],
+  nodes: FileTreeNode[],
   targetPath: string,
-): FolderTreeNode[] {
+): FileTreeNode[] {
   return nodes
     .filter(
       (node) =>
@@ -76,10 +97,10 @@ export function removeNodeFromTree(
 }
 
 export function updateChildPaths(
-  nodes: FolderTreeNode[],
+  nodes: FileTreeNode[],
   oldPrefix: string,
   newPrefix: string,
-): FolderTreeNode[] {
+): FileTreeNode[] {
   return nodes.map((node) => ({
     ...node,
     path: newPrefix + node.path.slice(oldPrefix.length),
@@ -90,11 +111,11 @@ export function updateChildPaths(
 }
 
 export function renameNodeInTree(
-  nodes: FolderTreeNode[],
+  nodes: FileTreeNode[],
   oldPath: string,
   newPath: string,
   newName: string,
-): FolderTreeNode[] {
+): FileTreeNode[] {
   return nodes.map((node) => {
     if (node.path === oldPath) {
       return {
@@ -117,10 +138,10 @@ export function renameNodeInTree(
 }
 
 export function addOrInvalidateChild(
-  node: FolderTreeNode,
+  node: FileTreeNode,
   parentPath: string,
-  child: FolderTreeNode,
-): FolderTreeNode {
+  child: FileTreeNode,
+): FileTreeNode {
   if (node.path === parentPath) {
     if (node.expanded && node.loaded && node.children) {
       const newChildren = [...node.children, child].sort((a, b) =>
@@ -150,7 +171,7 @@ export function addOrInvalidateChild(
   return node;
 }
 
-export function collectExpandedPaths(nodes: FolderTreeNode[]): string[] {
+export function collectExpandedPaths(nodes: FileTreeNode[]): string[] {
   const paths: string[] = [];
   for (const node of nodes) {
     if (node.expanded) {

@@ -90,15 +90,20 @@ export default function TaskDetailPage() {
   const handleBulkRemoveRef = useRef<() => void>(() => {});
 
   const fetchTaskFolderContents = useCallback(
-    async (path: string) => {
-      const res = await tasksApi.getFolderContents(taskIdNum, path);
+    async (path: string, skip?: number, limit?: number) => {
+      const res = await tasksApi.getFolderContents(
+        taskIdNum,
+        path,
+        skip,
+        limit,
+      );
       return {
         folders: res.data.folders.map((f) => ({
           ...f,
           count: f.image_count,
         })),
         files: res.data.images.map((img) => ({
-          id: img.image_id,
+          id: img.id,
           name: img.image.original_filename,
           path: (path || "") + img.image.original_filename,
         })),
@@ -114,8 +119,13 @@ export default function TaskDetailPage() {
   }, [taskIdNum]);
 
   const fetchPoolFolderContents = useCallback(
-    async (path: string) => {
-      const res = await imagesApi.getFolderContents(dataStore!.id, path);
+    async (path: string, skip?: number, limit?: number) => {
+      const res = await imagesApi.getFolderContents(
+        dataStore!.id,
+        path,
+        skip,
+        limit,
+      );
       return {
         folders: (res.data.folders ?? []).map((f) => ({
           ...f,

@@ -3,9 +3,11 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
@@ -27,11 +29,59 @@ import {
   addOrInvalidateChild,
   collectExpandedPaths,
 } from "./tree-utils";
-import type { FileTreeNode } from "./tree-utils";
+import type { FileTreeNode, FlatNode } from "./tree-utils";
+import { flattenTree } from "./tree-utils";
 
 // -- 상수 --
 
-const MAX_FILE_NODES = 50;
+const FILE_PAGE_SIZE = 50;
+const TREE_ROW_HEIGHT = 28; // 트리 노드 높이 (py-1 = 4px*2 + text ~20px)
+
+// -- PlaceholderRow 컴포넌트 --
+
+function PlaceholderRow({
+  parentPath,
+  fileIndex,
+  depth,
+  onLoadPage,
+}: {
+  parentPath: string;
+  fileIndex: number;
+  depth: number;
+  onLoadPage: (parentPath: string, skip: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const triggeredRef = useRef(false);
+  const isPageStart = fileIndex % FILE_PAGE_SIZE === 0;
+
+  useEffect(() => {
+    if (!isPageStart || triggeredRef.current) return;
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !triggeredRef.current) {
+          triggeredRef.current = true;
+          onLoadPage(parentPath, fileIndex);
+        }
+      },
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [parentPath, fileIndex, isPageStart, onLoadPage]);
+
+  return (
+    <div
+      ref={isPageStart ? ref : undefined}
+      className="px-2 py-1"
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+    </div>
+  );
+}
 
 // -- 헬퍼: 폴더 먼저, 파일 나중 정렬 --
 
@@ -45,16 +95,17 @@ function sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {
   return [...folders, ...files];
 }
 
-// -- 헬퍼: files → 노드 변환 (최대 MAX_FILE_NODES) --
+// -- 헬퍼: files → 노드 변환 --
 
 function buildFileNodes(result: {
   files?: Array<{ id: number; name: string; path: string }>;
   totalFiles?: number;
 }): { visibleFiles: FileTreeNode[]; hiddenCount: number } {
-  const allFileNodes = (result.files ?? []).map(buildFileNode);
-  const visibleFiles = allFileNodes.slice(0, MAX_FILE_NODES);
-  const hiddenCount =
-    (result.totalFiles ?? allFileNodes.length) - visibleFiles.length;
+  const visibleFiles = (result.files ?? []).map(buildFileNode);
+  const hiddenCount = Math.max(
+    0,
+    (result.totalFiles ?? visibleFiles.length) - visibleFiles.length,
+  );
   return { visibleFiles, hiddenCount };
 }
 
@@ -82,7 +133,11 @@ export interface FileTreeRef {
 }
 
 export interface FileTreeViewProps {
-  fetchFolderContents: (path: string) => Promise<FileContentsResult>;
+  fetchFolderContents: (
+    path: string,
+    skip?: number,
+    limit?: number,
+  ) => Promise<FileContentsResult>;
   fetchAllFolders?: () => Promise<string[]>;
   rootLabel?: string;
   rootCount?: number;
@@ -194,6 +249,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
     const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
     const fileDropTargetRef = useRef<string>("");
     const selectAllRef = useRef<HTMLInputElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const [internalCollapsed, setInternalCollapsed] =
       useState(defaultCollapsed);
     const { confirmDialog: treeConfirmDialog, showAlert: treeShowAlert } =
@@ -250,7 +306,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       async function loadRoot() {
         setLoading(true);
         try {
-          const result = await fetchFolderContents("");
+          const result = await fetchFolderContents("", 0, FILE_PAGE_SIZE);
           const folderNodes = result.folders.map(buildFolderNode);
           const { visibleFiles, hiddenCount } = buildFileNodes(result);
           setRootNodes(sortNodes([...folderNodes, ...visibleFiles]));
@@ -263,6 +319,31 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       }
       loadRoot();
     }, [fetchFolderContents]);
+
+    // -- 가상화 --
+    const flatNodes = useMemo(() => {
+      const result: FlatNode[] = [];
+      flattenTree(rootNodes, 0, result);
+      if (rootHiddenFileCount > 0) {
+        const rootFileCount = rootNodes.filter((n) => n.type === "file").length;
+        for (let i = 0; i < rootHiddenFileCount; i++) {
+          result.push({
+            type: "placeholder",
+            parentPath: "",
+            fileIndex: rootFileCount + i,
+            depth: 0,
+          });
+        }
+      }
+      return result;
+    }, [rootNodes, rootHiddenFileCount]);
+
+    const virtualizer = useVirtualizer({
+      count: flatNodes.length,
+      getScrollElement: () => scrollRef.current,
+      estimateSize: () => TREE_ROW_HEIGHT,
+      overscan: 10,
+    });
 
     // -- 전체 선택 체크박스 상태 --
     const resolvedCheckedPaths = checkedPaths ?? new Set<string>();
@@ -421,21 +502,104 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       setRootNodes(collapseNodes(rootNodes));
     }
 
+    // -- 파일 페이지 로드 --
+
+    const loadingPagesRef = useRef<Set<string>>(new Set());
+
+    const handleLoadPage = useCallback(
+      async (parentPath: string, skip: number) => {
+        const pageKey = `${parentPath}:${skip}`;
+        if (loadingPagesRef.current.has(pageKey)) return;
+        loadingPagesRef.current.add(pageKey);
+
+        try {
+          const result = await fetchFolderContents(
+            parentPath,
+            skip,
+            FILE_PAGE_SIZE,
+          );
+          const newFileNodes = (result.files ?? []).map(buildFileNode);
+
+          if (parentPath === "") {
+            setRootNodes((prev) => {
+              const existingIds = new Set(
+                prev.filter((n) => n.type === "file").map((n) => n.fileId),
+              );
+              const dedupedNew = newFileNodes.filter(
+                (n) => !existingIds.has(n.fileId),
+              );
+              const updated = sortNodes([...prev, ...dedupedNew]);
+              const totalLoaded = updated.filter(
+                (n) => n.type === "file",
+              ).length;
+              const remaining = Math.max(
+                0,
+                (result.totalFiles ?? 0) - totalLoaded,
+              );
+              setRootHiddenFileCount(remaining);
+              return updated;
+            });
+          } else {
+            setRootNodes((prev) =>
+              updateNodeInTree(prev, parentPath, (n) => {
+                const existingChildren = n.children ?? [];
+                const existingIds = new Set(
+                  existingChildren
+                    .filter((c) => c.type === "file")
+                    .map((c) => c.fileId),
+                );
+                const dedupedNew = newFileNodes.filter(
+                  (c) => !existingIds.has(c.fileId),
+                );
+                const updatedChildren = sortNodes([
+                  ...existingChildren,
+                  ...dedupedNew,
+                ]);
+                const totalLoaded = updatedChildren.filter(
+                  (c) => c.type === "file",
+                ).length;
+                const remaining = Math.max(
+                  0,
+                  (result.totalFiles ?? 0) - totalLoaded,
+                );
+                return {
+                  ...n,
+                  children: updatedChildren,
+                  totalFiles: remaining > 0 ? remaining : undefined,
+                };
+              }),
+            );
+          }
+        } catch {
+          // silently fail
+        } finally {
+          loadingPagesRef.current.delete(pageKey);
+        }
+      },
+      [fetchFolderContents],
+    );
+
     useImperativeHandle(ref, () => ({
       async refresh() {
         const expandedPaths = collectExpandedPaths(rootNodes).sort(
           (a, b) => a.split("/").length - b.split("/").length,
         );
 
-        const rootResult = await fetchFolderContents("");
+        const rootResult = await fetchFolderContents("", 0, FILE_PAGE_SIZE);
         const rootFolderNodes = rootResult.folders.map(buildFolderNode);
-        const { visibleFiles: rootFileNodes } = buildFileNodes(rootResult);
+        const { visibleFiles: rootFileNodes, hiddenCount: rootHidden } =
+          buildFileNodes(rootResult);
         let newNodes = sortNodes([...rootFolderNodes, ...rootFileNodes]);
+        setRootHiddenFileCount(rootHidden);
 
         for (const path of expandedPaths) {
           if (!findNodeInTree(newNodes, path)) continue;
           try {
-            const childResult = await fetchFolderContents(path);
+            const childResult = await fetchFolderContents(
+              path,
+              0,
+              FILE_PAGE_SIZE,
+            );
             const childFolderNodes = childResult.folders.map(buildFolderNode);
             const { visibleFiles: childFileNodes, hiddenCount } =
               buildFileNodes(childResult);
@@ -481,7 +645,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
 
       if (!node.loaded) {
         try {
-          const result = await fetchFolderContents(path);
+          const result = await fetchFolderContents(path, 0, FILE_PAGE_SIZE);
           const folderChildren = result.folders.map(buildFolderNode);
           const { visibleFiles: fileChildren, hiddenCount } =
             buildFileNodes(result);
@@ -808,43 +972,6 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       }
     }
 
-    // -- checkable 모드 노드 렌더 --
-
-    function renderCheckableNodes(
-      list: FileTreeNode[],
-      depth: number,
-    ): React.ReactNode {
-      return list.map((node) => {
-        const checkState = getNodeCheckState(node, resolvedCheckedPaths);
-        return (
-          <TreeNode
-            key={node.path}
-            node={node}
-            depth={depth}
-            readOnly={readOnly}
-            checkable
-            checked={checkState === "checked"}
-            indeterminate={checkState === "indeterminate"}
-            onCheck={(checked) => handleCheckNode(node, checked)}
-            onSelectPath={onSelectPath}
-            onToggleExpand={handleToggleExpand}
-            onDeleteFolder={readOnly ? undefined : handleDeleteFolder}
-            onCreateFolder={readOnly ? undefined : handleCreateFolder}
-            onStartRename={readOnly ? undefined : handleStartRename}
-            onEditNameChange={readOnly ? undefined : setEditName}
-            onFinishRename={readOnly ? undefined : handleFinishRename}
-            onCancelRename={readOnly ? undefined : handleCancelRename}
-            editingPath={readOnly ? undefined : editingPath}
-            editName={readOnly ? undefined : editName}
-            editStartTime={readOnly ? undefined : editStartTime}
-            renderChildren={(children, childDepth) =>
-              renderCheckableNodes(children, childDepth)
-            }
-          />
-        );
-      });
-    }
-
     // -- 로딩 상태 --
 
     if (loading) {
@@ -1019,49 +1146,104 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         {/* 트리 목록 — collapsed이면 숨김 */}
         {!isCollapsed && (
           <div
-            className="space-y-0.5 flex-1 min-h-0 overflow-y-auto select-none"
+            ref={scrollRef}
+            className="flex-1 min-h-0 overflow-y-auto select-none"
             onDragOver={readOnly ? undefined : handleRootDragOver}
             onDragLeave={readOnly ? undefined : handleRootDragLeave}
             onDrop={readOnly ? undefined : handleRootDrop}
             onContextMenu={handleTreeBgContextMenu}
             onClick={handleTreeBgClick}
           >
-            {checkable
-              ? renderCheckableNodes(rootNodes, 0)
-              : rootNodes.map((node) => (
-                  <TreeNode
-                    key={node.path}
-                    node={node}
-                    depth={0}
-                    selectedPath={selectedPath}
-                    editingPath={editingPath}
-                    editName={editName}
-                    draggingPath={draggingPath}
-                    dragOverPath={dragOverPath}
-                    editStartTime={editStartTime}
-                    readOnly={readOnly}
-                    acceptDropTypes={acceptDropTypes}
-                    acceptFileDrop={acceptFileDrop}
-                    onSelectPath={onSelectPath}
-                    onToggleExpand={handleToggleExpand}
-                    onDeleteFolder={handleDeleteFolder}
-                    onCreateFolder={handleCreateFolder}
-                    onStartRename={handleStartRename}
-                    onEditNameChange={setEditName}
-                    onFinishRename={handleFinishRename}
-                    onCancelRename={handleCancelRename}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  />
-                ))}
-            {rootHiddenFileCount > 0 && (
-              <div className="px-2 py-1 text-xs text-muted-foreground">
-                외 {rootHiddenFileCount}개 이미지
-              </div>
-            )}
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const flatNode = flatNodes[virtualRow.index];
+                if (flatNode.type === "placeholder") {
+                  return (
+                    <div
+                      key={`ph-${flatNode.parentPath}-${flatNode.fileIndex}`}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <PlaceholderRow
+                        parentPath={flatNode.parentPath}
+                        fileIndex={flatNode.fileIndex}
+                        depth={flatNode.depth}
+                        onLoadPage={handleLoadPage}
+                      />
+                    </div>
+                  );
+                }
+                const { node, depth } = flatNode;
+                const checkState = checkable
+                  ? getNodeCheckState(node, resolvedCheckedPaths)
+                  : undefined;
+
+                return (
+                  <div
+                    key={
+                      node.type === "file"
+                        ? `${node.path}:${node.fileId}`
+                        : node.path
+                    }
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <TreeNode
+                      node={node}
+                      depth={depth}
+                      selectedPath={selectedPath}
+                      editingPath={readOnly ? undefined : editingPath}
+                      editName={readOnly ? undefined : editName}
+                      draggingPath={draggingPath}
+                      dragOverPath={dragOverPath}
+                      editStartTime={readOnly ? undefined : editStartTime}
+                      readOnly={readOnly}
+                      acceptDropTypes={acceptDropTypes}
+                      acceptFileDrop={acceptFileDrop}
+                      checkable={checkable}
+                      checked={checkState === "checked"}
+                      indeterminate={checkState === "indeterminate"}
+                      onCheck={
+                        checkable
+                          ? (checked) => handleCheckNode(node, checked)
+                          : undefined
+                      }
+                      onSelectPath={onSelectPath}
+                      onToggleExpand={handleToggleExpand}
+                      onDeleteFolder={readOnly ? undefined : handleDeleteFolder}
+                      onCreateFolder={readOnly ? undefined : handleCreateFolder}
+                      onStartRename={readOnly ? undefined : handleStartRename}
+                      onEditNameChange={readOnly ? undefined : setEditName}
+                      onFinishRename={readOnly ? undefined : handleFinishRename}
+                      onCancelRename={readOnly ? undefined : handleCancelRename}
+                      onDragStart={readOnly ? undefined : handleDragStart}
+                      onDragEnd={readOnly ? undefined : handleDragEnd}
+                      onDragOver={readOnly ? undefined : handleDragOver}
+                      onDragLeave={readOnly ? undefined : handleDragLeave}
+                      onDrop={readOnly ? undefined : handleDrop}
+                    />
+                  </div>
+                );
+              })}
+            </div>
             {/* 빈 공간 — 우클릭 컨텍스트 메뉴 영역 */}
             <div className="min-h-10 flex-1" />
           </div>

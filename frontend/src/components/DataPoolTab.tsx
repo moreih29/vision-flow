@@ -64,8 +64,13 @@ export default function DataPoolTab({
   const { confirmDialog, confirm, showAlert } = useConfirmDialog();
 
   const fetchFolderContents = useCallback(
-    async (path: string) => {
-      const res = await imagesApi.getFolderContents(dataStore?.id ?? 0, path);
+    async (path: string, skip?: number, limit?: number) => {
+      const res = await imagesApi.getFolderContents(
+        dataStore?.id ?? 0,
+        path,
+        skip,
+        limit,
+      );
       return {
         folders: (res.data.folders ?? []).map((f) => ({
           ...f,

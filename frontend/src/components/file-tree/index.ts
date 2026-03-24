@@ -4,5 +4,5 @@ export type {
   FileTreeViewProps,
   FileContentsResult,
 } from "./FileTreeView";
-export type { FileTreeNode } from "./tree-utils";
+export type { FileTreeNode, FlatNode } from "./tree-utils";
 export { buildFolderNode, buildFileNode } from "./tree-utils";

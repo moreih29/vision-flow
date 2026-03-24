@@ -181,3 +181,40 @@ export function collectExpandedPaths(nodes: FileTreeNode[]): string[] {
   }
   return paths;
 }
+
+// -- 가상화 유틸리티 --
+
+export type FlatNode =
+  | { type: "node"; node: FileTreeNode; depth: number }
+  | {
+      type: "placeholder";
+      parentPath: string;
+      fileIndex: number;
+      depth: number;
+    };
+
+export function flattenTree(
+  nodes: FileTreeNode[],
+  depth: number,
+  result: FlatNode[],
+): void {
+  for (const node of nodes) {
+    result.push({ type: "node", node, depth });
+    if (node.type === "folder" && node.expanded && node.children) {
+      flattenTree(node.children, depth + 1, result);
+      if (node.totalFiles && node.totalFiles > 0) {
+        const loadedFileCount = node.children.filter(
+          (c) => c.type === "file",
+        ).length;
+        for (let i = 0; i < node.totalFiles; i++) {
+          result.push({
+            type: "placeholder",
+            parentPath: node.path,
+            fileIndex: loadedFileCount + i,
+            depth: depth + 1,
+          });
+        }
+      }
+    }
+  }
+}

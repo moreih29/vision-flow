@@ -50,7 +50,6 @@ export interface TreeNodeProps {
   onDragOver?: (e: React.DragEvent, path: string) => void;
   onDragLeave?: () => void;
   onDrop?: (e: React.DragEvent, targetPath: string) => void;
-  renderChildren?: (children: FileTreeNode[], depth: number) => React.ReactNode;
 }
 
 // -- 컴포넌트 --
@@ -84,7 +83,6 @@ export function TreeNode({
   onDragOver,
   onDragLeave,
   onDrop,
-  renderChildren,
 }: TreeNodeProps) {
   const isFile = node.type === "file";
   const isSelected = selectedPath === node.path;
@@ -288,82 +286,30 @@ export function TreeNode({
     </div>
   );
 
-  return (
-    <div>
-      {isEditing || readOnly || isFile ? (
-        rowContent
-      ) : (
-        <ContextMenu>
-          <ContextMenuTrigger>{rowContent}</ContextMenuTrigger>
-          <ContextMenuContent className="w-40">
-            <ContextMenuItem onClick={() => onCreateFolder?.(node.path)}>
-              <FolderPlus className="mr-2 h-3.5 w-3.5" />새 폴더
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => onStartRename?.(node.path, node.name)}
-            >
-              <Pencil className="mr-2 h-3.5 w-3.5" />
-              이름 변경
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              variant="destructive"
-              onClick={() => onDeleteFolder?.(node.path)}
-            >
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              삭제
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      )}
+  if (isEditing || readOnly || isFile) {
+    return rowContent;
+  }
 
-      {node.expanded && node.children && node.children.length > 0 && (
-        <div>
-          {renderChildren
-            ? renderChildren(node.children, depth + 1)
-            : node.children.map((child) => (
-                <TreeNode
-                  key={child.path}
-                  node={child}
-                  depth={depth + 1}
-                  selectedPath={selectedPath}
-                  editingPath={editingPath}
-                  editName={editName}
-                  draggingPath={draggingPath}
-                  dragOverPath={dragOverPath}
-                  editStartTime={editStartTime}
-                  readOnly={readOnly}
-                  acceptDropTypes={acceptDropTypes}
-                  acceptFileDrop={acceptFileDrop}
-                  checkable={checkable}
-                  checked={checked}
-                  indeterminate={indeterminate}
-                  onCheck={onCheck}
-                  onSelectPath={onSelectPath}
-                  onToggleExpand={onToggleExpand}
-                  onDeleteFolder={onDeleteFolder}
-                  onCreateFolder={onCreateFolder}
-                  onStartRename={onStartRename}
-                  onEditNameChange={onEditNameChange}
-                  onFinishRename={onFinishRename}
-                  onCancelRename={onCancelRename}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onDrop={onDrop}
-                />
-              ))}
-          {node.totalFiles !== undefined && node.totalFiles > 0 && (
-            <div
-              className="px-2 py-1 text-xs text-muted-foreground"
-              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
-            >
-              외 {node.totalFiles}개 이미지
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{rowContent}</ContextMenuTrigger>
+      <ContextMenuContent className="w-40">
+        <ContextMenuItem onClick={() => onCreateFolder?.(node.path)}>
+          <FolderPlus className="mr-2 h-3.5 w-3.5" />새 폴더
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onStartRename?.(node.path, node.name)}>
+          <Pencil className="mr-2 h-3.5 w-3.5" />
+          이름 변경
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => onDeleteFolder?.(node.path)}
+        >
+          <Trash2 className="mr-2 h-3.5 w-3.5" />
+          삭제
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

@@ -23,26 +23,36 @@ import type { FolderTreeNode } from "./tree-utils";
 export interface TreeNodeProps {
   node: FolderTreeNode;
   depth: number;
-  selectedPath: string;
-  editingPath: string | null;
-  editName: string;
-  draggingPath: string | null;
-  dragOverPath: string | null;
-  editStartTime: number;
+  selectedPath?: string;
+  editingPath?: string | null;
+  editName?: string;
+  draggingPath?: string | null;
+  dragOverPath?: string | null;
+  editStartTime?: number;
   readOnly?: boolean;
-  onSelectPath: (path: string) => void;
+  acceptDropTypes?: string[];
+  acceptFileDrop?: boolean;
+  checkable?: boolean;
+  checked?: boolean;
+  indeterminate?: boolean;
+  onCheck?: (checked: boolean) => void;
+  onSelectPath?: (path: string) => void;
   onToggleExpand: (path: string) => void;
-  onDeleteFolder: (path: string) => void;
-  onCreateFolder: (parentPath: string) => void;
-  onStartRename: (path: string, name: string) => void;
-  onEditNameChange: (value: string) => void;
-  onFinishRename: () => void;
-  onCancelRename: () => void;
-  onDragStart: (path: string) => void;
-  onDragEnd: () => void;
-  onDragOver: (e: React.DragEvent, path: string) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent, targetPath: string) => void;
+  onDeleteFolder?: (path: string) => void;
+  onCreateFolder?: (parentPath: string) => void;
+  onStartRename?: (path: string, name: string) => void;
+  onEditNameChange?: (value: string) => void;
+  onFinishRename?: () => void;
+  onCancelRename?: () => void;
+  onDragStart?: (path: string) => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent, path: string) => void;
+  onDragLeave?: () => void;
+  onDrop?: (e: React.DragEvent, targetPath: string) => void;
+  renderChildren?: (
+    children: FolderTreeNode[],
+    depth: number,
+  ) => React.ReactNode;
 }
 
 // -- 컴포넌트 --
@@ -50,13 +60,19 @@ export interface TreeNodeProps {
 export function TreeNode({
   node,
   depth,
-  selectedPath,
-  editingPath,
-  editName,
-  draggingPath,
-  dragOverPath,
-  editStartTime,
+  selectedPath = "",
+  editingPath = null,
+  editName = "",
+  draggingPath = null,
+  dragOverPath = null,
+  editStartTime = 0,
   readOnly = false,
+  acceptDropTypes = [],
+  acceptFileDrop = false,
+  checkable = false,
+  checked = false,
+  indeterminate = false,
+  onCheck,
   onSelectPath,
   onToggleExpand,
   onDeleteFolder,
@@ -70,6 +86,7 @@ export function TreeNode({
   onDragOver,
   onDragLeave,
   onDrop,
+  renderChildren,
 }: TreeNodeProps) {
   const isSelected = selectedPath === node.path;
   const hasChildren = node.subfolder_count > 0;
@@ -77,6 +94,7 @@ export function TreeNode({
   const isDragging = draggingPath === node.path;
   const isDragOver = dragOverPath === node.path;
   const inputRef = useRef<HTMLInputElement>(null);
+  const checkboxRef = useRef<HTMLInputElement>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -84,6 +102,12 @@ export function TreeNode({
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (checkboxRef.current) {
+      checkboxRef.current.indeterminate = indeterminate && !checked;
+    }
+  }, [indeterminate, checked]);
 
   const isValidDropTarget =
     draggingPath !== null &&
@@ -98,7 +122,7 @@ export function TreeNode({
   }, [isEditing]);
 
   function handleSingleClick() {
-    onSelectPath(node.path);
+    onSelectPath?.(node.path);
     if (hasChildren && !node.expanded) onToggleExpand(node.path);
   }
 
@@ -107,7 +131,7 @@ export function TreeNode({
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
       if (isSelected && !readOnly) {
-        onStartRename(node.path, node.name);
+        onStartRename?.(node.path, node.name);
       }
       return;
     }
@@ -119,7 +143,7 @@ export function TreeNode({
 
   function handleBlur() {
     if (Date.now() - editStartTime < 300) return;
-    onCancelRename();
+    onCancelRename?.();
   }
 
   const rowContent = (
@@ -132,14 +156,14 @@ export function TreeNode({
       `}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       draggable={!isEditing && !readOnly}
-      onContextMenu={() => onSelectPath(node.path)}
+      onContextMenu={() => onSelectPath?.(node.path)}
       onDragStart={
         readOnly
           ? undefined
           : (e) => {
               e.dataTransfer.setData("text/plain", node.path);
               e.dataTransfer.effectAllowed = "move";
-              onDragStart(node.path);
+              onDragStart?.(node.path);
             }
       }
       onDragEnd={readOnly ? undefined : onDragEnd}
@@ -148,21 +172,21 @@ export function TreeNode({
           ? undefined
           : (e) => {
               const types = Array.from(e.dataTransfer.types);
-              const hasExternalItems = types.includes(
-                "application/x-datapool-items",
+              const hasAcceptedItems = acceptDropTypes.some((t) =>
+                types.includes(t),
               );
               const hasExternalFiles =
-                types.includes("Files") && !hasExternalItems;
+                acceptFileDrop && types.includes("Files") && !hasAcceptedItems;
 
-              if (isValidDropTarget || hasExternalItems) {
+              if (isValidDropTarget || hasAcceptedItems) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.dataTransfer.dropEffect = "move";
-                onDragOver(e, node.path);
+                onDragOver?.(e, node.path);
               } else if (hasExternalFiles) {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "copy";
-                onDragOver(e, node.path);
+                onDragOver?.(e, node.path);
               }
             }
       }
@@ -171,7 +195,7 @@ export function TreeNode({
           ? undefined
           : (e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                onDragLeave();
+                onDragLeave?.();
               }
             }
       }
@@ -180,16 +204,16 @@ export function TreeNode({
           ? undefined
           : (e) => {
               const types = Array.from(e.dataTransfer.types);
-              const hasExternalItems = types.includes(
-                "application/x-datapool-items",
+              const hasAcceptedItems = acceptDropTypes.some((t) =>
+                types.includes(t),
               );
               const hasExternalFiles =
-                types.includes("Files") && !hasExternalItems;
+                acceptFileDrop && types.includes("Files") && !hasAcceptedItems;
 
-              if (isValidDropTarget || hasExternalItems || hasExternalFiles) {
+              if (isValidDropTarget || hasAcceptedItems || hasExternalFiles) {
                 e.preventDefault();
                 e.stopPropagation();
-                onDrop(e, node.path);
+                onDrop?.(e, node.path);
               }
             }
       }
@@ -209,6 +233,17 @@ export function TreeNode({
         ) : null}
       </button>
 
+      {checkable && (
+        <input
+          ref={checkboxRef}
+          type="checkbox"
+          className="h-3.5 w-3.5 shrink-0 accent-primary cursor-pointer"
+          checked={checked}
+          onChange={(e) => onCheck?.(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+
       {isEditing ? (
         <div className="flex flex-1 items-center gap-1">
           {node.expanded ? (
@@ -219,10 +254,10 @@ export function TreeNode({
           <Input
             ref={inputRef}
             value={editName}
-            onChange={(e) => onEditNameChange(e.target.value)}
+            onChange={(e) => onEditNameChange?.(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onFinishRename();
-              if (e.key === "Escape") onCancelRename();
+              if (e.key === "Enter") onFinishRename?.();
+              if (e.key === "Escape") onCancelRename?.();
             }}
             onBlur={handleBlur}
             className="h-6 px-1 py-0 text-sm"
@@ -258,11 +293,11 @@ export function TreeNode({
         <ContextMenu>
           <ContextMenuTrigger>{rowContent}</ContextMenuTrigger>
           <ContextMenuContent className="w-40">
-            <ContextMenuItem onClick={() => onCreateFolder(node.path)}>
+            <ContextMenuItem onClick={() => onCreateFolder?.(node.path)}>
               <FolderPlus className="mr-2 h-3.5 w-3.5" />새 폴더
             </ContextMenuItem>
             <ContextMenuItem
-              onClick={() => onStartRename(node.path, node.name)}
+              onClick={() => onStartRename?.(node.path, node.name)}
             >
               <Pencil className="mr-2 h-3.5 w-3.5" />
               이름 변경
@@ -270,7 +305,7 @@ export function TreeNode({
             <ContextMenuSeparator />
             <ContextMenuItem
               variant="destructive"
-              onClick={() => onDeleteFolder(node.path)}
+              onClick={() => onDeleteFolder?.(node.path)}
             >
               <Trash2 className="mr-2 h-3.5 w-3.5" />
               삭제
@@ -281,33 +316,41 @@ export function TreeNode({
 
       {node.expanded && node.children && node.children.length > 0 && (
         <div>
-          {node.children.map((child) => (
-            <TreeNode
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              selectedPath={selectedPath}
-              editingPath={editingPath}
-              editName={editName}
-              draggingPath={draggingPath}
-              dragOverPath={dragOverPath}
-              editStartTime={editStartTime}
-              readOnly={readOnly}
-              onSelectPath={onSelectPath}
-              onToggleExpand={onToggleExpand}
-              onDeleteFolder={onDeleteFolder}
-              onCreateFolder={onCreateFolder}
-              onStartRename={onStartRename}
-              onEditNameChange={onEditNameChange}
-              onFinishRename={onFinishRename}
-              onCancelRename={onCancelRename}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-            />
-          ))}
+          {renderChildren
+            ? renderChildren(node.children, depth + 1)
+            : node.children.map((child) => (
+                <TreeNode
+                  key={child.path}
+                  node={child}
+                  depth={depth + 1}
+                  selectedPath={selectedPath}
+                  editingPath={editingPath}
+                  editName={editName}
+                  draggingPath={draggingPath}
+                  dragOverPath={dragOverPath}
+                  editStartTime={editStartTime}
+                  readOnly={readOnly}
+                  acceptDropTypes={acceptDropTypes}
+                  acceptFileDrop={acceptFileDrop}
+                  checkable={checkable}
+                  checked={checked}
+                  indeterminate={indeterminate}
+                  onCheck={onCheck}
+                  onSelectPath={onSelectPath}
+                  onToggleExpand={onToggleExpand}
+                  onDeleteFolder={onDeleteFolder}
+                  onCreateFolder={onCreateFolder}
+                  onStartRename={onStartRename}
+                  onEditNameChange={onEditNameChange}
+                  onFinishRename={onFinishRename}
+                  onCancelRename={onCancelRename}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onDrop={onDrop}
+                />
+              ))}
         </div>
       )}
     </div>

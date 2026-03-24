@@ -36,7 +36,7 @@ interface DataPoolContentAreaProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
-  variant?: "data-pool" | "task";
+  deleteLabel?: string;
 }
 
 export default function DataPoolContentArea({
@@ -67,7 +67,7 @@ export default function DataPoolContentArea({
   onDragOver,
   onDragLeave,
   onDrop,
-  variant = "data-pool",
+  deleteLabel,
 }: DataPoolContentAreaProps) {
   const sharedProps = {
     items,
@@ -131,9 +131,9 @@ export default function DataPoolContentArea({
               </p>
             </div>
           ) : previewMode === "grid" ? (
-            <VirtualImageGrid {...sharedProps} variant={variant} />
+            <VirtualImageGrid {...sharedProps} deleteLabel={deleteLabel} />
           ) : (
-            <VirtualImageList {...sharedProps} variant={variant} />
+            <VirtualImageList {...sharedProps} deleteLabel={deleteLabel} />
           )}
         </div>
       </div>

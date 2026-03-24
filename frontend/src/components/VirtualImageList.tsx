@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowUpLeft,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { imagesApi } from "@/api/images";
 import type { DataPoolItem } from "@/types/image";
+import { formatBytes } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -20,6 +21,9 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
+import { useImageContextMenu } from "@/hooks/use-image-context-menu";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
 interface VirtualImageListProps {
   items: DataPoolItem[];
@@ -46,14 +50,8 @@ interface VirtualImageListProps {
     folderPaths: string[],
     targetPath: string,
   ) => Promise<void>;
-  variant?: "data-pool" | "task";
+  deleteLabel?: string;
   dragSource?: string;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function VirtualImageList({
@@ -77,15 +75,10 @@ export default function VirtualImageList({
   onClearSelection,
   onNavigateUp,
   onDropItemsOnFolder,
-  variant = "data-pool",
+  deleteLabel = "삭제",
   dragSource,
 }: VirtualImageListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
-  const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
-  const draggingKeyRef = useRef<string | null>(null);
-  const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(
-    null,
-  );
   const rowCount = items.length + (hasMore ? 1 : 0);
 
   const virtualizer = useVirtualizer({
@@ -95,146 +88,36 @@ export default function VirtualImageList({
     overscan: 10,
   });
 
-  useEffect(() => {
-    const vItems = virtualizer.getVirtualItems();
-    if (vItems.length === 0) return;
-    const lastItem = vItems[vItems.length - 1];
-    if (lastItem && lastItem.index >= rowCount - 2 && hasMore && !loadingMore) {
-      onLoadMore();
-    }
-  }, [
-    virtualizer.getVirtualItems(),
+  useInfiniteScroll({
+    virtualizer,
     rowCount,
     hasMore,
     loadingMore,
     onLoadMore,
-  ]);
+  });
 
-  useEffect(() => {
-    if (!bgMenu) return;
-    const handler = () => setBgMenu(null);
-    const timer = setTimeout(() => {
-      window.addEventListener("mousedown", handler);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("mousedown", handler);
-    };
-  }, [bgMenu]);
+  const {
+    dragOverFolderKey,
+    handleDragStart,
+    handleDragEnd,
+    handleFolderDragOver,
+    handleFolderDrop,
+    handleFolderDragLeave,
+  } = useImageDragDrop({ selectedKeys, onDropItemsOnFolder, dragSource });
 
-  function handleDragStart(e: React.DragEvent, item: DataPoolItem) {
-    draggingKeyRef.current = item.key;
-    const dragKeys = selectedKeys.has(item.key)
-      ? [...selectedKeys]
-      : [item.key];
-    const imageIds = dragKeys
-      .filter((k) => k.startsWith("i:"))
-      .map((k) => parseInt(k.slice(2)));
-    const folderPaths = dragKeys
-      .filter((k) => k.startsWith("f:"))
-      .map((k) => k.slice(2));
-    e.dataTransfer.setData(
-      "application/x-datapool-items",
-      JSON.stringify({ imageIds, folderPaths, source: dragSource ?? "task" }),
-    );
-    e.dataTransfer.effectAllowed = "move";
-    const ghost = document.createElement("div");
-    ghost.style.cssText =
-      "position:fixed;top:-50px;left:0;z-index:99999;pointer-events:none;display:flex;align-items:center;gap:6px;padding:6px 10px;background:hsl(var(--popover));color:hsl(var(--popover-foreground));border:1px solid hsl(var(--border));border-radius:6px;font-size:13px;white-space:nowrap;max-width:240px;box-shadow:0 2px 8px rgba(0,0,0,.12);";
-    if (dragKeys.length > 1) {
-      ghost.textContent = `${dragKeys.length}\uAC1C \uD56D\uBAA9`;
-    } else if (item.type === "folder") {
-      ghost.textContent = `\uD83D\uDCC1 ${item.folder?.name || "\uD3F4\uB354"}`;
-    } else if (item.type === "image" && item.image) {
-      const thumb = document.createElement("img");
-      thumb.src = imagesApi.getFileUrl(item.image.id);
-      thumb.style.cssText =
-        "width:28px;height:28px;object-fit:cover;border-radius:3px;flex-shrink:0;";
-      const label = document.createElement("span");
-      label.textContent = item.image.original_filename;
-      label.style.cssText = "overflow:hidden;text-overflow:ellipsis;";
-      ghost.appendChild(thumb);
-      ghost.appendChild(label);
-    }
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, 0, 0);
-    setTimeout(() => {
-      if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
-    }, 100);
-  }
-
-  function handleDragEnd() {
-    draggingKeyRef.current = null;
-    setDragOverFolderKey(null);
-  }
-
-  const handleFolderDragOver = useCallback(
-    (e: React.DragEvent, item: DataPoolItem) => {
-      if (!onDropItemsOnFolder) return;
-      if (!e.dataTransfer.types.includes("application/x-datapool-items"))
-        return;
-      const srcKey = draggingKeyRef.current;
-      if (srcKey === item.key) return;
-      if (srcKey && selectedKeys.has(srcKey) && selectedKeys.has(item.key))
-        return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = "move";
-      setDragOverFolderKey(item.key);
-    },
-    [onDropItemsOnFolder, selectedKeys],
-  );
-
-  const handleFolderDrop = useCallback(
-    (e: React.DragEvent, item: DataPoolItem) => {
-      if (!onDropItemsOnFolder || !item.folder) return;
-      const data = e.dataTransfer.getData("application/x-datapool-items");
-      if (!data) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setDragOverFolderKey(null);
-      const { imageIds, folderPaths } = JSON.parse(data);
-      const filteredFolders = folderPaths.filter(
-        (p: string) => p !== item.folder!.path,
-      );
-      if (imageIds.length > 0 || filteredFolders.length > 0) {
-        onDropItemsOnFolder(imageIds, filteredFolders, item.folder.path);
-      }
-    },
-    [onDropItemsOnFolder],
-  );
-
-  function handleFolderDragLeave(e: React.DragEvent) {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragOverFolderKey(null);
-    }
-  }
-
-  function handleContextMenu(item: DataPoolItem, index: number) {
-    setBgMenu(null);
-    if (!selectedKeys.has(item.key)) {
-      onItemClick(index, {
-        shiftKey: false,
-        metaKey: false,
-        ctrlKey: false,
-      } as React.MouseEvent);
-    }
-  }
-
-  function handleBgContextMenu(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).closest("[data-pool-item]")) return;
-    e.preventDefault();
-    setBgMenu({ x: e.clientX, y: e.clientY });
-    onClearSelection();
-  }
-
-  function handleBgClick(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).closest("[data-pool-item]")) return;
-    onClearSelection();
-  }
+  const {
+    bgMenu,
+    closeBgMenu,
+    handleContextMenu,
+    handleBgContextMenu,
+    handleBgClick,
+  } = useImageContextMenu({
+    selectedKeys,
+    onItemClick,
+    onClearSelection,
+  });
 
   const isMultiSelected = selectedKeys.size > 1;
-  const deleteLabel = variant === "task" ? "제거" : "삭제";
 
   function renderContextMenuContent(item: DataPoolItem) {
     if (isMultiSelected && selectedKeys.has(item.key)) {
@@ -368,7 +251,7 @@ export default function VirtualImageList({
                     className="flex items-center justify-center"
                   >
                     <span className="text-sm text-muted-foreground">
-                      {loadingMore ? "\uB85C\uB529 \uC911..." : ""}
+                      {loadingMore ? "로딩 중..." : ""}
                     </span>
                   </div>
                 );
@@ -493,7 +376,7 @@ export default function VirtualImageList({
                         </div>
                         <div className="w-28 shrink-0 px-3 py-1.5 text-sm text-muted-foreground">
                           {item.folder.subfolder_count > 0
-                            ? `${item.folder.subfolder_count}\uAC1C \uD558\uC704\uD3F4\uB354`
+                            ? `${item.folder.subfolder_count}개 하위폴더`
                             : "-"}
                         </div>
                         <div className="w-16 shrink-0 px-3 py-1.5 text-right">
@@ -616,7 +499,7 @@ export default function VirtualImageList({
             className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => {
-              setBgMenu(null);
+              closeBgMenu();
               onCreateFolderHere();
             }}
           >

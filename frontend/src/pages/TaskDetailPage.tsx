@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  ChevronDown,
-  ChevronRight,
-  FolderPlus,
-  LayoutGrid,
-  List,
-} from "lucide-react";
+import { Database, FolderPlus, LayoutGrid, List, ListTodo } from "lucide-react";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
 import { imagesApi } from "@/api/images";
@@ -22,11 +16,11 @@ import FolderBreadcrumb from "@/components/FolderBreadcrumb";
 import {
   TaskDetailHeader,
   TaskClassPanel,
-  TaskFolderTreeView,
-  type TaskFolderTreeRef,
-  PoolFolderCheckTree,
   VersionPanel,
 } from "@/components/task-detail";
+import FolderTreeView, {
+  type FolderTreeRef,
+} from "@/components/FolderTreeView";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPoolContentArea } from "@/components/data-pool";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
@@ -90,8 +84,34 @@ export default function TaskDetailPage() {
   const nextColor = CLASS_COLORS[classes.length % CLASS_COLORS.length];
   const [newClassColor, setNewClassColor] = useState(nextColor);
   const [savingClass, setSavingClass] = useState(false);
-  const treeRef = useRef<TaskFolderTreeRef>(null);
+  const treeRef = useRef<FolderTreeRef>(null);
   const handleBulkRemoveRef = useRef<() => void>(() => {});
+
+  const fetchTaskFolderContents = useCallback(
+    async (path: string) => {
+      const res = await tasksApi.getFolderContents(taskIdNum, path);
+      return res.data;
+    },
+    [taskIdNum],
+  );
+
+  const fetchTaskAllFolders = useCallback(async () => {
+    const res = await tasksApi.getAllFolders(taskIdNum);
+    return res.data;
+  }, [taskIdNum]);
+
+  const fetchPoolFolderContents = useCallback(
+    async (path: string) => {
+      const res = await imagesApi.getFolderContents(dataStore!.id, path);
+      return { folders: res.data.folders ?? [] };
+    },
+    [dataStore],
+  );
+
+  const fetchPoolAllFolders = useCallback(async () => {
+    const res = await imagesApi.getAllFolders(dataStore!.id);
+    return res.data;
+  }, [dataStore]);
 
   // -- Folder contents (React Query) --
   const {
@@ -606,7 +626,7 @@ export default function TaskDetailPage() {
   );
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col min-h-0">
       <TaskDetailHeader
         task={task}
         loading={taskLoading}
@@ -627,52 +647,44 @@ export default function TaskDetailPage() {
             <div
               className={`rounded-lg border flex flex-col min-h-0 ${poolCollapsed ? "shrink-0" : "flex-1"}`}
             >
-              {/* Pool 헤더 */}
-              <button
-                type="button"
-                className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors shrink-0 w-full text-left"
-                onClick={() => setPoolCollapsed((v) => !v)}
-              >
-                {poolCollapsed ? (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-                Data Pool
-              </button>
+              {!dataStore ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">
+                  Data Pool이 없습니다.
+                </p>
+              ) : (
+                <FolderTreeView
+                  checkable
+                  collapsible
+                  collapsed={poolCollapsed}
+                  onCollapsedChange={setPoolCollapsed}
+                  checkedPaths={poolCheckedPaths}
+                  onCheckPath={handlePoolCheckPath}
+                  fetchFolderContents={fetchPoolFolderContents}
+                  fetchAllFolders={fetchPoolAllFolders}
+                  rootLabel="Data Pool"
+                  rootIcon={
+                    <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  }
+                  rootImageCount={dataStore.image_count ?? 0}
+                />
+              )}
 
+              {/* Task에 추가 버튼 */}
               {!poolCollapsed && (
-                <>
-                  <div className="flex-1 overflow-y-auto px-1 pb-1 min-h-0">
-                    {!dataStore ? (
-                      <p className="py-4 text-center text-xs text-muted-foreground">
-                        Data Pool이 없습니다.
-                      </p>
-                    ) : (
-                      <PoolFolderCheckTree
-                        dataStoreId={dataStore.id}
-                        checkedPaths={poolCheckedPaths}
-                        onCheckPath={handlePoolCheckPath}
-                      />
-                    )}
-                  </div>
-
-                  {/* Task에 추가 버튼 */}
-                  <div className="px-2 pb-2 shrink-0">
-                    <Button
-                      size="sm"
-                      className="w-full text-xs h-7"
-                      disabled={poolAdding || poolCheckedPaths.size === 0}
-                      onClick={handleAddPoolToTask}
-                    >
-                      {poolAdding
-                        ? poolProgress
-                          ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
-                          : "추가 중..."
-                        : `↓ Task에 추가 (${poolCheckedPaths.size}개)`}
-                    </Button>
-                  </div>
-                </>
+                <div className="px-2 pb-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="w-full text-xs h-7"
+                    disabled={poolAdding || poolCheckedPaths.size === 0}
+                    onClick={handleAddPoolToTask}
+                  >
+                    {poolAdding
+                      ? poolProgress
+                        ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
+                        : "추가 중..."
+                      : `↓ Task에 추가 (${poolCheckedPaths.size}개)`}
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -681,12 +693,20 @@ export default function TaskDetailPage() {
 
             {/* Task 섹션 */}
             <div className="flex-1 rounded-lg border p-2 overflow-y-auto min-h-0">
-              <TaskFolderTreeView
+              <FolderTreeView
                 ref={treeRef}
-                taskId={taskIdNum}
+                fetchFolderContents={fetchTaskFolderContents}
+                fetchAllFolders={fetchTaskAllFolders}
                 rootLabel={task?.name ?? "Task"}
                 rootImageCount={task?.image_count ?? 0}
+                rootIcon={
+                  <ListTodo className="h-4 w-4 shrink-0 text-muted-foreground" />
+                }
                 selectedPath={currentPath}
+                acceptDropTypes={[
+                  "application/x-task-items",
+                  "application/x-datapool-items",
+                ]}
                 onSelectPath={handleNavigateFolder}
                 onDeleteFolder={handleDeleteFolder}
                 onUpdateFolder={handleUpdateFolder}
@@ -736,7 +756,7 @@ export default function TaskDetailPage() {
               onDragOver={() => {}}
               onDragLeave={() => {}}
               onDrop={() => {}}
-              variant="task"
+              deleteLabel="제거"
             />
           </div>
 

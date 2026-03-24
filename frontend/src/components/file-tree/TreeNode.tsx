@@ -5,6 +5,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  ImageIcon,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -16,12 +17,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import type { FolderTreeNode } from "./tree-utils";
+import type { FileTreeNode } from "./tree-utils";
 
 // -- 타입 정의 --
 
 export interface TreeNodeProps {
-  node: FolderTreeNode;
+  node: FileTreeNode;
   depth: number;
   selectedPath?: string;
   editingPath?: string | null;
@@ -49,10 +50,6 @@ export interface TreeNodeProps {
   onDragOver?: (e: React.DragEvent, path: string) => void;
   onDragLeave?: () => void;
   onDrop?: (e: React.DragEvent, targetPath: string) => void;
-  renderChildren?: (
-    children: FolderTreeNode[],
-    depth: number,
-  ) => React.ReactNode;
 }
 
 // -- 컴포넌트 --
@@ -86,11 +83,11 @@ export function TreeNode({
   onDragOver,
   onDragLeave,
   onDrop,
-  renderChildren,
 }: TreeNodeProps) {
+  const isFile = node.type === "file";
   const isSelected = selectedPath === node.path;
-  const hasChildren = node.subfolder_count > 0;
-  const isEditing = editingPath === node.path;
+  const hasChildren = !isFile;
+  const isEditing = !isFile && editingPath === node.path;
   const isDragging = draggingPath === node.path;
   const isDragOver = dragOverPath === node.path;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +127,7 @@ export function TreeNode({
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
-      if (isSelected && !readOnly) {
+      if (isSelected && !readOnly && !isFile) {
         onStartRename?.(node.path, node.name);
       }
       return;
@@ -155,10 +152,10 @@ export function TreeNode({
         ${isDragOver && (isValidDropTarget || draggingPath === null) ? "ring-2 ring-primary bg-primary/10" : ""}
       `}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
-      draggable={!isEditing && !readOnly}
+      draggable={!isFile && !isEditing && !readOnly}
       onContextMenu={() => onSelectPath?.(node.path)}
       onDragStart={
-        readOnly
+        readOnly || isFile
           ? undefined
           : (e) => {
               e.dataTransfer.setData("text/plain", node.path);
@@ -166,7 +163,7 @@ export function TreeNode({
               onDragStart?.(node.path);
             }
       }
-      onDragEnd={readOnly ? undefined : onDragEnd}
+      onDragEnd={readOnly || isFile ? undefined : onDragEnd}
       onDragOver={
         readOnly
           ? undefined
@@ -269,7 +266,9 @@ export function TreeNode({
           className="flex flex-1 items-center gap-1.5 overflow-hidden text-left"
           onClick={handleClick}
         >
-          {node.expanded ? (
+          {isFile ? (
+            <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : node.expanded ? (
             <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : (
             <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -277,82 +276,40 @@ export function TreeNode({
           <span className="truncate" title={node.name}>
             {node.name}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            ({node.image_count})
-          </span>
+          {!isFile && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              ({node.count})
+            </span>
+          )}
         </button>
       )}
     </div>
   );
 
-  return (
-    <div>
-      {isEditing || readOnly ? (
-        rowContent
-      ) : (
-        <ContextMenu>
-          <ContextMenuTrigger>{rowContent}</ContextMenuTrigger>
-          <ContextMenuContent className="w-40">
-            <ContextMenuItem onClick={() => onCreateFolder?.(node.path)}>
-              <FolderPlus className="mr-2 h-3.5 w-3.5" />새 폴더
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => onStartRename?.(node.path, node.name)}
-            >
-              <Pencil className="mr-2 h-3.5 w-3.5" />
-              이름 변경
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              variant="destructive"
-              onClick={() => onDeleteFolder?.(node.path)}
-            >
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              삭제
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      )}
+  if (isEditing || readOnly || isFile) {
+    return rowContent;
+  }
 
-      {node.expanded && node.children && node.children.length > 0 && (
-        <div>
-          {renderChildren
-            ? renderChildren(node.children, depth + 1)
-            : node.children.map((child) => (
-                <TreeNode
-                  key={child.path}
-                  node={child}
-                  depth={depth + 1}
-                  selectedPath={selectedPath}
-                  editingPath={editingPath}
-                  editName={editName}
-                  draggingPath={draggingPath}
-                  dragOverPath={dragOverPath}
-                  editStartTime={editStartTime}
-                  readOnly={readOnly}
-                  acceptDropTypes={acceptDropTypes}
-                  acceptFileDrop={acceptFileDrop}
-                  checkable={checkable}
-                  checked={checked}
-                  indeterminate={indeterminate}
-                  onCheck={onCheck}
-                  onSelectPath={onSelectPath}
-                  onToggleExpand={onToggleExpand}
-                  onDeleteFolder={onDeleteFolder}
-                  onCreateFolder={onCreateFolder}
-                  onStartRename={onStartRename}
-                  onEditNameChange={onEditNameChange}
-                  onFinishRename={onFinishRename}
-                  onCancelRename={onCancelRename}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onDrop={onDrop}
-                />
-              ))}
-        </div>
-      )}
-    </div>
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{rowContent}</ContextMenuTrigger>
+      <ContextMenuContent className="w-40">
+        <ContextMenuItem onClick={() => onCreateFolder?.(node.path)}>
+          <FolderPlus className="mr-2 h-3.5 w-3.5" />새 폴더
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onStartRename?.(node.path, node.name)}>
+          <Pencil className="mr-2 h-3.5 w-3.5" />
+          이름 변경
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => onDeleteFolder?.(node.path)}
+        >
+          <Trash2 className="mr-2 h-3.5 w-3.5" />
+          삭제
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

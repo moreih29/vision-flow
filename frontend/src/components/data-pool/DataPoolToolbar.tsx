@@ -72,7 +72,7 @@ export default function DataPoolToolbar({
       />
 
       <div className="mb-4 flex items-center justify-between select-none shrink-0">
-        <div>
+        <div className="min-w-0 flex-1">
           <FolderBreadcrumb
             currentPath={currentPath}
             onNavigate={(path) => onNavigateFolder(path ? path + "/" : "")}

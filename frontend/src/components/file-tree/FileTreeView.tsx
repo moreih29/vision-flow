@@ -285,7 +285,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
     }, [fetchFolderContents]);
 
     // -- 가상화 --
-    const flatNodes = useMemo(() => {
+    const { flatNodes, maxDepth } = useMemo(() => {
       const result: FlatNode[] = [];
       flattenTree(rootNodes, 0, result);
       if (rootHiddenFileCount > 0) {
@@ -299,7 +299,8 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
           });
         }
       }
-      return result;
+      const max = result.reduce((acc, fn) => Math.max(acc, fn.depth), 0);
+      return { flatNodes: result, maxDepth: max };
     }, [rootNodes, rootHiddenFileCount]);
 
     const virtualizer = useVirtualizer({
@@ -384,6 +385,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
               const existing = findNodeInTree(rootNodes, path);
               const children = buildTreeFromPaths(path);
               return {
+                type: "folder" as const,
                 path,
                 name,
                 count: existing?.count ?? 0,
@@ -1143,7 +1145,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         {!isCollapsed && (
           <div
             ref={scrollRef}
-            className="flex-1 min-h-0 overflow-y-auto select-none"
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-auto select-none"
             onDragOver={readOnly ? undefined : handleRootDragOver}
             onDragLeave={readOnly ? undefined : handleRootDragLeave}
             onDrop={readOnly ? undefined : handleRootDrop}
@@ -1154,6 +1156,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
                 width: "100%",
+                minWidth: maxDepth * 16 + 200,
                 position: "relative",
               }}
             >

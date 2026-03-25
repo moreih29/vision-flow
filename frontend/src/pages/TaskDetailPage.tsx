@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Database, FolderPlus, LayoutGrid, List, ListTodo } from "lucide-react";
+import {
+  Database,
+  FolderPlus,
+  LayoutGrid,
+  List,
+  ListTodo,
+  Upload,
+} from "lucide-react";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
 import { imagesApi } from "@/api/images";
@@ -23,7 +30,9 @@ import {
   type FileTreeRef as FolderTreeRef,
 } from "@/components/file-tree";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { DataPoolContentArea } from "@/components/data-pool";
+import { ImageGridCard, ImageListRow } from "@/components/data-pool";
+import { ContentArea } from "@/components/content-viewer";
+import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
 import { useTaskFolderContents } from "@/hooks/use-task-folder-contents";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
 import {
@@ -309,6 +318,24 @@ export default function TaskDetailPage() {
       [clearSelection, showAlert, refreshAll],
     ),
   );
+
+  // -- 아이템 D&D (폴더 간 이동) --
+  const {
+    dragOverFolderKey,
+    handleDragStart,
+    handleDragEnd,
+    handleFolderDragOver,
+    handleFolderDrop,
+    handleFolderDragLeave,
+  } = useImageDragDrop({
+    selectedKeys,
+    onDropItemsOnFolder: async (imageIds, folderPaths, targetPath) => {
+      await dropItems.mutate(imageIds, folderPaths, targetPath);
+    },
+    dragSource: "task",
+  });
+
+  const hasParentItem = items.length > 0 && items[0].type === "parent";
 
   // -- Navigation --
   const handleNavigateFolder = useCallback(
@@ -644,7 +671,7 @@ export default function TaskDetailPage() {
   // -- Toolbar --
   const toolbar = (
     <div className="mb-4 flex items-center justify-between select-none shrink-0">
-      <div>
+      <div className="min-w-0 flex-1">
         <FolderBreadcrumb
           currentPath={currentPath}
           onNavigate={(path) => handleNavigateFolder(path ? path + "/" : "")}
@@ -739,28 +766,23 @@ export default function TaskDetailPage() {
                   onRefresh={refreshPoolTree}
                 />
               )}
-
-              {/* Task에 추가 버튼 */}
-              {!poolCollapsed && (
-                <div className="px-2 pb-2 shrink-0">
-                  <Button
-                    size="sm"
-                    className="w-full text-xs h-7"
-                    disabled={poolAdding || poolCheckedPaths.size === 0}
-                    onClick={handleAddPoolToTask}
-                  >
-                    {poolAdding
-                      ? poolProgress
-                        ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
-                        : "추가 중..."
-                      : `↓ Task에 추가 (${[...poolCheckedPaths.values()].reduce((a, b) => a + b.count, 0)}개)`}
-                  </Button>
-                </div>
-              )}
             </div>
 
-            {/* 구분선 */}
-            <div className="border-t shrink-0" />
+            {/* Task에 추가 버튼 */}
+            <div className="shrink-0">
+              <Button
+                size="sm"
+                className="w-full text-xs h-7"
+                disabled={poolAdding || poolCheckedPaths.size === 0}
+                onClick={handleAddPoolToTask}
+              >
+                {poolAdding
+                  ? poolProgress
+                    ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
+                    : "추가 중..."
+                  : "↓ Task에 추가"}
+              </Button>
+            </div>
 
             {/* Task 섹션 */}
             <div className="flex-1 rounded-lg border p-2 flex flex-col overflow-hidden min-h-0">
@@ -791,42 +813,128 @@ export default function TaskDetailPage() {
           {/* 중앙: 콘텐츠 영역 */}
           <div className="min-w-0 flex-1 flex flex-col min-h-0">
             {toolbar}
-            <DataPoolContentArea
+            <ContentArea
               items={items}
               contentsLoading={contentsLoading}
               previewMode={previewMode}
               selectedKeys={selectedKeys}
               hasMore={taskImages.length < totalImages}
               loadingMore={loadingMore}
-              currentPath={currentPath}
-              renamingFolderPath={renamingFolderPath}
-              isDragOverUpload={false}
               onLoadMore={loadMoreImages}
               onItemClick={handleItemClick}
-              onNavigateFolder={handleNavigateFolder}
-              onNavigateUp={currentPath ? handleNavigateUp : undefined}
-              onDeleteImage={handleRemoveImage}
-              onDeleteFolder={handleDeleteFolder}
-              onCheckboxClick={toggleItem}
-              onMoveSelected={() => setMoveDialogOpen(true)}
-              onDeleteSelected={handleBulkRemove}
-              onRenameFolder={(path) => setRenamingFolderPath(path)}
-              onCreateFolderHere={handleCreateFolderInCurrentPath}
-              onFinishRenameFolder={handleFinishRenameInViewer}
-              onCancelRenameFolder={() => setRenamingFolderPath(null)}
               onClearSelection={clearSelection}
-              onDropItemsOnFolder={async (
-                imageIds,
-                folderPaths,
-                targetPath,
-              ) => {
-                // Task 컨텍스트: imageIds가 실제로는 task_image_ids
-                await dropItems.mutate(imageIds, folderPaths, targetPath);
-              }}
-              onDragOver={() => {}}
-              onDragLeave={() => {}}
-              onDrop={() => {}}
-              deleteLabel="제거"
+              hasParentItem={hasParentItem}
+              onNavigateUp={currentPath ? handleNavigateUp : undefined}
+              totalCount={
+                folders.length + totalImages + (hasParentItem ? 1 : 0)
+              }
+              renderBgMenu={(close) => (
+                <button
+                  type="button"
+                  className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    close();
+                    handleCreateFolderInCurrentPath();
+                  }}
+                >
+                  <FolderPlus className="h-3.5 w-3.5" />새 폴더
+                </button>
+              )}
+              renderGridItem={(item, flatIndex, isSelected) => (
+                <ImageGridCard
+                  key={item.key}
+                  item={item as DataPoolItem}
+                  flatIndex={flatIndex}
+                  isSelected={isSelected}
+                  selectedKeys={selectedKeys}
+                  renamingFolderPath={renamingFolderPath}
+                  dragOverFolderKey={dragOverFolderKey}
+                  deleteLabel="제거"
+                  onItemClick={handleItemClick}
+                  onCheckboxClick={toggleItem}
+                  onNavigateFolder={handleNavigateFolder}
+                  onRenameFolder={(path) => setRenamingFolderPath(path)}
+                  onFinishRenameFolder={handleFinishRenameInViewer}
+                  onCancelRenameFolder={() => setRenamingFolderPath(null)}
+                  onMoveSelected={() => setMoveDialogOpen(true)}
+                  onDeleteSelected={handleBulkRemove}
+                  onDeleteFolder={handleDeleteFolder}
+                  onDeleteImage={handleRemoveImage}
+                  onContextMenu={(_contextItem, index) => {
+                    handleItemClick(
+                      index,
+                      new MouseEvent("click") as unknown as React.MouseEvent,
+                    );
+                  }}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onFolderDragOver={handleFolderDragOver}
+                  onFolderDragLeave={handleFolderDragLeave}
+                  onFolderDrop={handleFolderDrop}
+                />
+              )}
+              renderListItem={(
+                item,
+                virtualRowIndex,
+                isSelected,
+                virtualRow,
+              ) => (
+                <ImageListRow
+                  key={`row-${virtualRowIndex}`}
+                  item={item as DataPoolItem}
+                  virtualRowIndex={virtualRowIndex}
+                  virtualRowSize={virtualRow.size}
+                  virtualRowStart={virtualRow.start}
+                  isSelected={isSelected}
+                  selectedKeys={selectedKeys}
+                  renamingFolderPath={renamingFolderPath}
+                  dragOverFolderKey={dragOverFolderKey}
+                  deleteLabel="제거"
+                  onItemClick={handleItemClick}
+                  onCheckboxClick={toggleItem}
+                  onNavigateFolder={handleNavigateFolder}
+                  onRenameFolder={(path) => setRenamingFolderPath(path)}
+                  onFinishRenameFolder={handleFinishRenameInViewer}
+                  onCancelRenameFolder={() => setRenamingFolderPath(null)}
+                  onMoveSelected={() => setMoveDialogOpen(true)}
+                  onDeleteSelected={handleBulkRemove}
+                  onDeleteFolder={handleDeleteFolder}
+                  onDeleteImage={handleRemoveImage}
+                  onContextMenu={(_contextItem, index) => {
+                    handleItemClick(
+                      index,
+                      new MouseEvent("click") as unknown as React.MouseEvent,
+                    );
+                  }}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onFolderDragOver={handleFolderDragOver}
+                  onFolderDragLeave={handleFolderDragLeave}
+                  onFolderDrop={handleFolderDrop}
+                />
+              )}
+              renderListHeader={() => (
+                <div className="flex border-b bg-muted/80 text-sm font-medium">
+                  <div className="w-10 shrink-0 px-3 py-2" />
+                  <div className="w-12 shrink-0 px-3 py-2" />
+                  <div className="flex-1 px-3 py-2">파일명</div>
+                  <div className="w-24 shrink-0 px-3 py-2">크기</div>
+                  <div className="w-28 shrink-0 px-3 py-2">해상도</div>
+                  <div className="w-16 shrink-0 px-3 py-2" />
+                </div>
+              )}
+              renderEmpty={() => (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    이 Task에 항목이 없습니다.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    좌측 Data Pool에서 항목을 추가하세요.
+                  </p>
+                </div>
+              )}
             />
           </div>
 
@@ -897,7 +1005,6 @@ export default function TaskDetailPage() {
 
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -957,11 +1064,9 @@ function TaskFolderMoveDialog({
           ))}
         </div>
         <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" onClick={onClose}>
-              취소
-            </Button>
-          </DialogClose>
+          <Button variant="outline" onClick={onClose}>
+            취소
+          </Button>
           <Button
             onClick={() => {
               onSelect(selected);

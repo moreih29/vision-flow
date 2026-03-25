@@ -25,6 +25,7 @@ export const tasksApi = {
   addImages: (taskId: number, imageIds: number[], folderPath: string = "") =>
     client.post<{
       added: number;
+      moved: number;
       skipped: number;
       images: TaskImageResponse[];
     }>(`/tasks/${taskId}/images`, {

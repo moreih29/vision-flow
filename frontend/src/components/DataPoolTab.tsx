@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Images } from "lucide-react";
+import { FolderPlus, Images, Upload } from "lucide-react";
 import { dataStoresApi } from "@/api/data-stores";
 import { imagesApi } from "@/api/images";
 import type { DataStore } from "@/types/data-store";
@@ -23,9 +23,12 @@ import {
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import {
   DataPoolToolbar,
-  DataPoolContentArea,
+  ImageGridCard,
+  ImageListRow,
   UploadProgressBar,
 } from "@/components/data-pool";
+import { ContentArea } from "@/components/content-viewer";
+import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
@@ -126,6 +129,8 @@ export default function DataPoolTab({
     [folders, images, currentPath],
   );
 
+  const hasParentItem = items.length > 0 && items[0].type === "parent";
+
   const itemKeys = useMemo(() => items.map((i) => i.key), [items]);
   const {
     selectedKeys,
@@ -198,6 +203,21 @@ export default function DataPoolTab({
     handleMainDrop,
     handleTreeExternalFileDrop,
   } = useExternalFileDrop(handleUpload);
+
+  // -- 아이템 D&D (폴더 간 이동) --
+  const {
+    dragOverFolderKey,
+    handleDragStart,
+    handleDragEnd,
+    handleFolderDragOver,
+    handleFolderDrop,
+    handleFolderDragLeave,
+  } = useImageDragDrop({
+    selectedKeys,
+    onDropItemsOnFolder: async (imageIds, folderPaths, targetPath) => {
+      await dropItems.mutate(imageIds, folderPaths, targetPath);
+    },
+  });
 
   // -- Bulk operations --
   const bulkDeleteMutation = useBulkDelete(
@@ -418,36 +438,128 @@ export default function DataPoolTab({
             onCreateFolder={handleCreateFolderInCurrentPath}
             onUpload={handleUpload}
           />
-          <DataPoolContentArea
+          <ContentArea
             items={items}
             contentsLoading={contentsLoading}
             previewMode={previewMode}
             selectedKeys={selectedKeys}
             hasMore={images.length < totalImages}
             loadingMore={loadingMore}
-            currentPath={currentPath}
-            renamingFolderPath={renamingFolderPath}
-            isDragOverUpload={isDragOverUpload}
             onLoadMore={loadMoreImages}
             onItemClick={handleItemClick}
-            onNavigateFolder={handleNavigateFolder}
-            onNavigateUp={currentPath ? handleNavigateUp : undefined}
-            onDeleteImage={handleDeleteImage}
-            onDeleteFolder={handleDeleteFolder}
-            onCheckboxClick={toggleItem}
-            onMoveSelected={() => setMoveDialogOpen(true)}
-            onDeleteSelected={handleBulkDelete}
-            onRenameFolder={(path) => setRenamingFolderPath(path)}
-            onCreateFolderHere={handleCreateFolderInCurrentPath}
-            onFinishRenameFolder={handleFinishRenameInViewer}
-            onCancelRenameFolder={() => setRenamingFolderPath(null)}
             onClearSelection={clearSelection}
-            onDropItemsOnFolder={async (imageIds, folderPaths, targetPath) => {
-              await dropItems.mutate(imageIds, folderPaths, targetPath);
+            hasParentItem={hasParentItem}
+            onNavigateUp={currentPath ? handleNavigateUp : undefined}
+            totalCount={folders.length + totalImages + (hasParentItem ? 1 : 0)}
+            renderBgMenu={(close) => (
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  close();
+                  handleCreateFolderInCurrentPath();
+                }}
+              >
+                <FolderPlus className="h-3.5 w-3.5" />새 폴더
+              </button>
+            )}
+            renderGridItem={(item, flatIndex, isSelected) => (
+              <ImageGridCard
+                key={item.key}
+                item={item as DataPoolItem}
+                flatIndex={flatIndex}
+                isSelected={isSelected}
+                selectedKeys={selectedKeys}
+                renamingFolderPath={renamingFolderPath}
+                dragOverFolderKey={dragOverFolderKey}
+                onItemClick={handleItemClick}
+                onCheckboxClick={toggleItem}
+                onNavigateFolder={handleNavigateFolder}
+                onRenameFolder={(path) => setRenamingFolderPath(path)}
+                onFinishRenameFolder={handleFinishRenameInViewer}
+                onCancelRenameFolder={() => setRenamingFolderPath(null)}
+                onMoveSelected={() => setMoveDialogOpen(true)}
+                onDeleteSelected={handleBulkDelete}
+                onDeleteFolder={handleDeleteFolder}
+                onDeleteImage={handleDeleteImage}
+                onContextMenu={(_contextItem, index) => {
+                  handleItemClick(
+                    index,
+                    new MouseEvent("click") as unknown as React.MouseEvent,
+                  );
+                }}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onFolderDragOver={handleFolderDragOver}
+                onFolderDragLeave={handleFolderDragLeave}
+                onFolderDrop={handleFolderDrop}
+              />
+            )}
+            renderListItem={(item, virtualRowIndex, isSelected, virtualRow) => (
+              <ImageListRow
+                key={`row-${virtualRowIndex}`}
+                item={item as DataPoolItem}
+                virtualRowIndex={virtualRowIndex}
+                virtualRowSize={virtualRow.size}
+                virtualRowStart={virtualRow.start}
+                isSelected={isSelected}
+                selectedKeys={selectedKeys}
+                renamingFolderPath={renamingFolderPath}
+                dragOverFolderKey={dragOverFolderKey}
+                onItemClick={handleItemClick}
+                onCheckboxClick={toggleItem}
+                onNavigateFolder={handleNavigateFolder}
+                onRenameFolder={(path) => setRenamingFolderPath(path)}
+                onFinishRenameFolder={handleFinishRenameInViewer}
+                onCancelRenameFolder={() => setRenamingFolderPath(null)}
+                onMoveSelected={() => setMoveDialogOpen(true)}
+                onDeleteSelected={handleBulkDelete}
+                onDeleteFolder={handleDeleteFolder}
+                onDeleteImage={handleDeleteImage}
+                onContextMenu={(_contextItem, index) => {
+                  handleItemClick(
+                    index,
+                    new MouseEvent("click") as unknown as React.MouseEvent,
+                  );
+                }}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onFolderDragOver={handleFolderDragOver}
+                onFolderDragLeave={handleFolderDragLeave}
+                onFolderDrop={handleFolderDrop}
+              />
+            )}
+            renderListHeader={() => (
+              <div className="flex border-b bg-muted/80 text-sm font-medium">
+                <div className="w-10 shrink-0 px-3 py-2" />
+                <div className="w-12 shrink-0 px-3 py-2" />
+                <div className="flex-1 px-3 py-2">파일명</div>
+                <div className="w-24 shrink-0 px-3 py-2">크기</div>
+                <div className="w-28 shrink-0 px-3 py-2">해상도</div>
+                <div className="w-16 shrink-0 px-3 py-2" />
+              </div>
+            )}
+            renderEmpty={() => (
+              <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                <Upload className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  이 폴더에 항목이 없습니다.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  파일을 드래그하거나 상단 버튼으로 업로드하세요.
+                </p>
+              </div>
+            )}
+            fileDrop={{
+              isDragOver: isDragOverUpload,
+              dropLabel: currentPath
+                ? `"${currentPath.replace(/\/$/, "").split("/").pop()}" 폴더에 업로드`
+                : "현재 위치에 파일 업로드",
+              onDragOver: handleMainDragOver,
+              onDragLeave: handleMainDragLeave,
+              onDrop: handleMainDrop,
             }}
-            onDragOver={handleMainDragOver}
-            onDragLeave={handleMainDragLeave}
-            onDrop={handleMainDrop}
           />
         </div>
       </div>

@@ -41,7 +41,7 @@ export function ImageQuickLook({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [open, stableOnOpenChange]);
+  }, [open, onOpenChange]);
 
   if (!current) return null;
 

@@ -1,64 +1,47 @@
-<!-- tags: architecture, system, tech-stack, services, communication -->
-# System Architecture
+<!-- tags: architecture, system, services, data-flow, overview -->
+<!-- tags: architecture, system, overview, services, data-flow -->
 
-## 모노레포 구조
+# 시스템 아키텍처
 
-세 개의 독립 서비스로 구성. 서비스 간 공유 패키지 없음, 각각 독립 빌드/배포.
-
-```
-vision-flow/
-├── frontend/       # React SPA (UI)
-├── backend/        # FastAPI (API Gateway + Business Logic)
-├── ai-worker/      # Celery Worker (AI Training/Inference)
-└── docker/         # 개발 인프라 (PostgreSQL, Redis)
-```
-
-## 서비스 간 통신 흐름
+## 서비스 구성
 
 ```
-Browser
-  │  HTTP (JWT Auth, /api/v1/*)
-  ▼
-Frontend (React 19, Vite 8)
-  │  Proxy /api/* → localhost:8100
-  ▼
-Backend (FastAPI, uvicorn)
-  ├── PostgreSQL (asyncpg) ─── 모든 CRUD
-  ├── Local Filesystem ─────── 이미지 파일 (hash-based CAS)
-  ├── Redis ─────────────────── Celery 브로커
-  │
-  │  Celery Task Dispatch (비동기)
-  ▼
-AI Worker (Celery Consumer)
-  ├── Redis (broker + result backend)
-  ├── Local Filesystem (모델 가중치, 학습 데이터)
-  └── GPU (YOLO 학습/추론)
+┌─────────────┐    /api/v1     ┌─────────────┐     async     ┌─────────────┐
+│  Frontend   │ ──(proxy)────▶ │   Backend   │ ──(asyncpg)─▶ │ PostgreSQL  │
+│  Vite:5273  │                │ FastAPI:8100│               │   16:5433   │
+└─────────────┘                └──────┬──────┘               └─────────────┘
+                                      │
+                                      │ Celery task
+                                      ▼
+                               ┌─────────────┐     broker    ┌─────────────┐
+                               │  AI Worker  │ ◀──(redis)──▶ │   Redis 7   │
+                               │   Celery    │               │   :6379     │
+                               └─────────────┘               └─────────────┘
 ```
 
-## 기술 스택
+| 서비스 | 기술 스택 | 역할 |
+|--------|-----------|------|
+| Frontend | React 19, TypeScript, Vite 8, Tailwind 4, shadcn/ui | SPA, 라벨링 캔버스 |
+| Backend | Python 3.11+, FastAPI, SQLAlchemy 2 (async), Alembic | REST API, 비즈니스 로직 |
+| AI Worker | Python 3.11+, Celery, Ultralytics (YOLO) | 모델 학습/추론 |
+| PostgreSQL 16 | asyncpg 드라이버 | 주 데이터베이스 |
+| Redis 7 | — | Celery broker/backend |
 
-| 계층 | 기술 |
-|------|------|
-| Frontend | React 19, TypeScript 5.9, Vite 8, Tailwind CSS 4, shadcn/ui (radix-nova/slate), Zustand 5, React Query, react-konva, Axios |
-| Backend | Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), Alembic, asyncpg, python-jose (JWT), bcrypt, aiofiles |
-| AI Worker | Python 3.11+, Celery, Ultralytics (YOLO), Redis |
-| Database | PostgreSQL 16 |
-| Cache/Queue | Redis 7 |
-| Dev Infra | Docker Compose |
+## 데이터 흐름
 
-## 포트 할당
+1. **이미지 업로드**: Frontend → Backend `/api/v1/images/upload` → LocalStorage(`./data/storage/`)에 파일 저장 + DB 레코드
+2. **폴더 탐색**: Frontend FileTreeView → Backend folder/image API → 페이지네이션(skip/limit) 응답
+3. **라벨링**: LabelingCanvas(Konva) → Backend annotation API → DB 저장
+4. **학습**: Backend → Celery task 발행 → AI Worker가 YOLO 학습 수행 → 결과 반환
 
-| 서비스 | 포트 | 비고 |
-|--------|------|------|
-| Frontend (Vite) | 5174 | 개발 서버 |
-| Backend (uvicorn) | 8100 | API 서버 |
-| PostgreSQL | 5433 | 기본 포트 충돌 방지 |
-| Redis | 6379 | 기본 포트 |
+## 스토리지
 
-## 핵심 설계 원칙
+- **파일 저장**: `StorageBackend` 추상 클래스 → 현재 `LocalStorage` 구현 (로컬 파일시스템)
+- **저장 경로**: `backend/data/storage/` (설정: `STORAGE_BASE_PATH`)
+- **확장 설계**: S3 등 오브젝트 스토리지 백엔드 추가 가능 (추상 인터페이스 준비됨)
 
-1. **Backend = 유일한 API Gateway**: Frontend↔DB/AI Worker 직접 접근 금지. 모든 인증·권한·비즈니스 로직은 Backend에서 처리.
-2. **비동기 AI 처리**: Celery를 통한 비동기 학습. 브라우저 닫아도 학습 중단 안됨. SSE로 실시간 모니터링 (D004).
-3. **스토리지 추상화**: `StorageBackend` ABC → 현재 `LocalStorage` (D001: MinIO가 GPU와 리소스 경쟁하므로 로컬 우선), 향후 S3 확장 가능. SHA-256 해시 기반 CAS로 중복 제거.
-4. **서비스 독립성**: 공유 코드 없음. AI Worker는 GPU 서버 분리 배포 가능.
-5. **Docker Compose는 인프라만** (D002): DB+Redis만 Docker, 앱은 호스트 실행 (HMR/핫리로드). 프로덕션은 별도 Dockerfile.
+## 인증
+
+- JWT 기반 (HS256), `Authorization: Bearer` 헤더
+- 토큰 만료: 7일 (설정 가능)
+- 401 응답 시 프론트엔드 자동 로그아웃 + 리다이렉트

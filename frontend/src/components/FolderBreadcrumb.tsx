@@ -43,13 +43,30 @@ export default function FolderBreadcrumb({
     setDropdownOpen(false);
   }
 
+  const segmentBtn = (
+    segment: string,
+    isLast: boolean,
+    onClick: () => void,
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-w-0 shrink truncate transition-colors hover:text-foreground ${
+        isLast ? "font-medium text-foreground" : "text-muted-foreground"
+      }`}
+      title={segment}
+    >
+      {segment}
+    </button>
+  );
+
   return (
-    <nav className="flex items-center gap-1 text-sm">
+    <nav className="flex items-center gap-1 text-sm min-w-0">
       {/* 루트 */}
       <button
         type="button"
         onClick={() => onNavigate("")}
-        className={`transition-colors hover:text-foreground ${
+        className={`shrink-0 transition-colors hover:text-foreground ${
           segments.length === 0
             ? "font-medium text-foreground"
             : "text-muted-foreground"
@@ -64,19 +81,9 @@ export default function FolderBreadcrumb({
           const path = segments.slice(0, index + 1).join("/");
           const isLast = index === segments.length - 1;
           return (
-            <span key={path} className="flex items-center gap-1">
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              <button
-                type="button"
-                onClick={() => onNavigate(path)}
-                className={`transition-colors hover:text-foreground ${
-                  isLast
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {segment}
-              </button>
+            <span key={path} className="flex items-center gap-1 min-w-0 shrink">
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {segmentBtn(segment, isLast, () => onNavigate(path))}
             </span>
           );
         })}
@@ -86,28 +93,20 @@ export default function FolderBreadcrumb({
         <>
           {/* 앞쪽 표시 세그먼트 */}
           {visibleStart.map((segment, index) => {
-            const isLast = false;
             const path = segments.slice(0, index + 1).join("/");
             return (
-              <span key={path} className="flex items-center gap-1">
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                <button
-                  type="button"
-                  onClick={() => onNavigate(path)}
-                  className={`transition-colors hover:text-foreground ${
-                    isLast
-                      ? "font-medium text-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {segment}
-                </button>
+              <span
+                key={path}
+                className="flex items-center gap-1 min-w-0 shrink"
+              >
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {segmentBtn(segment, false, () => onNavigate(path))}
               </span>
             );
           })}
 
           {/* 생략 버튼 + 드롭다운 */}
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 shrink-0">
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
             <div ref={dropdownRef} className="relative">
               <button
@@ -144,19 +143,12 @@ export default function FolderBreadcrumb({
             const isLast = absoluteIndex === segments.length - 1;
             const path = segments.slice(0, absoluteIndex + 1).join("/");
             return (
-              <span key={path} className="flex items-center gap-1">
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                <button
-                  type="button"
-                  onClick={() => onNavigate(path)}
-                  className={`transition-colors hover:text-foreground ${
-                    isLast
-                      ? "font-medium text-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {segment}
-                </button>
+              <span
+                key={path}
+                className="flex items-center gap-1 min-w-0 shrink"
+              >
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {segmentBtn(segment, isLast, () => onNavigate(path))}
               </span>
             );
           })}

@@ -148,7 +148,10 @@ export default function ImageGridCard({
                     onFocus={(e) => e.target.select()}
                   />
                 ) : (
-                  <span className="text-sm font-medium truncate max-w-[90%]">
+                  <span
+                    className="text-sm font-medium truncate max-w-[90%]"
+                    title={item.folder.name}
+                  >
                     {item.folder.name}
                   </span>
                 )}

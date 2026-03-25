@@ -671,7 +671,7 @@ export default function TaskDetailPage() {
   // -- Toolbar --
   const toolbar = (
     <div className="mb-4 flex items-center justify-between select-none shrink-0">
-      <div>
+      <div className="min-w-0 flex-1">
         <FolderBreadcrumb
           currentPath={currentPath}
           onNavigate={(path) => handleNavigateFolder(path ? path + "/" : "")}

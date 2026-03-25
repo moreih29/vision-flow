@@ -263,7 +263,7 @@ export function TreeNode({
       ) : (
         <button
           type="button"
-          className="flex flex-1 items-center gap-1.5 overflow-hidden text-left"
+          className="flex items-center gap-1.5 text-left"
           onClick={handleClick}
         >
           {isFile ? (
@@ -273,9 +273,7 @@ export function TreeNode({
           ) : (
             <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate" title={node.name}>
-            {node.name}
-          </span>
+          <span className="whitespace-nowrap">{node.name}</span>
           {!isFile && (
             <span className="shrink-0 text-xs text-muted-foreground">
               ({node.count})

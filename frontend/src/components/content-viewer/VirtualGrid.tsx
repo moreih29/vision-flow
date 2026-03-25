@@ -18,6 +18,9 @@ export default function VirtualGrid<T extends ViewerItem>({
   onNavigateUp,
   renderBgMenu,
   totalCount,
+  scrollToItemKey,
+  onScrollComplete,
+  onColumnsChange,
 }: VirtualGridProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
@@ -40,6 +43,10 @@ export default function VirtualGrid<T extends ViewerItem>({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    onColumnsChange?.(columns);
+  }, [columns, onColumnsChange]);
 
   // hasParentItem이 true이면 첫 번째 아이템은 상위 폴더 — 그리드에서 제외
   const gridItems = hasParentItem ? items.slice(1) : items;
@@ -67,6 +74,21 @@ export default function VirtualGrid<T extends ViewerItem>({
     estimateSize: () => itemSize,
     overscan: 3,
   });
+
+  // containerWidth 변경 시 virtualizer에 행 높이 재계산 요청
+  useEffect(() => {
+    virtualizer.measure();
+  }, [itemSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // scrollToItemKey 변경 시 해당 아이템 행으로 스크롤
+  useEffect(() => {
+    if (!scrollToItemKey) return;
+    const idx = gridItems.findIndex((item) => item.key === scrollToItemKey);
+    if (idx < 0) return;
+    const rowIdx = Math.floor(idx / columns);
+    virtualizer.scrollToIndex(rowIdx, { align: "center" });
+    onScrollComplete?.();
+  }, [scrollToItemKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // viewport에 보이는 placeholder 행이 있으면 onLoadMore 호출
   const virtualItems = virtualizer.getVirtualItems();
@@ -130,7 +152,7 @@ export default function VirtualGrid<T extends ViewerItem>({
         </div>
         <div
           ref={parentRef}
-          className="flex-1 min-h-0 overflow-y-auto rounded-md"
+          className="flex-1 min-h-0 overflow-y-auto rounded-md px-4"
           onContextMenu={handleBgContextMenu}
           onClick={handleBgClick}
         >

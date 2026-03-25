@@ -50,6 +50,7 @@ export interface TreeNodeProps {
   onDragOver?: (e: React.DragEvent, path: string) => void;
   onDragLeave?: () => void;
   onDrop?: (e: React.DragEvent, targetPath: string) => void;
+  onFileClick?: (path: string, fileId?: number) => void;
 }
 
 // -- 컴포넌트 --
@@ -83,6 +84,7 @@ export function TreeNode({
   onDragOver,
   onDragLeave,
   onDrop,
+  onFileClick,
 }: TreeNodeProps) {
   const isFile = node.type === "file";
   const isSelected = selectedPath === node.path;
@@ -119,8 +121,12 @@ export function TreeNode({
   }, [isEditing]);
 
   function handleSingleClick() {
-    onSelectPath?.(node.path);
-    if (hasChildren && !node.expanded) onToggleExpand(node.path);
+    if (isFile) {
+      onFileClick?.(node.path, node.fileId);
+    } else {
+      onSelectPath?.(node.path);
+      if (!node.expanded) onToggleExpand(node.path);
+    }
   }
 
   function handleClick() {

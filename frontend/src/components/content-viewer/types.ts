@@ -51,6 +51,12 @@ export interface ContentAreaProps<T extends ViewerItem> {
   fileDrop?: FileDropProps;
   /** 빈 상태 렌더러 — undefined이면 기본 메시지 표시 */
   renderEmpty?: () => React.ReactNode;
+  /** 이 key를 가진 아이템으로 자동 스크롤 */
+  scrollToItemKey?: string | null;
+  /** 스크롤 완료 후 호출 — 부모가 scrollToItemKey를 null로 리셋하는 데 사용 */
+  onScrollComplete?: () => void;
+  /** 그리드 열 수 변경 시 호출 */
+  onColumnsChange?: (columns: number) => void;
 }
 
 /** 가상 그리드 공통 props */
@@ -72,6 +78,12 @@ export interface VirtualGridProps<T extends ViewerItem> {
   renderBgMenu?: (close: () => void) => React.ReactNode;
   /** 전체 아이템 수 — 스크롤 전체 길이 미리 확보용 (없으면 기존 방식 fallback) */
   totalCount?: number;
+  /** 이 key를 가진 아이템으로 자동 스크롤 */
+  scrollToItemKey?: string | null;
+  /** 스크롤 완료 후 호출 — 부모가 scrollToItemKey를 null로 리셋하는 데 사용 */
+  onScrollComplete?: () => void;
+  /** 그리드 열 수 변경 시 호출 */
+  onColumnsChange?: (columns: number) => void;
 }
 
 /** 가상 리스트 renderItem에 전달되는 가상화 정보 */
@@ -108,4 +120,8 @@ export interface VirtualListProps<T extends ViewerItem> {
   renderBgMenu?: (close: () => void) => React.ReactNode;
   /** 전체 아이템 수 — 스크롤 전체 길이 미리 확보용 (없으면 기존 방식 fallback) */
   totalCount?: number;
+  /** 이 key를 가진 아이템으로 자동 스크롤 */
+  scrollToItemKey?: string | null;
+  /** 스크롤 완료 후 호출 — 부모가 scrollToItemKey를 null로 리셋하는 데 사용 */
+  onScrollComplete?: () => void;
 }

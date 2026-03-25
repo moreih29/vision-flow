@@ -94,6 +94,8 @@ export interface FileTreeRef {
   refresh: () => Promise<void>;
   expandAll: () => Promise<void>;
   collapseAll: () => void;
+  expandToPath: (path: string) => Promise<void>;
+  collapseBelow: (path: string) => void;
 }
 
 export interface FileTreeViewProps {
@@ -111,6 +113,7 @@ export interface FileTreeViewProps {
   acceptDropTypes?: string[];
   acceptFileDrop?: boolean;
   onSelectPath?: (path: string) => void;
+  onFileClick?: (path: string, fileId?: number) => void;
   onDeleteFolder?: (path: string) => Promise<void>;
   onUpdateFolder?: (oldPath: string, newPath: string) => Promise<void>;
   onCreateFolder?: (parentPath: string) => Promise<void>;
@@ -184,6 +187,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       acceptDropTypes = [],
       acceptFileDrop = false,
       onSelectPath,
+      onFileClick,
       onDeleteFolder,
       onUpdateFolder,
       onCreateFolder,
@@ -617,7 +621,85 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         loadedPagesRef.current.clear();
         handleCollapseAll();
       },
+      async expandToPath(targetPath: string) {
+        const segments = targetPath
+          .replace(/\/$/, "")
+          .split("/")
+          .filter(Boolean);
+        let current = "";
+        for (const seg of segments) {
+          current += seg + "/";
+          await expandNode(current);
+        }
+      },
+      collapseBelow(path: string) {
+        function collapseAllDescendants(nodes: FileTreeNode[]): FileTreeNode[] {
+          return nodes.map((n) => ({
+            ...n,
+            expanded: false,
+            children: n.children
+              ? collapseAllDescendants(n.children)
+              : n.children,
+          }));
+        }
+        setRootNodes((prev) => {
+          if (!path) {
+            // 루트로 이동: 모든 노드 접기
+            return collapseAllDescendants(prev);
+          }
+          const normalizedPath = path.endsWith("/") ? path : path + "/";
+          // 대상 노드의 자식들만 재귀적으로 접기
+          return updateNodeInTree(prev, normalizedPath, (n) => ({
+            ...n,
+            children: n.children
+              ? collapseAllDescendants(n.children)
+              : n.children,
+          }));
+        });
+      },
     }));
+
+    async function expandNode(path: string) {
+      const findNode = (nodes: FileTreeNode[]): FileTreeNode | undefined => {
+        for (const n of nodes) {
+          if (n.path === path) return n;
+          if (n.children) {
+            const found = findNode(n.children);
+            if (found) return found;
+          }
+        }
+        return undefined;
+      };
+
+      const node = findNode(rootNodes);
+      if (!node) return;
+      if (node.expanded && node.loaded) return; // 이미 확장됨
+
+      if (!node.loaded) {
+        try {
+          const result = await fetchFolderContents(path, 0, FILE_PAGE_SIZE);
+          const folderChildren = result.folders.map(buildFolderNode);
+          const { visibleFiles: fileChildren, hiddenCount } =
+            buildFileNodes(result);
+          const children = sortNodes([...folderChildren, ...fileChildren]);
+          setRootNodes((prev) =>
+            updateNodeInTree(prev, path, (n) => ({
+              ...n,
+              expanded: true,
+              loaded: true,
+              children,
+              totalFiles: hiddenCount > 0 ? hiddenCount : undefined,
+            })),
+          );
+        } catch {
+          // silently fail
+        }
+      } else {
+        setRootNodes((prev) =>
+          updateNodeInTree(prev, path, (n) => ({ ...n, expanded: true })),
+        );
+      }
+    }
 
     async function handleToggleExpand(path: string) {
       const findNode = (nodes: FileTreeNode[]): FileTreeNode | undefined => {
@@ -1221,6 +1303,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
                           : undefined
                       }
                       onSelectPath={onSelectPath}
+                      onFileClick={onFileClick}
                       onToggleExpand={handleToggleExpand}
                       onDeleteFolder={readOnly ? undefined : handleDeleteFolder}
                       onCreateFolder={readOnly ? undefined : handleCreateFolder}

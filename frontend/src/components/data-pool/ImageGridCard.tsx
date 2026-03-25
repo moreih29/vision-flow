@@ -24,6 +24,7 @@ interface ImageGridCardProps {
   onDeleteSelected: () => void;
   onDeleteFolder: (path: string) => void;
   onDeleteImage: (id: number) => void;
+  onImageDoubleClick?: (index: number) => void;
   onContextMenu: (item: DataPoolItem, index: number) => void;
   onDragStart: (e: React.DragEvent, item: DataPoolItem) => void;
   onDragEnd: () => void;
@@ -50,6 +51,7 @@ export default function ImageGridCard({
   onDeleteSelected,
   onDeleteFolder,
   onDeleteImage,
+  onImageDoubleClick,
   onContextMenu,
   onDragStart,
   onDragEnd,
@@ -123,7 +125,7 @@ export default function ImageGridCard({
                 >
                   {isSelected && <Check className="h-3 w-3" />}
                 </div>
-                <Folder className="h-12 w-12 text-muted-foreground" />
+                <Folder className="h-24 w-24 text-muted-foreground" />
                 {isRenaming ? (
                   <input
                     autoFocus
@@ -179,6 +181,7 @@ export default function ImageGridCard({
               e.stopPropagation();
               onItemClick(flatIndex, e);
             }}
+            onDoubleClick={() => onImageDoubleClick?.(flatIndex)}
             onContextMenu={() => onContextMenu(item, flatIndex)}
             draggable
             onDragStart={(e) => onDragStart(e, item)}

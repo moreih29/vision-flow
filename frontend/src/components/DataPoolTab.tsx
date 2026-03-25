@@ -28,6 +28,7 @@ import {
   UploadProgressBar,
 } from "@/components/data-pool";
 import { ContentArea } from "@/components/content-viewer";
+import { ImageQuickLook } from "@/components/content-viewer/ImageQuickLook";
 import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -61,7 +62,11 @@ export default function DataPoolTab({
   const [renamingFolderPath, setRenamingFolderPath] = useState<string | null>(
     null,
   );
+  const [quickLookIndex, setQuickLookIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scrollToItemKey, setScrollToItemKey] = useState<string | null>(null);
+  const [gridColumns, setGridColumns] = useState(5);
+  const pendingAutoSelectPathRef = useRef<string | null>(null);
   const treeRef = useRef<FolderTreeRef>(null);
   const handleBulkDeleteRef = useRef<() => void>(() => {});
   const { confirmDialog, confirm, showAlert } = useConfirmDialog();
@@ -129,6 +134,11 @@ export default function DataPoolTab({
     [folders, images, currentPath],
   );
 
+  const imageItems = useMemo(
+    () => items.filter((i) => i.type === "image"),
+    [items],
+  );
+
   const hasParentItem = items.length > 0 && items[0].type === "parent";
 
   const itemKeys = useMemo(() => items.map((i) => i.key), [items]);
@@ -139,7 +149,22 @@ export default function DataPoolTab({
     toggleItem,
     clearSelection,
     selectAll,
+    selectByKey,
+    selectTo,
+    cursorIndexRef,
   } = useMultiSelect(itemKeys, currentPath);
+
+  // 폴더 진입/상위 이동 후 첫 번째 아이템 자동 선택
+  // useMultiSelect 선언 이후에 위치하여 resetKey effect보다 나중에 실행되도록 보장
+  useEffect(() => {
+    if (pendingAutoSelectPathRef.current === null) return;
+    if (pendingAutoSelectPathRef.current !== currentPath) return;
+    const firstIdx = items[0]?.type === "parent" ? 1 : 0;
+    if (items[firstIdx]) {
+      pendingAutoSelectPathRef.current = null;
+      selectByKey(items[firstIdx].key);
+    }
+  }, [items, currentPath, selectByKey]);
   const selectedImageIds = useMemo(
     () =>
       [...selectedKeys]
@@ -296,6 +321,27 @@ export default function DataPoolTab({
     );
   }, [dataStoreList, dataStoresLoading, dataStoresError]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // -- Navigation --
+  const handleNavigateFolder = useCallback(
+    (path: string, autoSelect = false) => {
+      if (autoSelect) pendingAutoSelectPathRef.current = path;
+      onPathChange(path);
+      if (path) treeRef.current?.expandToPath(path);
+    },
+    [onPathChange],
+  );
+  const handleNavigateUp = useCallback(
+    (autoSelect = false) => {
+      if (!currentPath) return;
+      const parts = currentPath.replace(/\/$/, "").split("/");
+      parts.pop();
+      const newPath = parts.length > 0 ? parts.join("/") + "/" : "";
+      handleNavigateFolder(newPath, autoSelect);
+      treeRef.current?.collapseBelow(newPath);
+    },
+    [currentPath, handleNavigateFolder],
+  );
+
   // -- Keyboard shortcuts --
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -305,14 +351,145 @@ export default function DataPoolTab({
         selectAll();
       }
       if (e.key === "Escape") clearSelection();
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedCount > 0) {
+      if (e.key === "Delete" && selectedCount > 0) {
         e.preventDefault();
         handleBulkDeleteRef.current();
+      }
+      // Backspace: 상위 폴더 이동
+      if (e.key === "Backspace") {
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (currentPath) {
+          e.preventDefault();
+          handleNavigateUp(true);
+        }
+      }
+      // Enter: 폴더 1개 선택 시 진입
+      if (e.key === "Enter") {
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (selectedKeys.size === 1) {
+          const selectedKey = [...selectedKeys][0];
+          const selectedItem = items.find((i) => i.key === selectedKey);
+          if (selectedItem?.type === "folder" && selectedItem.folder) {
+            e.preventDefault();
+            handleNavigateFolder(selectedItem.folder.path, true);
+          }
+        }
+      }
+      if (e.key === " ") {
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        // 다중 선택 시 cursor 위치의 이미지로 모달 열기
+        if (selectedKeys.size > 0 && cursorIndexRef.current >= 0) {
+          const cursorItem = items[cursorIndexRef.current];
+          if (cursorItem?.type === "image") {
+            e.preventDefault();
+            const imageIndex = imageItems.findIndex(
+              (i) => i.key === cursorItem.key,
+            );
+            if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+            return;
+          }
+        }
+        const selectedImageKeys = [...selectedKeys].filter((k) =>
+          k.startsWith("i:"),
+        );
+        if (selectedImageKeys.length === 1) {
+          e.preventDefault();
+          const imageIndex = imageItems.findIndex(
+            (i) => i.key === selectedImageKeys[0],
+          );
+          if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+        }
+      }
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        if (quickLookIndex !== null) return;
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+        const minIdx = items[0]?.type === "parent" ? 1 : 0;
+
+        let currentIdx: number;
+        if (e.shiftKey && selectedKeys.size > 0) {
+          // Shift 모드: cursor 기준
+          currentIdx =
+            cursorIndexRef.current >= 0 ? cursorIndexRef.current : minIdx - 1;
+        } else if (selectedKeys.size === 0) {
+          currentIdx = minIdx - 1;
+        } else if (cursorIndexRef.current >= 0) {
+          // 다중 선택 후 일반 이동: cursor(마지막 위치) 기준
+          currentIdx = cursorIndexRef.current;
+        } else if (selectedKeys.size === 1) {
+          const selectedKey = [...selectedKeys][0];
+          currentIdx = items.findIndex((i) => i.key === selectedKey);
+          if (currentIdx < 0) return;
+        } else {
+          return;
+        }
+
+        let nextIdx = currentIdx;
+        if (previewMode === "list") {
+          if (e.key === "ArrowUp") nextIdx = currentIdx - 1;
+          else if (e.key === "ArrowDown") nextIdx = currentIdx + 1;
+          else if (e.key === "ArrowRight") {
+            // 리스트뷰: Shift 없을 때만 폴더 진입
+            if (!e.shiftKey && selectedKeys.size === 1) {
+              const selectedKey = [...selectedKeys][0];
+              const selectedItem = items.find((i) => i.key === selectedKey);
+              if (selectedItem?.type === "folder" && selectedItem.folder) {
+                e.preventDefault();
+                handleNavigateFolder(selectedItem.folder.path, true);
+              }
+            }
+            return;
+          } else if (e.key === "ArrowLeft") {
+            // 리스트뷰: Shift 없을 때만 상위 폴더 이동
+            if (!e.shiftKey && currentPath) {
+              e.preventDefault();
+              handleNavigateUp(true);
+            }
+            return;
+          } else return;
+        } else {
+          if (e.key === "ArrowLeft") nextIdx = currentIdx - 1;
+          else if (e.key === "ArrowRight") nextIdx = currentIdx + 1;
+          else if (e.key === "ArrowUp") nextIdx = currentIdx - gridColumns;
+          else if (e.key === "ArrowDown") nextIdx = currentIdx + gridColumns;
+        }
+
+        if (nextIdx < minIdx || nextIdx >= items.length) return;
+
+        e.preventDefault();
+        if (e.shiftKey) {
+          selectTo(nextIdx);
+        } else {
+          const nextKey = items[nextIdx].key;
+          selectByKey(nextKey);
+        }
+        setScrollToItemKey(items[nextIdx].key);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectAll, clearSelection, selectedCount, moveDialogOpen]);
+  }, [
+    selectAll,
+    clearSelection,
+    selectedCount,
+    moveDialogOpen,
+    selectedKeys,
+    imageItems,
+    quickLookIndex,
+    items,
+    previewMode,
+    gridColumns,
+    selectByKey,
+    selectTo,
+    cursorIndexRef,
+    currentPath,
+    handleNavigateFolder,
+    handleNavigateUp,
+  ]);
 
   // -- Bulk handlers --
   async function handleBulkDelete() {
@@ -343,20 +520,18 @@ export default function DataPoolTab({
     [dropItems],
   );
 
-  // -- Navigation --
-  const handleNavigateFolder = useCallback(
-    (path: string) => {
-      clearSelection();
-      onPathChange(path);
+  const handleFileClick = useCallback(
+    (path: string, fileId?: number) => {
+      if (fileId == null) return;
+      const lastSlash = path.lastIndexOf("/");
+      const parentPath = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : "";
+      const key = `i:${fileId}`;
+      selectByKey(key);
+      setScrollToItemKey(key);
+      onPathChange(parentPath);
     },
-    [clearSelection, onPathChange],
+    [onPathChange, selectByKey],
   );
-  const handleNavigateUp = useCallback(() => {
-    if (!currentPath) return;
-    const parts = currentPath.replace(/\/$/, "").split("/");
-    parts.pop();
-    handleNavigateFolder(parts.length > 0 ? parts.join("/") + "/" : "");
-  }, [currentPath, handleNavigateFolder]);
 
   const handleTreeRefresh = useCallback(async () => {
     if (!dataStore) return;
@@ -413,6 +588,7 @@ export default function DataPoolTab({
               acceptDropTypes={["application/x-datapool-items"]}
               acceptFileDrop
               onSelectPath={onPathChange}
+              onFileClick={handleFileClick}
               onDeleteFolder={handleDeleteFolder}
               onUpdateFolder={handleUpdateFolder}
               onCreateFolder={handleCreateFolder}
@@ -450,7 +626,12 @@ export default function DataPoolTab({
             onClearSelection={clearSelection}
             hasParentItem={hasParentItem}
             onNavigateUp={currentPath ? handleNavigateUp : undefined}
-            totalCount={folders.length + totalImages + (hasParentItem ? 1 : 0)}
+            totalCount={
+              totalImages > 0 ? folders.length + totalImages : undefined
+            }
+            scrollToItemKey={scrollToItemKey}
+            onScrollComplete={() => setScrollToItemKey(null)}
+            onColumnsChange={(cols) => setGridColumns(cols)}
             renderBgMenu={(close) => (
               <button
                 type="button"
@@ -483,6 +664,12 @@ export default function DataPoolTab({
                 onDeleteSelected={handleBulkDelete}
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteImage={handleDeleteImage}
+                onImageDoubleClick={(flatIdx) => {
+                  const imageIndex = imageItems.findIndex(
+                    (i) => i === items[flatIdx],
+                  );
+                  if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                }}
                 onContextMenu={(_contextItem, index) => {
                   handleItemClick(
                     index,
@@ -517,6 +704,12 @@ export default function DataPoolTab({
                 onDeleteSelected={handleBulkDelete}
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteImage={handleDeleteImage}
+                onImageDoubleClick={(rowIdx) => {
+                  const imageIndex = imageItems.findIndex(
+                    (i) => i === items[rowIdx],
+                  );
+                  if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                }}
                 onContextMenu={(_contextItem, index) => {
                   handleItemClick(
                     index,
@@ -580,6 +773,25 @@ export default function DataPoolTab({
           excludePaths={selectedFolderPaths}
         />
       )}
+      <ImageQuickLook
+        images={imageItems.map((i) => ({
+          id: i.image!.id,
+          filename: i.image!.original_filename,
+          width: i.image!.width ?? undefined,
+          height: i.image!.height ?? undefined,
+        }))}
+        currentIndex={quickLookIndex ?? 0}
+        open={quickLookIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) setQuickLookIndex(null);
+        }}
+        onIndexChange={(idx) => {
+          setQuickLookIndex(idx);
+          const item = imageItems[idx];
+          if (item) selectByKey(item.key);
+        }}
+        getImageUrl={(id) => imagesApi.getFileUrl(id)}
+      />
       {confirmDialog}
     </div>
   );

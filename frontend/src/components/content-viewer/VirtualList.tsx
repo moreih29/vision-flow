@@ -19,6 +19,8 @@ export default function VirtualList<T extends ViewerItem>({
   onNavigateUp,
   renderBgMenu,
   totalCount,
+  scrollToItemKey,
+  onScrollComplete,
 }: VirtualListProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +40,15 @@ export default function VirtualList<T extends ViewerItem>({
     estimateSize: (index) => (index === 0 && hasParentItem ? 0 : 52),
     overscan: 10,
   });
+
+  // scrollToItemKey 변경 시 해당 아이템 행으로 스크롤
+  useEffect(() => {
+    if (!scrollToItemKey) return;
+    const idx = items.findIndex((item) => item.key === scrollToItemKey);
+    if (idx < 0) return;
+    virtualizer.scrollToIndex(idx, { align: "center" });
+    onScrollComplete?.();
+  }, [scrollToItemKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // viewport에 보이는 placeholder 행이 있으면 onLoadMore 호출
   const virtualItems = virtualizer.getVirtualItems();

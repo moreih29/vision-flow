@@ -23,6 +23,9 @@ export default function ContentArea<T extends ViewerItem>({
   fileDrop,
   renderEmpty,
   totalCount,
+  scrollToItemKey,
+  onScrollComplete,
+  onColumnsChange,
 }: ContentAreaProps<T>) {
   return (
     <div
@@ -78,6 +81,9 @@ export default function ContentArea<T extends ViewerItem>({
               renderBgMenu={renderBgMenu}
               renderItem={renderGridItem}
               totalCount={totalCount}
+              scrollToItemKey={scrollToItemKey}
+              onScrollComplete={onScrollComplete}
+              onColumnsChange={onColumnsChange}
             />
           ) : (
             <VirtualList
@@ -94,6 +100,8 @@ export default function ContentArea<T extends ViewerItem>({
               renderHeader={renderListHeader}
               renderItem={renderListItem}
               totalCount={totalCount}
+              scrollToItemKey={scrollToItemKey}
+              onScrollComplete={onScrollComplete}
             />
           )}
         </div>

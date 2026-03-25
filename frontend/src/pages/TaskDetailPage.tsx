@@ -13,6 +13,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
 import { imagesApi } from "@/api/images";
 import { dataStoresApi } from "@/api/data-stores";
+import { ImageQuickLook } from "@/components/content-viewer/ImageQuickLook";
 import { labelClassesApi } from "@/api/label-classes";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
@@ -57,6 +58,7 @@ export default function TaskDetailPage() {
   // -- Core state --
   const [task, setTask] = useState<Task | null>(null);
   const [classes, setClasses] = useState<LabelClass[]>([]);
+  const [quickLookIndex, setQuickLookIndex] = useState<number | null>(null);
   const [taskLoading, setTaskLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState("");
@@ -77,6 +79,8 @@ export default function TaskDetailPage() {
     null,
   );
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [scrollToItemKey, setScrollToItemKey] = useState<string | null>(null);
+  const [gridColumns, setGridColumns] = useState(5);
   const [addingClass, setAddingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
   const CLASS_COLORS = [
@@ -202,6 +206,12 @@ export default function TaskDetailPage() {
     [folders, taskImages, currentPath],
   );
 
+  // QuickLook용 이미지 목록 (폴더/parent 제외)
+  const imageItems = useMemo(
+    () => items.filter((i) => i.type === "image" && i.image),
+    [items],
+  );
+
   const itemKeys = useMemo(() => items.map((i) => i.key), [items]);
   const {
     selectedKeys,
@@ -210,6 +220,9 @@ export default function TaskDetailPage() {
     toggleItem,
     clearSelection,
     selectAll,
+    selectByKey,
+    selectTo,
+    cursorIndexRef,
   } = useMultiSelect(itemKeys, currentPath);
 
   // 선택된 task_image_id 추출 (key가 "i:{task_image_id}")
@@ -337,21 +350,58 @@ export default function TaskDetailPage() {
 
   const hasParentItem = items.length > 0 && items[0].type === "parent";
 
+  const pendingAutoSelectPathRef = useRef<string | null>(null);
+
   // -- Navigation --
   const handleNavigateFolder = useCallback(
-    (path: string) => {
-      clearSelection();
+    (path: string, autoSelect = false) => {
+      if (autoSelect) pendingAutoSelectPathRef.current = path;
       setCurrentPath(path);
+      if (path) treeRef.current?.expandToPath(path);
     },
-    [clearSelection],
+    [],
   );
 
-  const handleNavigateUp = useCallback(() => {
-    if (!currentPath) return;
-    const parts = currentPath.replace(/\/$/, "").split("/");
-    parts.pop();
-    handleNavigateFolder(parts.length > 0 ? parts.join("/") + "/" : "");
-  }, [currentPath, handleNavigateFolder]);
+  // 폴더 진입/상위 이동 후 첫 번째 아이템 자동 선택
+  // useMultiSelect 선언(line 216) 이후에 위치하여 resetKey effect보다 나중에 실행되도록 보장
+  useEffect(() => {
+    if (pendingAutoSelectPathRef.current === null) return;
+    if (pendingAutoSelectPathRef.current !== currentPath) return;
+    const firstIdx = items[0]?.type === "parent" ? 1 : 0;
+    if (items[firstIdx]) {
+      pendingAutoSelectPathRef.current = null;
+      selectByKey(items[firstIdx].key);
+    }
+  }, [items, currentPath, selectByKey]);
+
+  const handleNavigateUp = useCallback(
+    (autoSelect = false) => {
+      if (!currentPath) return;
+      const parts = currentPath.replace(/\/$/, "").split("/");
+      parts.pop();
+      const newPath = parts.length > 0 ? parts.join("/") + "/" : "";
+      handleNavigateFolder(newPath, autoSelect);
+      treeRef.current?.collapseBelow(newPath);
+    },
+    [currentPath, handleNavigateFolder],
+  );
+
+  const handleFileClick = useCallback(
+    (path: string, fileId?: number) => {
+      if (fileId == null) return;
+      const lastSlash = path.lastIndexOf("/");
+      const parentPath = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : "";
+      // fileId는 image_id. taskImages에서 해당 task_image_id(ti.id)를 찾아 선택
+      const ti = taskImages.find((t) => t.image_id === fileId);
+      if (ti) {
+        const key = `i:${ti.id}`;
+        selectByKey(key);
+        setScrollToItemKey(key);
+      }
+      setCurrentPath(parentPath);
+    },
+    [taskImages, selectByKey],
+  );
 
   // -- Tree handlers --
   const handleItemDrop = useCallback(
@@ -405,14 +455,156 @@ export default function TaskDetailPage() {
         selectAll();
       }
       if (e.key === "Escape") clearSelection();
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedCount > 0) {
+      if (e.key === "Delete" && selectedCount > 0) {
         e.preventDefault();
         handleBulkRemoveRef.current();
+      }
+      // Backspace: 상위 폴더 이동
+      if (e.key === "Backspace") {
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (currentPath) {
+          e.preventDefault();
+          handleNavigateUp(true);
+        }
+      }
+      // Enter: 폴더 1개 선택 시 진입
+      if (e.key === "Enter") {
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (selectedKeys.size === 1) {
+          const selectedKey = [...selectedKeys][0];
+          const selectedItem = items.find((i) => i.key === selectedKey);
+          if (selectedItem?.type === "folder" && selectedItem.folder) {
+            e.preventDefault();
+            handleNavigateFolder(selectedItem.folder.path, true);
+          }
+        }
+      }
+      // Space 키: QuickLook 열기 (닫기는 모달이 capture phase에서 처리)
+      if (e.key === " ") {
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable
+        )
+          return;
+        // 다중 선택 시 cursor 위치의 이미지로 모달 열기
+        if (selectedKeys.size > 0 && cursorIndexRef.current >= 0) {
+          const cursorItem = items[cursorIndexRef.current];
+          if (cursorItem?.type === "image") {
+            e.preventDefault();
+            const imageIndex = imageItems.findIndex(
+              (i) => i.key === cursorItem.key,
+            );
+            if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+            return;
+          }
+        }
+        const selectedImageKeys = [...selectedKeys].filter((k) =>
+          k.startsWith("i:"),
+        );
+        if (selectedImageKeys.length === 1) {
+          e.preventDefault();
+          const itemIndex = items.findIndex(
+            (item) => item.key === selectedImageKeys[0],
+          );
+          const imageIndex = imageItems.findIndex(
+            (item) => item.key === selectedImageKeys[0],
+          );
+          if (itemIndex !== -1 && imageIndex !== -1) {
+            setQuickLookIndex(imageIndex);
+          }
+        }
+      }
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        if (quickLookIndex !== null) return;
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+        const minIdx = items[0]?.type === "parent" ? 1 : 0;
+
+        let currentIdx: number;
+        if (e.shiftKey && selectedKeys.size > 0) {
+          // Shift 모드: cursor 기준
+          currentIdx =
+            cursorIndexRef.current >= 0 ? cursorIndexRef.current : minIdx - 1;
+        } else if (selectedKeys.size === 0) {
+          currentIdx = minIdx - 1;
+        } else if (cursorIndexRef.current >= 0) {
+          // 다중 선택 후 일반 이동: cursor(마지막 위치) 기준
+          currentIdx = cursorIndexRef.current;
+        } else if (selectedKeys.size === 1) {
+          const selectedKey = [...selectedKeys][0];
+          currentIdx = items.findIndex((i) => i.key === selectedKey);
+          if (currentIdx < 0) return;
+        } else {
+          return;
+        }
+
+        let nextIdx = currentIdx;
+        if (previewMode === "list") {
+          if (e.key === "ArrowUp") nextIdx = currentIdx - 1;
+          else if (e.key === "ArrowDown") nextIdx = currentIdx + 1;
+          else if (e.key === "ArrowRight") {
+            // 리스트뷰: Shift 없을 때만 폴더 진입
+            if (!e.shiftKey && selectedKeys.size === 1) {
+              const selectedKey = [...selectedKeys][0];
+              const selectedItem = items.find((i) => i.key === selectedKey);
+              if (selectedItem?.type === "folder" && selectedItem.folder) {
+                e.preventDefault();
+                handleNavigateFolder(selectedItem.folder.path, true);
+              }
+            }
+            return;
+          } else if (e.key === "ArrowLeft") {
+            // 리스트뷰: Shift 없을 때만 상위 폴더 이동
+            if (!e.shiftKey && currentPath) {
+              e.preventDefault();
+              handleNavigateUp(true);
+            }
+            return;
+          } else return;
+        } else {
+          if (e.key === "ArrowLeft") nextIdx = currentIdx - 1;
+          else if (e.key === "ArrowRight") nextIdx = currentIdx + 1;
+          else if (e.key === "ArrowUp") nextIdx = currentIdx - gridColumns;
+          else if (e.key === "ArrowDown") nextIdx = currentIdx + gridColumns;
+        }
+
+        if (nextIdx < minIdx || nextIdx >= items.length) return;
+
+        e.preventDefault();
+        if (e.shiftKey) {
+          selectTo(nextIdx);
+        } else {
+          const nextKey = items[nextIdx].key;
+          selectByKey(nextKey);
+        }
+        setScrollToItemKey(items[nextIdx].key);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectAll, clearSelection, selectedCount, moveDialogOpen]);
+  }, [
+    selectAll,
+    clearSelection,
+    selectedCount,
+    moveDialogOpen,
+    selectedKeys,
+    items,
+    imageItems,
+    quickLookIndex,
+    previewMode,
+    gridColumns,
+    selectByKey,
+    selectTo,
+    cursorIndexRef,
+    currentPath,
+    handleNavigateFolder,
+    handleNavigateUp,
+  ]);
 
   // -- DataStore 로드 --
   useEffect(() => {
@@ -801,6 +993,7 @@ export default function TaskDetailPage() {
                   "application/x-datapool-items",
                 ]}
                 onSelectPath={handleNavigateFolder}
+                onFileClick={handleFileClick}
                 onDeleteFolder={handleDeleteFolder}
                 onUpdateFolder={handleUpdateFolder}
                 onCreateFolder={handleCreateFolder}
@@ -826,8 +1019,11 @@ export default function TaskDetailPage() {
               hasParentItem={hasParentItem}
               onNavigateUp={currentPath ? handleNavigateUp : undefined}
               totalCount={
-                folders.length + totalImages + (hasParentItem ? 1 : 0)
+                totalImages > 0 ? folders.length + totalImages : undefined
               }
+              scrollToItemKey={scrollToItemKey}
+              onScrollComplete={() => setScrollToItemKey(null)}
+              onColumnsChange={(cols) => setGridColumns(cols)}
               renderBgMenu={(close) => (
                 <button
                   type="button"
@@ -861,6 +1057,12 @@ export default function TaskDetailPage() {
                   onDeleteSelected={handleBulkRemove}
                   onDeleteFolder={handleDeleteFolder}
                   onDeleteImage={handleRemoveImage}
+                  onImageDoubleClick={() => {
+                    const imageIndex = imageItems.findIndex(
+                      (img) => img.key === item.key,
+                    );
+                    if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                  }}
                   onContextMenu={(_contextItem, index) => {
                     handleItemClick(
                       index,
@@ -901,6 +1103,12 @@ export default function TaskDetailPage() {
                   onDeleteSelected={handleBulkRemove}
                   onDeleteFolder={handleDeleteFolder}
                   onDeleteImage={handleRemoveImage}
+                  onImageDoubleClick={() => {
+                    const imageIndex = imageItems.findIndex(
+                      (img) => img.key === item.key,
+                    );
+                    if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                  }}
                   onContextMenu={(_contextItem, index) => {
                     handleItemClick(
                       index,
@@ -995,6 +1203,26 @@ export default function TaskDetailPage() {
           }}
         />
       )}
+
+      <ImageQuickLook
+        images={imageItems.map((item) => ({
+          id: item.image!.id,
+          filename: item.image!.original_filename,
+          width: item.image!.width ?? undefined,
+          height: item.image!.height ?? undefined,
+        }))}
+        currentIndex={quickLookIndex ?? 0}
+        open={quickLookIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) setQuickLookIndex(null);
+        }}
+        onIndexChange={(idx) => {
+          setQuickLookIndex(idx);
+          const item = imageItems[idx];
+          if (item) selectByKey(item.key);
+        }}
+        getImageUrl={(id) => imagesApi.getFileUrl(id)}
+      />
 
       {confirmDialog}
     </div>

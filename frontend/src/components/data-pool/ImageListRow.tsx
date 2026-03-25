@@ -26,6 +26,7 @@ interface ImageListRowProps {
   onDeleteSelected: () => void;
   onDeleteFolder: (path: string) => void;
   onDeleteImage: (id: number) => void;
+  onImageDoubleClick?: (index: number) => void;
   onContextMenu: (item: DataPoolItem, index: number) => void;
   onDragStart: (e: React.DragEvent, item: DataPoolItem) => void;
   onDragEnd: () => void;
@@ -54,6 +55,7 @@ export default function ImageListRow({
   onDeleteSelected,
   onDeleteFolder,
   onDeleteImage,
+  onImageDoubleClick,
   onContextMenu,
   onDragStart,
   onDragEnd,
@@ -200,6 +202,7 @@ export default function ImageListRow({
               isSelected ? "bg-primary/10" : "hover:bg-muted/30"
             }`}
             onClick={(e) => onItemClick(virtualRowIndex, e)}
+            onDoubleClick={() => onImageDoubleClick?.(virtualRowIndex)}
             onContextMenu={() => onContextMenu(item, virtualRowIndex)}
             draggable
             onDragStart={(e) => onDragStart(e, item)}

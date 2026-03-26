@@ -13,7 +13,10 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
 import { imagesApi } from "@/api/images";
 import { dataStoresApi } from "@/api/data-stores";
-import { ImageQuickLook } from "@/components/content-viewer/ImageQuickLook";
+import {
+  ImageQuickLook,
+  type QuickLookItem,
+} from "@/components/content-viewer/ImageQuickLook";
 import { labelClassesApi } from "@/api/label-classes";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
@@ -58,7 +61,7 @@ export default function TaskDetailPage() {
   // -- Core state --
   const [task, setTask] = useState<Task | null>(null);
   const [classes, setClasses] = useState<LabelClass[]>([]);
-  const [quickLookIndex, setQuickLookIndex] = useState<number | null>(null);
+  const [quickLookOpen, setQuickLookOpen] = useState(false);
   const [taskLoading, setTaskLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState("");
@@ -224,6 +227,40 @@ export default function TaskDetailPage() {
     selectTo,
     cursorIndexRef,
   } = useMultiSelect(itemKeys, currentPath);
+
+  // 현재 cursor 위치 아이템 기반 QuickLookItem 계산
+  const quickLookItem = useMemo((): QuickLookItem | null => {
+    const idx = cursorIndexRef.current;
+    const selectedKey = selectedKeys.size === 1 ? [...selectedKeys][0] : null;
+    const cursorItem =
+      idx >= 0
+        ? items[idx]
+        : selectedKey
+          ? (items.find((i) => i.key === selectedKey) ?? null)
+          : null;
+    if (!cursorItem) return null;
+    if (cursorItem.type === "image" && cursorItem.image) {
+      const imgIdx = imageItems.indexOf(cursorItem);
+      return {
+        type: "image",
+        id: cursorItem.image.id,
+        filename: cursorItem.image.original_filename,
+        width: cursorItem.image.width ?? undefined,
+        height: cursorItem.image.height ?? undefined,
+        indexInFolder: imgIdx >= 0 ? imgIdx : 0,
+        totalInFolder: totalImages,
+      };
+    }
+    if (cursorItem.type === "folder" && cursorItem.folder) {
+      return {
+        type: "folder",
+        name: cursorItem.folder.name,
+        folderCount: 0,
+        imageCount: cursorItem.folder.image_count ?? 0,
+      };
+    }
+    return null;
+  }, [selectedKeys, items, imageItems, totalImages, cursorIndexRef]);
 
   // 선택된 task_image_id 추출 (key가 "i:{task_image_id}")
   const selectedTaskImageIds = useMemo(
@@ -454,13 +491,13 @@ export default function TaskDetailPage() {
         e.preventDefault();
         selectAll();
       }
-      if (e.key === "Escape") clearSelection();
+      if (e.key === "Escape" && !quickLookOpen) clearSelection();
       if (e.key === "Delete" && selectedCount > 0) {
         e.preventDefault();
         handleBulkRemoveRef.current();
       }
-      // Backspace: 상위 폴더 이동
-      if (e.key === "Backspace") {
+      // Backspace: 상위 폴더 이동 (QuickLook 열림 시 차단)
+      if (e.key === "Backspace" && !quickLookOpen) {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         if (currentPath) {
@@ -468,8 +505,8 @@ export default function TaskDetailPage() {
           handleNavigateUp(true);
         }
       }
-      // Enter: 폴더 1개 선택 시 진입
-      if (e.key === "Enter") {
+      // Enter: 폴더 1개 선택 시 진입 (QuickLook 열림 시 차단)
+      if (e.key === "Enter" && !quickLookOpen) {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         if (selectedKeys.size === 1) {
@@ -490,36 +527,15 @@ export default function TaskDetailPage() {
           target.isContentEditable
         )
           return;
-        // 다중 선택 시 cursor 위치의 이미지로 모달 열기
-        if (selectedKeys.size > 0 && cursorIndexRef.current >= 0) {
-          const cursorItem = items[cursorIndexRef.current];
-          if (cursorItem?.type === "image") {
-            e.preventDefault();
-            const imageIndex = imageItems.findIndex(
-              (i) => i.key === cursorItem.key,
-            );
-            if (imageIndex !== -1) setQuickLookIndex(imageIndex);
-            return;
-          }
-        }
-        const selectedImageKeys = [...selectedKeys].filter((k) =>
-          k.startsWith("i:"),
-        );
-        if (selectedImageKeys.length === 1) {
+        if (selectedKeys.size > 0) {
           e.preventDefault();
-          const itemIndex = items.findIndex(
-            (item) => item.key === selectedImageKeys[0],
-          );
-          const imageIndex = imageItems.findIndex(
-            (item) => item.key === selectedImageKeys[0],
-          );
-          if (itemIndex !== -1 && imageIndex !== -1) {
-            setQuickLookIndex(imageIndex);
-          }
+          setQuickLookOpen(true);
         }
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        if (quickLookIndex !== null) return;
+        if (quickLookOpen) {
+          // QuickLook 열려있을 때도 화살표로 뷰어 선택 이동 허용
+        }
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
 
@@ -548,8 +564,8 @@ export default function TaskDetailPage() {
           if (e.key === "ArrowUp") nextIdx = currentIdx - 1;
           else if (e.key === "ArrowDown") nextIdx = currentIdx + 1;
           else if (e.key === "ArrowRight") {
-            // 리스트뷰: Shift 없을 때만 폴더 진입
-            if (!e.shiftKey && selectedKeys.size === 1) {
+            // 리스트뷰: Shift 없을 때만 폴더 진입 (QuickLook 열림 시 차단)
+            if (!quickLookOpen && !e.shiftKey && selectedKeys.size === 1) {
               const selectedKey = [...selectedKeys][0];
               const selectedItem = items.find((i) => i.key === selectedKey);
               if (selectedItem?.type === "folder" && selectedItem.folder) {
@@ -559,8 +575,8 @@ export default function TaskDetailPage() {
             }
             return;
           } else if (e.key === "ArrowLeft") {
-            // 리스트뷰: Shift 없을 때만 상위 폴더 이동
-            if (!e.shiftKey && currentPath) {
+            // 리스트뷰: Shift 없을 때만 상위 폴더 이동 (QuickLook 열림 시 차단)
+            if (!quickLookOpen && !e.shiftKey && currentPath) {
               e.preventDefault();
               handleNavigateUp(true);
             }
@@ -595,7 +611,7 @@ export default function TaskDetailPage() {
     selectedKeys,
     items,
     imageItems,
-    quickLookIndex,
+    quickLookOpen,
     previewMode,
     gridColumns,
     selectByKey,
@@ -862,51 +878,51 @@ export default function TaskDetailPage() {
 
   // -- Toolbar --
   const toolbar = (
-    <div className="mb-4 flex items-center justify-between select-none shrink-0">
-      <div className="min-w-0 flex-1">
-        <FolderBreadcrumb
-          currentPath={currentPath}
-          onNavigate={(path) => handleNavigateFolder(path ? path + "/" : "")}
-        />
+    <div className="mb-4 select-none shrink-0 space-y-1">
+      <FolderBreadcrumb
+        currentPath={currentPath}
+        onNavigate={(path) => handleNavigateFolder(path ? path + "/" : "")}
+      />
+      <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
           {contentsLoading
             ? "로딩 중..."
             : `${folders.length > 0 ? `${folders.length}개 폴더, ` : ""}${totalImages}개 이미지`}
         </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCreateFolderInCurrentPath}
-        >
-          <FolderPlus className="mr-1 h-3.5 w-3.5" />새 폴더
-        </Button>
-        <div className="flex items-center gap-1 rounded-md border p-0.5">
+        <div className="flex items-center gap-2">
           <Button
-            variant={previewMode === "grid" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => {
-              setPreviewMode("grid");
-              localStorage.setItem(VIEW_MODE_KEY, "grid");
-            }}
-            title="격자 보기"
+            variant="outline"
+            size="sm"
+            onClick={handleCreateFolderInCurrentPath}
           >
-            <LayoutGrid className="h-4 w-4" />
+            <FolderPlus className="mr-1 h-3.5 w-3.5" />새 폴더
           </Button>
-          <Button
-            variant={previewMode === "list" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => {
-              setPreviewMode("list");
-              localStorage.setItem(VIEW_MODE_KEY, "list");
-            }}
-            title="리스트 보기"
-          >
-            <List className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1 rounded-md border p-0.5">
+            <Button
+              variant={previewMode === "grid" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => {
+                setPreviewMode("grid");
+                localStorage.setItem(VIEW_MODE_KEY, "grid");
+              }}
+              title="격자 보기"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={previewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => {
+                setPreviewMode("list");
+                localStorage.setItem(VIEW_MODE_KEY, "list");
+              }}
+              title="리스트 보기"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -1043,7 +1059,7 @@ export default function TaskDetailPage() {
                   item={item as DataPoolItem}
                   flatIndex={flatIndex}
                   isSelected={isSelected}
-                  selectedKeys={selectedKeys}
+                  selectedCount={selectedCount}
                   renamingFolderPath={renamingFolderPath}
                   dragOverFolderKey={dragOverFolderKey}
                   deleteLabel="제거"
@@ -1058,10 +1074,7 @@ export default function TaskDetailPage() {
                   onDeleteFolder={handleDeleteFolder}
                   onDeleteImage={handleRemoveImage}
                   onImageDoubleClick={() => {
-                    const imageIndex = imageItems.findIndex(
-                      (img) => img.key === item.key,
-                    );
-                    if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                    setQuickLookOpen(true);
                   }}
                   onContextMenu={(_contextItem, index) => {
                     handleItemClick(
@@ -1089,7 +1102,7 @@ export default function TaskDetailPage() {
                   virtualRowSize={virtualRow.size}
                   virtualRowStart={virtualRow.start}
                   isSelected={isSelected}
-                  selectedKeys={selectedKeys}
+                  selectedCount={selectedCount}
                   renamingFolderPath={renamingFolderPath}
                   dragOverFolderKey={dragOverFolderKey}
                   deleteLabel="제거"
@@ -1104,10 +1117,7 @@ export default function TaskDetailPage() {
                   onDeleteFolder={handleDeleteFolder}
                   onDeleteImage={handleRemoveImage}
                   onImageDoubleClick={() => {
-                    const imageIndex = imageItems.findIndex(
-                      (img) => img.key === item.key,
-                    );
-                    if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                    setQuickLookOpen(true);
                   }}
                   onContextMenu={(_contextItem, index) => {
                     handleItemClick(
@@ -1205,22 +1215,9 @@ export default function TaskDetailPage() {
       )}
 
       <ImageQuickLook
-        images={imageItems.map((item) => ({
-          id: item.image!.id,
-          filename: item.image!.original_filename,
-          width: item.image!.width ?? undefined,
-          height: item.image!.height ?? undefined,
-        }))}
-        currentIndex={quickLookIndex ?? 0}
-        open={quickLookIndex !== null}
-        onOpenChange={(open) => {
-          if (!open) setQuickLookIndex(null);
-        }}
-        onIndexChange={(idx) => {
-          setQuickLookIndex(idx);
-          const item = imageItems[idx];
-          if (item) selectByKey(item.key);
-        }}
+        item={quickLookOpen ? quickLookItem : null}
+        open={quickLookOpen}
+        onOpenChange={(open) => setQuickLookOpen(open)}
         getImageUrl={(id) => imagesApi.getFileUrl(id)}
       />
 

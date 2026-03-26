@@ -136,6 +136,31 @@ async def get_image_file(
     return FileResponse(path=storage.get_file_path(image.storage_key), media_type=image.mime_type)
 
 
+@router.get("/images/{image_id}/thumbnail")
+async def get_image_thumbnail(
+    image_id: int,
+    token: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> Response:
+    """서버 측 썸네일 반환. SVG는 원본, 그 외는 WebP 변환 캐시 반환."""
+    from app.services.auth import auth_service
+
+    if token is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token_data = auth_service.decode_token(token)
+    user = await auth_service.get_user_by_email(db, token_data.email)  # type: ignore[arg-type]
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    image = await image_service.get_image(db, image_id)
+    await image_service.check_image_ownership(db, image, user.id)
+
+    thumb_path = await image_service.get_or_create_thumbnail(image, storage)
+    media_type = image.mime_type if image.mime_type == "image/svg+xml" else "image/webp"
+    return FileResponse(path=thumb_path, media_type=media_type)
+
+
 @router.patch("/data-stores/{data_store_id}/folders", status_code=200)
 async def update_folder(
     data_store_id: int,

@@ -71,57 +71,57 @@ export default function DataPoolToolbar({
         onChange={handleFolderInputChange}
       />
 
-      <div className="mb-4 flex items-center justify-between select-none shrink-0">
-        <div className="min-w-0 flex-1">
-          <FolderBreadcrumb
-            currentPath={currentPath}
-            onNavigate={(path) => onNavigateFolder(path ? path + "/" : "")}
-          />
+      <div className="mb-4 select-none shrink-0 space-y-1">
+        <FolderBreadcrumb
+          currentPath={currentPath}
+          onNavigate={(path) => onNavigateFolder(path ? path + "/" : "")}
+        />
+        <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
             {contentsLoading
               ? "로딩 중..."
               : `${foldersCount > 0 ? `${foldersCount}개 폴더, ` : ""}${totalImages}개 이미지`}
           </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="mr-1 h-3.5 w-3.5" />
-            파일
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => folderInputRef.current?.click()}
-          >
-            <Upload className="mr-1 h-3.5 w-3.5" />
-            폴더
-          </Button>
-          <Button variant="outline" size="sm" onClick={onCreateFolder}>
-            <FolderPlus className="mr-1 h-3.5 w-3.5" />새 폴더
-          </Button>
-          <div className="flex items-center gap-1 rounded-md border p-0.5">
+          <div className="flex items-center gap-2">
             <Button
-              variant={previewMode === "grid" ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onChangePreviewMode("grid")}
-              title="격자 보기"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
             >
-              <LayoutGrid className="h-4 w-4" />
+              <Upload className="mr-1 h-3.5 w-3.5" />
+              파일
             </Button>
             <Button
-              variant={previewMode === "list" ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onChangePreviewMode("list")}
-              title="리스트 보기"
+              variant="outline"
+              size="sm"
+              onClick={() => folderInputRef.current?.click()}
             >
-              <List className="h-4 w-4" />
+              <Upload className="mr-1 h-3.5 w-3.5" />
+              폴더
             </Button>
+            <Button variant="outline" size="sm" onClick={onCreateFolder}>
+              <FolderPlus className="mr-1 h-3.5 w-3.5" />새 폴더
+            </Button>
+            <div className="flex items-center gap-1 rounded-md border p-0.5">
+              <Button
+                variant={previewMode === "grid" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onChangePreviewMode("grid")}
+                title="격자 보기"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={previewMode === "list" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onChangePreviewMode("list")}
+                title="리스트 보기"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>

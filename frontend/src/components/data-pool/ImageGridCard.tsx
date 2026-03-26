@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Check, Folder, Trash2 } from "lucide-react";
 import { imagesApi } from "@/api/images";
 import type { DataPoolItem } from "@/types/image";
@@ -10,7 +11,7 @@ interface ImageGridCardProps {
   item: DataPoolItem;
   flatIndex: number;
   isSelected: boolean;
-  selectedKeys: Set<string>;
+  selectedCount: number;
   renamingFolderPath: string | null;
   dragOverFolderKey: string | null;
   deleteLabel?: string;
@@ -33,11 +34,11 @@ interface ImageGridCardProps {
   onFolderDrop: (e: React.DragEvent, item: DataPoolItem) => void;
 }
 
-export default function ImageGridCard({
+const ImageGridCard = memo(function ImageGridCard({
   item,
   flatIndex,
   isSelected,
-  selectedKeys,
+  selectedCount,
   renamingFolderPath,
   dragOverFolderKey,
   deleteLabel = "삭제",
@@ -61,7 +62,8 @@ export default function ImageGridCard({
 }: ImageGridCardProps) {
   const contextMenuProps = {
     item,
-    selectedKeys,
+    selectedCount,
+    isSelected,
     deleteLabel,
     onNavigateFolder,
     onRenameFolder,
@@ -209,7 +211,7 @@ export default function ImageGridCard({
                   {isSelected && <Check className="h-3 w-3" />}
                 </div>
                 <img
-                  src={imagesApi.getFileUrl(image.id)}
+                  src={imagesApi.getThumbnailUrl(image.id)}
                   alt={image.original_filename}
                   className="h-full w-full object-cover"
                   loading="lazy"
@@ -251,4 +253,6 @@ export default function ImageGridCard({
   }
 
   return null;
-}
+});
+
+export default ImageGridCard;

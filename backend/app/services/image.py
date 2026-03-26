@@ -1,5 +1,6 @@
 import bisect
 import hashlib
+import os
 import tempfile
 from pathlib import Path
 
@@ -59,6 +60,22 @@ async def _resolve_keys_to_delete(
         .group_by(Image.storage_key)
     )
     return [row.storage_key for row in rows if row.total_refs <= row.target_refs]
+
+
+def _delete_thumbnail_cache(storage_key: str) -> None:
+    """storage_key에 대응하는 썸네일 캐시 파일을 best-effort로 삭제."""
+    try:
+        parts = storage_key.split("/")
+        if len(parts) >= 3:
+            hash_part = parts[2]
+            if "." in hash_part:
+                hash_part = hash_part[:hash_part.rfind(".")]
+            from app.config import settings
+            thumb_path = Path(settings.storage_base_path) / ".thumbnails" / parts[0] / parts[1] / f"{hash_part}_thumb.webp"
+            if thumb_path.exists():
+                thumb_path.unlink()
+    except Exception:
+        pass
 
 
 class ImageService:
@@ -152,6 +169,13 @@ class ImageService:
         db.add(image)
         await db.commit()
         await db.refresh(image)
+
+        # 업로드 직후 썸네일 사전 생성 (best-effort: 실패해도 업로드는 성공)
+        try:
+            await self.get_or_create_thumbnail(image, storage)
+        except Exception:
+            pass
+
         return image
 
     async def get_images_by_data_store(
@@ -192,13 +216,15 @@ class ImageService:
     ) -> None:
         image = await self.get_image(db, image_id)
         await self.check_image_ownership(db, image, user_id)
+        storage_key = image.storage_key
         # only delete physical file if no other image records reference same storage_key
-        count_result = await db.execute(select(func.count()).where(Image.storage_key == image.storage_key))
+        count_result = await db.execute(select(func.count()).where(Image.storage_key == storage_key))
         ref_count = count_result.scalar_one()
         await db.delete(image)
         await db.commit()
         if ref_count <= 1:
-            await storage.delete(image.storage_key)
+            await storage.delete(storage_key)
+            _delete_thumbnail_cache(storage_key)
 
     async def get_folder_contents(
         self,
@@ -345,6 +371,7 @@ class ImageService:
         # physically delete files with no remaining references
         for key in keys_to_delete:
             await storage.delete(key)
+            _delete_thumbnail_cache(key)
 
         return len(target_ids)
 
@@ -517,6 +544,7 @@ class ImageService:
 
         for key in keys_to_delete:
             await storage.delete(key)
+            _delete_thumbnail_cache(key)
 
         return len(images)
 
@@ -585,6 +613,73 @@ class ImageService:
             count = await self.update_folder_path(db, data_store_id, normalized_old, normalized_new)
             total += count
         return total
+
+
+    async def get_or_create_thumbnail(self, image: Image, storage: StorageBackend) -> str:
+        """썸네일 캐시가 있으면 경로를 반환하고, 없으면 생성 후 반환.
+
+        SVG는 원본 경로 그대로 반환.
+        캐시 경로: {storage_base_path}/.thumbnails/{hash[:2]}/{hash[2:4]}/{hash}_thumb.webp
+        """
+        THUMBNAIL_MAX_SIZE = 300
+
+        # SVG는 썸네일 생성 불가 — 원본 반환
+        if image.mime_type == "image/svg+xml":
+            return storage.get_file_path(image.storage_key)
+
+        from app.config import settings
+
+        # storage_key 형식: ab/cd/abcd...hash[.ext]
+        key_parts = image.storage_key.split("/")
+        hash_with_ext = key_parts[2] if len(key_parts) >= 3 else image.storage_key
+        file_hash = hash_with_ext[:hash_with_ext.rfind(".")] if "." in hash_with_ext else hash_with_ext
+
+        base = Path(settings.storage_base_path)
+        thumb_dir = base / ".thumbnails" / file_hash[:2] / file_hash[2:4]
+        thumb_path = thumb_dir / f"{file_hash}_thumb.webp"
+
+        if thumb_path.exists():
+            return str(thumb_path)
+
+        # 원본 파일 존재 확인
+        if not await storage.exists(image.storage_key):
+            raise HTTPException(status_code=404, detail="Image file not found")
+
+        os.makedirs(thumb_dir, exist_ok=True)
+
+        from PIL import Image as PILImage, ImageOps
+
+        src_path = storage.get_file_path(image.storage_key)
+        img = PILImage.open(src_path)
+        img = ImageOps.exif_transpose(img)
+        # 16비트 grayscale(I;16 등) → 동적 범위 정규화 후 L → RGB
+        if img.mode.startswith("I"):
+            img_i = img.convert("I")
+            lo, hi = img_i.getextrema()
+            if hi > lo:
+                scale = 255.0 / (hi - lo)
+                offset = -lo * scale
+                img = img_i.point(lambda p: p * scale + offset).convert("L")
+            else:
+                img = img_i.point(lambda p: 0).convert("L")
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.thumbnail((THUMBNAIL_MAX_SIZE, THUMBNAIL_MAX_SIZE), PILImage.Resampling.LANCZOS)
+
+        # atomic write: 임시파일에 쓰고 rename
+        tmp_fd, tmp_str = tempfile.mkstemp(dir=thumb_dir, suffix=".webp.tmp")
+        try:
+            os.close(tmp_fd)
+            img.save(tmp_str, format="WEBP", quality=80)
+            os.replace(tmp_str, thumb_path)
+        except Exception:
+            try:
+                os.unlink(tmp_str)
+            except OSError:
+                pass
+            raise
+
+        return str(thumb_path)
 
 
 image_service = ImageService()

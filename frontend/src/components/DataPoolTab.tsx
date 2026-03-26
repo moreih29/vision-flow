@@ -28,7 +28,10 @@ import {
   UploadProgressBar,
 } from "@/components/data-pool";
 import { ContentArea } from "@/components/content-viewer";
-import { ImageQuickLook } from "@/components/content-viewer/ImageQuickLook";
+import {
+  ImageQuickLook,
+  type QuickLookItem,
+} from "@/components/content-viewer/ImageQuickLook";
 import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -62,7 +65,7 @@ export default function DataPoolTab({
   const [renamingFolderPath, setRenamingFolderPath] = useState<string | null>(
     null,
   );
-  const [quickLookIndex, setQuickLookIndex] = useState<number | null>(null);
+  const [quickLookOpen, setQuickLookOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scrollToItemKey, setScrollToItemKey] = useState<string | null>(null);
   const [gridColumns, setGridColumns] = useState(5);
@@ -153,6 +156,41 @@ export default function DataPoolTab({
     selectTo,
     cursorIndexRef,
   } = useMultiSelect(itemKeys, currentPath);
+
+  // 현재 cursor 위치 아이템 기반 QuickLookItem 계산
+  const quickLookItem = useMemo((): QuickLookItem | null => {
+    // eslint-disable-next-line react-hooks/refs -- selectedKeys 변경 시 재계산, 의도적 ref 읽기
+    const idx = cursorIndexRef.current;
+    const selectedKey = selectedKeys.size === 1 ? [...selectedKeys][0] : null;
+    const cursorItem =
+      idx >= 0
+        ? items[idx]
+        : selectedKey
+          ? (items.find((i) => i.key === selectedKey) ?? null)
+          : null;
+    if (!cursorItem) return null;
+    if (cursorItem.type === "image" && cursorItem.image) {
+      const imgIdx = imageItems.indexOf(cursorItem);
+      return {
+        type: "image",
+        id: cursorItem.image.id,
+        filename: cursorItem.image.original_filename,
+        width: cursorItem.image.width ?? undefined,
+        height: cursorItem.image.height ?? undefined,
+        indexInFolder: imgIdx >= 0 ? imgIdx : 0,
+        totalInFolder: totalImages,
+      };
+    }
+    if (cursorItem.type === "folder" && cursorItem.folder) {
+      return {
+        type: "folder",
+        name: cursorItem.folder.name,
+        folderCount: 0,
+        imageCount: cursorItem.folder.image_count ?? 0,
+      };
+    }
+    return null;
+  }, [selectedKeys, items, imageItems, totalImages, cursorIndexRef]);
 
   // 폴더 진입/상위 이동 후 첫 번째 아이템 자동 선택
   // useMultiSelect 선언 이후에 위치하여 resetKey effect보다 나중에 실행되도록 보장
@@ -350,13 +388,13 @@ export default function DataPoolTab({
         e.preventDefault();
         selectAll();
       }
-      if (e.key === "Escape") clearSelection();
+      if (e.key === "Escape" && !quickLookOpen) clearSelection();
       if (e.key === "Delete" && selectedCount > 0) {
         e.preventDefault();
         handleBulkDeleteRef.current();
       }
-      // Backspace: 상위 폴더 이동
-      if (e.key === "Backspace") {
+      // Backspace: 상위 폴더 이동 (QuickLook 열림 시 차단)
+      if (e.key === "Backspace" && !quickLookOpen) {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         if (currentPath) {
@@ -364,8 +402,8 @@ export default function DataPoolTab({
           handleNavigateUp(true);
         }
       }
-      // Enter: 폴더 1개 선택 시 진입
-      if (e.key === "Enter") {
+      // Enter: 폴더 1개 선택 시 진입 (QuickLook 열림 시 차단)
+      if (e.key === "Enter" && !quickLookOpen) {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         if (selectedKeys.size === 1) {
@@ -380,31 +418,16 @@ export default function DataPoolTab({
       if (e.key === " ") {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
-        // 다중 선택 시 cursor 위치의 이미지로 모달 열기
-        if (selectedKeys.size > 0 && cursorIndexRef.current >= 0) {
-          const cursorItem = items[cursorIndexRef.current];
-          if (cursorItem?.type === "image") {
-            e.preventDefault();
-            const imageIndex = imageItems.findIndex(
-              (i) => i.key === cursorItem.key,
-            );
-            if (imageIndex !== -1) setQuickLookIndex(imageIndex);
-            return;
-          }
-        }
-        const selectedImageKeys = [...selectedKeys].filter((k) =>
-          k.startsWith("i:"),
-        );
-        if (selectedImageKeys.length === 1) {
+        if (selectedKeys.size > 0) {
           e.preventDefault();
-          const imageIndex = imageItems.findIndex(
-            (i) => i.key === selectedImageKeys[0],
-          );
-          if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+          setQuickLookOpen(true);
         }
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        if (quickLookIndex !== null) return;
+        if (quickLookOpen) {
+          // QuickLook 열려있을 때는 화살표로 뷰어 선택만 이동 (QuickLook이 따라감)
+          // 아래 로직에서 정상적으로 처리되도록 통과시킴
+        }
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
 
@@ -433,8 +456,8 @@ export default function DataPoolTab({
           if (e.key === "ArrowUp") nextIdx = currentIdx - 1;
           else if (e.key === "ArrowDown") nextIdx = currentIdx + 1;
           else if (e.key === "ArrowRight") {
-            // 리스트뷰: Shift 없을 때만 폴더 진입
-            if (!e.shiftKey && selectedKeys.size === 1) {
+            // 리스트뷰: Shift 없을 때만 폴더 진입 (QuickLook 열림 시 차단)
+            if (!quickLookOpen && !e.shiftKey && selectedKeys.size === 1) {
               const selectedKey = [...selectedKeys][0];
               const selectedItem = items.find((i) => i.key === selectedKey);
               if (selectedItem?.type === "folder" && selectedItem.folder) {
@@ -444,8 +467,8 @@ export default function DataPoolTab({
             }
             return;
           } else if (e.key === "ArrowLeft") {
-            // 리스트뷰: Shift 없을 때만 상위 폴더 이동
-            if (!e.shiftKey && currentPath) {
+            // 리스트뷰: Shift 없을 때만 상위 폴더 이동 (QuickLook 열림 시 차단)
+            if (!quickLookOpen && !e.shiftKey && currentPath) {
               e.preventDefault();
               handleNavigateUp(true);
             }
@@ -479,7 +502,7 @@ export default function DataPoolTab({
     moveDialogOpen,
     selectedKeys,
     imageItems,
-    quickLookIndex,
+    quickLookOpen,
     items,
     previewMode,
     gridColumns,
@@ -651,7 +674,7 @@ export default function DataPoolTab({
                 item={item as DataPoolItem}
                 flatIndex={flatIndex}
                 isSelected={isSelected}
-                selectedKeys={selectedKeys}
+                selectedCount={selectedCount}
                 renamingFolderPath={renamingFolderPath}
                 dragOverFolderKey={dragOverFolderKey}
                 onItemClick={handleItemClick}
@@ -664,11 +687,8 @@ export default function DataPoolTab({
                 onDeleteSelected={handleBulkDelete}
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteImage={handleDeleteImage}
-                onImageDoubleClick={(flatIdx) => {
-                  const imageIndex = imageItems.findIndex(
-                    (i) => i === items[flatIdx],
-                  );
-                  if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                onImageDoubleClick={() => {
+                  setQuickLookOpen(true);
                 }}
                 onContextMenu={(_contextItem, index) => {
                   handleItemClick(
@@ -691,7 +711,7 @@ export default function DataPoolTab({
                 virtualRowSize={virtualRow.size}
                 virtualRowStart={virtualRow.start}
                 isSelected={isSelected}
-                selectedKeys={selectedKeys}
+                selectedCount={selectedCount}
                 renamingFolderPath={renamingFolderPath}
                 dragOverFolderKey={dragOverFolderKey}
                 onItemClick={handleItemClick}
@@ -704,11 +724,8 @@ export default function DataPoolTab({
                 onDeleteSelected={handleBulkDelete}
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteImage={handleDeleteImage}
-                onImageDoubleClick={(rowIdx) => {
-                  const imageIndex = imageItems.findIndex(
-                    (i) => i === items[rowIdx],
-                  );
-                  if (imageIndex !== -1) setQuickLookIndex(imageIndex);
+                onImageDoubleClick={() => {
+                  setQuickLookOpen(true);
                 }}
                 onContextMenu={(_contextItem, index) => {
                   handleItemClick(
@@ -774,22 +791,9 @@ export default function DataPoolTab({
         />
       )}
       <ImageQuickLook
-        images={imageItems.map((i) => ({
-          id: i.image!.id,
-          filename: i.image!.original_filename,
-          width: i.image!.width ?? undefined,
-          height: i.image!.height ?? undefined,
-        }))}
-        currentIndex={quickLookIndex ?? 0}
-        open={quickLookIndex !== null}
-        onOpenChange={(open) => {
-          if (!open) setQuickLookIndex(null);
-        }}
-        onIndexChange={(idx) => {
-          setQuickLookIndex(idx);
-          const item = imageItems[idx];
-          if (item) selectByKey(item.key);
-        }}
+        item={quickLookOpen ? quickLookItem : null}
+        open={quickLookOpen}
+        onOpenChange={(open) => setQuickLookOpen(open)}
         getImageUrl={(id) => imagesApi.getFileUrl(id)}
       />
       {confirmDialog}

@@ -51,11 +51,26 @@ export default function ContentArea<T extends ViewerItem>({
       <div className="relative flex-1 min-h-0">
         <div className="absolute inset-0">
           {contentsLoading ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="aspect-square w-full rounded-md" />
-              ))}
-            </div>
+            previewMode === "grid" ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className="aspect-square w-full rounded-md"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1 rounded-md border p-1">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2">
+                    <Skeleton className="h-8 w-8 rounded" />
+                    <Skeleton className="h-4 flex-1 rounded" />
+                    <Skeleton className="h-4 w-24 rounded" />
+                  </div>
+                ))}
+              </div>
+            )
           ) : items.length === 0 ? (
             renderEmpty ? (
               renderEmpty()

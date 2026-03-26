@@ -196,6 +196,11 @@ export const imagesApi = {
     const token = localStorage.getItem("auth_token");
     return `/api/v1/images/${id}/file?token=${token ?? ""}`;
   },
+
+  getThumbnailUrl: (id: number) => {
+    const token = localStorage.getItem("auth_token");
+    return `/api/v1/images/${id}/thumbnail?token=${token ?? ""}`;
+  },
 };
 
 async function uploadBatch(

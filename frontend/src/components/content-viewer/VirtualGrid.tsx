@@ -175,6 +175,11 @@ export default function VirtualGrid<T extends ViewerItem>({
                 totalCount !== undefined &&
                 virtualRow.index >= loadedRowCount
               ) {
+                // 마지막 행은 남은 아이템 수만큼만 skeleton 표시
+                const isLastRow = virtualRow.index === totalRowCount - 1;
+                const remainder = effectiveTotalCount % columns;
+                const skeletonCount =
+                  isLastRow && remainder > 0 ? remainder : columns;
                 return (
                   <div
                     key={virtualRow.key}
@@ -193,7 +198,7 @@ export default function VirtualGrid<T extends ViewerItem>({
                         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                       }}
                     >
-                      {Array.from({ length: columns }).map((_, i) => (
+                      {Array.from({ length: skeletonCount }).map((_, i) => (
                         <Skeleton
                           key={i}
                           className="w-full rounded-md"

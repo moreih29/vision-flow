@@ -284,9 +284,21 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         } finally {
           setLoading(false);
         }
+        // 초기 마운트 시 selectedPath가 있으면 해당 경로까지 자동 펼침
+        if (selectedPath) {
+          const segments = selectedPath
+            .replace(/\/$/, "")
+            .split("/")
+            .filter(Boolean);
+          let current = "";
+          for (const seg of segments) {
+            current += seg + "/";
+            await expandNode(current);
+          }
+        }
       }
       loadRoot();
-    }, [fetchFolderContents]);
+    }, [fetchFolderContents]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // -- 가상화 --
     const { flatNodes, maxDepth } = useMemo(() => {
@@ -659,6 +671,17 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       },
     }));
 
+    // 최신 rootNodes를 functional updater 경유로 읽기
+    // React가 pending state updates를 체이닝하므로 항상 최신 상태를 반환
+    function getLatestRootNodes(): Promise<FileTreeNode[]> {
+      return new Promise((resolve) => {
+        setRootNodes((prev) => {
+          resolve(prev);
+          return prev;
+        });
+      });
+    }
+
     async function expandNode(path: string) {
       const findNode = (nodes: FileTreeNode[]): FileTreeNode | undefined => {
         for (const n of nodes) {
@@ -671,7 +694,8 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         return undefined;
       };
 
-      const node = findNode(rootNodes);
+      const latestNodes = await getLatestRootNodes();
+      const node = findNode(latestNodes);
       if (!node) return;
       if (node.expanded && node.loaded) return; // 이미 확장됨
 

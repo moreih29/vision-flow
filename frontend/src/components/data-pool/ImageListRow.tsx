@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Check, Folder, Trash2 } from "lucide-react";
 import { imagesApi } from "@/api/images";
 import type { DataPoolItem } from "@/types/image";
@@ -12,7 +13,7 @@ interface ImageListRowProps {
   virtualRowSize: number;
   virtualRowStart: number;
   isSelected: boolean;
-  selectedKeys: Set<string>;
+  selectedCount: number;
   renamingFolderPath: string | null;
   dragOverFolderKey: string | null;
   deleteLabel?: string;
@@ -35,13 +36,13 @@ interface ImageListRowProps {
   onFolderDrop: (e: React.DragEvent, item: DataPoolItem) => void;
 }
 
-export default function ImageListRow({
+const ImageListRow = memo(function ImageListRow({
   item,
   virtualRowIndex,
   virtualRowSize,
   virtualRowStart,
   isSelected,
-  selectedKeys,
+  selectedCount,
   renamingFolderPath,
   dragOverFolderKey,
   deleteLabel = "삭제",
@@ -74,7 +75,8 @@ export default function ImageListRow({
 
   const contextMenuProps = {
     item,
-    selectedKeys,
+    selectedCount,
+    isSelected,
     deleteLabel,
     onNavigateFolder,
     onRenameFolder,
@@ -227,7 +229,7 @@ export default function ImageListRow({
             </div>
             <div className="w-12 shrink-0 px-3 py-1.5">
               <img
-                src={imagesApi.getFileUrl(image.id)}
+                src={imagesApi.getThumbnailUrl(image.id)}
                 alt={image.original_filename}
                 className="h-10 w-10 rounded object-cover"
                 loading="lazy"
@@ -268,4 +270,6 @@ export default function ImageListRow({
   }
 
   return null;
-}
+});
+
+export default ImageListRow;

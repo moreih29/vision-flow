@@ -27,7 +27,9 @@ export default function VirtualList<T extends ViewerItem>({
   // totalCount가 있으면 전체 스크롤 길이를 미리 확보, 없으면 기존 방식 fallback
   const loadedCount = items.length;
   const effectiveTotalCount =
-    totalCount !== undefined ? totalCount : loadedCount;
+    totalCount !== undefined
+      ? totalCount + (hasParentItem ? 1 : 0)
+      : loadedCount;
   const rowCount =
     totalCount !== undefined
       ? effectiveTotalCount

@@ -8,7 +8,8 @@ import type { DataPoolItem } from "@/types/image";
 
 interface DataPoolContextMenuProps {
   item: DataPoolItem;
-  selectedKeys: Set<string>;
+  selectedCount: number;
+  isSelected: boolean;
   deleteLabel?: string;
   onNavigateFolder: (path: string) => void;
   onRenameFolder: (path: string) => void;
@@ -20,7 +21,8 @@ interface DataPoolContextMenuProps {
 
 export default function DataPoolContextMenu({
   item,
-  selectedKeys,
+  selectedCount,
+  isSelected,
   deleteLabel = "삭제",
   onNavigateFolder,
   onRenameFolder,
@@ -29,19 +31,19 @@ export default function DataPoolContextMenu({
   onDeleteFolder,
   onDeleteImage,
 }: DataPoolContextMenuProps) {
-  const isMultiSelected = selectedKeys.size > 1;
+  const isMultiSelected = selectedCount > 1;
 
-  if (isMultiSelected && selectedKeys.has(item.key)) {
+  if (isMultiSelected && isSelected) {
     return (
       <ContextMenuContent className="w-48">
         <ContextMenuItem onClick={onMoveSelected}>
           <FolderInput className="mr-2 h-3.5 w-3.5" />
-          {selectedKeys.size}개 항목 이동...
+          {selectedCount}개 항목 이동...
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={onDeleteSelected}>
           <Trash2 className="mr-2 h-3.5 w-3.5" />
-          {selectedKeys.size}개 항목 {deleteLabel}
+          {selectedCount}개 항목 {deleteLabel}
         </ContextMenuItem>
       </ContextMenuContent>
     );

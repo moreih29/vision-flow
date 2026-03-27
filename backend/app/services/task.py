@@ -1,3 +1,5 @@
+import bisect
+
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -245,25 +247,40 @@ class TaskService:
         )
         path_image_counts: dict[str, int] = {row.folder_path: row.cnt for row in counts_result}
 
+        # bisect용 정렬 키: 이미지가 있는 경로 + 빈 폴더(all_folder_paths) 합산
+        all_keys = sorted(set(path_image_counts.keys()) | set(all_folder_paths))
+        sorted_count_keys = sorted(path_image_counts)
+
         # 각 직계 자식 폴더의 FolderInfo 생성
         folders: list[FolderInfo] = []
-        for folder_path in sorted(direct_child_folders):
-            image_count = sum(cnt for fp, cnt in path_image_counts.items() if fp.startswith(folder_path))
+        for child_path in sorted(direct_child_folders):
+            child_prefix_len = len(child_path)
+            lo = bisect.bisect_left(sorted_count_keys, child_path)
+            hi = bisect.bisect_left(sorted_count_keys, child_path[:-1] + "\xff")
+            image_count = sum(path_image_counts[sorted_count_keys[i]] for i in range(lo, hi))
+            direct_image_count = path_image_counts.get(child_path, 0)
+
+            # subfolder_count: all_keys 범위 내 직계 하위 세그먼트 수집 (빈 폴더 포함)
+            lo_all = bisect.bisect_left(all_keys, child_path)
+            hi_all = bisect.bisect_left(all_keys, child_path[:-1] + "\xff")
             sub_children: set[str] = set()
-            for fp in all_folder_paths:
-                if fp == folder_path or not fp.startswith(folder_path):
+            for i in range(lo_all, hi_all):
+                fp = all_keys[i]
+                if fp == child_path:
                     continue
-                relative = fp[len(folder_path) :]
-                parts = relative.split("/")
-                if parts[0]:
-                    sub_children.add(parts[0])
+                relative = fp[child_prefix_len:]
+                first_seg = relative.split("/")[0]
+                if first_seg:
+                    sub_children.add(first_seg)
             subfolder_count = len(sub_children)
-            name = folder_path.rstrip("/").split("/")[-1]
+
+            name = child_path.rstrip("/").split("/")[-1]
             folders.append(
                 FolderInfo(
-                    path=folder_path,
+                    path=child_path,
                     name=name,
                     image_count=image_count,
+                    direct_image_count=direct_image_count,
                     subfolder_count=subfolder_count,
                 )
             )

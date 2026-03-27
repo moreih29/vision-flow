@@ -16,6 +16,7 @@ interface FolderItem {
   type: "folder";
   name: string;
   folderCount: number;
+  directImageCount: number;
   imageCount: number;
 }
 
@@ -66,7 +67,11 @@ export function ImageQuickLook({
       {/* 콘텐츠 */}
       <div
         className="relative flex flex-col rounded-xl overflow-hidden bg-black/90"
-        style={{ width: "80vmin", height: "80vmin" }}
+        style={
+          item.type === "image"
+            ? { width: "80vmin", height: "80vmin" }
+            : { width: "40vmin", height: "30vmin" }
+        }
         onClick={(e) => e.stopPropagation()}
       >
         {item.type === "image" ? (
@@ -104,7 +109,7 @@ export function ImageQuickLook({
             {/* 폴더 미리보기 영역 */}
             <div className="flex-1 flex flex-col items-center justify-center gap-4 overflow-hidden min-h-0">
               <Folder className="h-24 w-24 text-white/60" strokeWidth={1} />
-              <span className="font-medium text-white text-lg truncate max-w-[80%]">
+              <span className="font-medium text-white text-lg text-center break-all px-4 line-clamp-3">
                 {item.name}
               </span>
             </div>
@@ -113,8 +118,13 @@ export function ImageQuickLook({
             <div className="flex flex-col items-center gap-1 py-3 px-4 text-white/80 text-sm shrink-0">
               <div className="flex items-center gap-3 text-white/60 text-xs">
                 {item.folderCount > 0 && <span>{item.folderCount}개 폴더</span>}
-                <span>{item.imageCount}개 이미지</span>
+                <span>{item.directImageCount}개 이미지</span>
               </div>
+              {item.imageCount !== item.directImageCount && (
+                <div className="text-white/40 text-xs">
+                  총 {item.imageCount}개 이미지
+                </div>
+              )}
             </div>
           </>
         )}

@@ -13,6 +13,7 @@ export interface ImageMeta {
 export interface FolderInfo {
   path: string;
   name: string;
+  direct_image_count: number;
   image_count: number;
   subfolder_count: number;
 }

@@ -101,6 +101,7 @@ export default function TaskDetailPage() {
   const nextColor = CLASS_COLORS[classes.length % CLASS_COLORS.length];
   const [newClassColor, setNewClassColor] = useState(nextColor);
   const [savingClass, setSavingClass] = useState(false);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<FolderTreeRef>(null);
   const poolTreeRef = useRef<FolderTreeRef>(null);
   const handleBulkRemoveRef = useRef<() => void>(() => {});
@@ -255,7 +256,8 @@ export default function TaskDetailPage() {
       return {
         type: "folder",
         name: cursorItem.folder.name,
-        folderCount: 0,
+        folderCount: cursorItem.folder.subfolder_count ?? 0,
+        directImageCount: cursorItem.folder.direct_image_count ?? 0,
         imageCount: cursorItem.folder.image_count ?? 0,
       };
     }
@@ -538,18 +540,17 @@ export default function TaskDetailPage() {
         }
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
+        e.preventDefault();
 
         const minIdx = items[0]?.type === "parent" ? 1 : 0;
 
         let currentIdx: number;
         if (e.shiftKey && selectedKeys.size > 0) {
-          // Shift 모드: cursor 기준
           currentIdx =
             cursorIndexRef.current >= 0 ? cursorIndexRef.current : minIdx - 1;
         } else if (selectedKeys.size === 0) {
           currentIdx = minIdx - 1;
         } else if (cursorIndexRef.current >= 0) {
-          // 다중 선택 후 일반 이동: cursor(마지막 위치) 기준
           currentIdx = cursorIndexRef.current;
         } else if (selectedKeys.size === 1) {
           const selectedKey = [...selectedKeys][0];
@@ -564,20 +565,16 @@ export default function TaskDetailPage() {
           if (e.key === "ArrowUp") nextIdx = currentIdx - 1;
           else if (e.key === "ArrowDown") nextIdx = currentIdx + 1;
           else if (e.key === "ArrowRight") {
-            // 리스트뷰: Shift 없을 때만 폴더 진입 (QuickLook 열림 시 차단)
             if (!quickLookOpen && !e.shiftKey && selectedKeys.size === 1) {
               const selectedKey = [...selectedKeys][0];
               const selectedItem = items.find((i) => i.key === selectedKey);
               if (selectedItem?.type === "folder" && selectedItem.folder) {
-                e.preventDefault();
                 handleNavigateFolder(selectedItem.folder.path, true);
               }
             }
             return;
           } else if (e.key === "ArrowLeft") {
-            // 리스트뷰: Shift 없을 때만 상위 폴더 이동 (QuickLook 열림 시 차단)
             if (!quickLookOpen && !e.shiftKey && currentPath) {
-              e.preventDefault();
               handleNavigateUp(true);
             }
             return;
@@ -590,8 +587,6 @@ export default function TaskDetailPage() {
         }
 
         if (nextIdx < minIdx || nextIdx >= items.length) return;
-
-        e.preventDefault();
         if (e.shiftKey) {
           selectTo(nextIdx);
         } else {
@@ -601,8 +596,10 @@ export default function TaskDetailPage() {
         setScrollToItemKey(items[nextIdx].key);
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const el = viewerRef.current;
+    if (!el) return;
+    el.addEventListener("keydown", handler);
+    return () => el.removeEventListener("keydown", handler);
   }, [
     selectAll,
     clearSelection,
@@ -1020,7 +1017,12 @@ export default function TaskDetailPage() {
           </div>
 
           {/* 중앙: 콘텐츠 영역 */}
-          <div className="min-w-0 flex-1 flex flex-col min-h-0">
+          <div
+            ref={viewerRef}
+            tabIndex={-1}
+            className="min-w-0 flex-1 flex flex-col min-h-0 outline-none"
+            onMouseDown={() => viewerRef.current?.focus()}
+          >
             {toolbar}
             <ContentArea
               items={items}

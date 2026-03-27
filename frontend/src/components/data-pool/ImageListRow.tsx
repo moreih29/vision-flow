@@ -231,7 +231,7 @@ const ImageListRow = memo(function ImageListRow({
               <img
                 src={imagesApi.getThumbnailUrl(image.id)}
                 alt={image.original_filename}
-                className="h-10 w-10 rounded object-cover"
+                className="h-10 w-10 rounded object-contain"
                 loading="lazy"
               />
             </div>

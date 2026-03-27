@@ -29,6 +29,7 @@ class FolderInfo(BaseModel):
     path: str
     name: str
     image_count: int
+    direct_image_count: int
     subfolder_count: int
 
 

@@ -213,7 +213,7 @@ const ImageGridCard = memo(function ImageGridCard({
                 <img
                   src={imagesApi.getThumbnailUrl(image.id)}
                   alt={image.original_filename}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                   loading="lazy"
                 />
                 <Button

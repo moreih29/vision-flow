@@ -296,12 +296,14 @@ class ImageService:
                     sub_children.add(first_seg)
             subfolder_count = len(sub_children)
 
+            direct_image_count = path_image_counts.get(child_path, 0)
             name = child_path.rstrip("/").split("/")[-1]
             folders.append(
                 FolderInfo(
                     path=child_path,
                     name=name,
                     image_count=image_count,
+                    direct_image_count=direct_image_count,
                     subfolder_count=subfolder_count,
                 )
             )
@@ -652,16 +654,9 @@ class ImageService:
         src_path = storage.get_file_path(image.storage_key)
         img = PILImage.open(src_path)
         img = ImageOps.exif_transpose(img)
-        # 16비트 grayscale(I;16 등) → 동적 범위 정규화 후 L → RGB
+        # 16비트 grayscale(I;16 등) → 선형 스케일(÷256) 후 L → RGB
         if img.mode.startswith("I"):
-            img_i = img.convert("I")
-            lo, hi = img_i.getextrema()
-            if hi > lo:
-                scale = 255.0 / (hi - lo)
-                offset = -lo * scale
-                img = img_i.point(lambda p: p * scale + offset).convert("L")
-            else:
-                img = img_i.point(lambda p: 0).convert("L")
+            img = img.convert("I").point(lambda p: p * (1.0 / 256)).convert("L")
         if img.mode != "RGB":
             img = img.convert("RGB")
         img.thumbnail((THUMBNAIL_MAX_SIZE, THUMBNAIL_MAX_SIZE), PILImage.Resampling.LANCZOS)

@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import type React from "react";
 import { ChevronRight } from "lucide-react";
 
 interface FolderBreadcrumbProps {
   currentPath: string;
   onNavigate: (path: string) => void;
+  prefix?: React.ReactNode;
 }
 
 export default function FolderBreadcrumb({
   currentPath,
   onNavigate,
+  prefix,
 }: FolderBreadcrumbProps) {
   const segments = currentPath ? currentPath.split("/").filter(Boolean) : [];
 
@@ -62,6 +65,12 @@ export default function FolderBreadcrumb({
 
   return (
     <nav className="flex items-center gap-1 text-sm min-w-0">
+      {prefix && (
+        <>
+          {prefix}
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </>
+      )}
       {/* 루트 */}
       <button
         type="button"

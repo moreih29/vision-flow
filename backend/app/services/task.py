@@ -1,6 +1,7 @@
 import bisect
 
 from fastapi import HTTPException, status
+from natsort import natsort_keygen
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,6 +17,9 @@ from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.task_image import TaskFolderContentsResponse, TaskImageResponse
 from app.services.image import _escape_like, _normalize_folder_path
 from app.services.project import project_service
+
+
+_natsort_key = natsort_keygen()
 
 
 class TaskService:
@@ -296,10 +300,12 @@ class TaskService:
             .where(TaskImage.task_id == task_id)
             .where(TaskImage.folder_path == normalized_path)
             .options(selectinload(TaskImage.image))
-            .offset(skip)
-            .limit(limit)
         )
-        images = [TaskImageResponse.model_validate(ti) for ti in images_result.scalars().all()]
+        all_task_images = sorted(
+            images_result.scalars().all(),
+            key=lambda ti: _natsort_key(ti.image.original_filename),
+        )
+        images = [TaskImageResponse.model_validate(ti) for ti in all_task_images[skip : skip + limit]]
 
         return TaskFolderContentsResponse(
             current_path=normalized_path,

@@ -152,13 +152,14 @@ export function TreeNode({
   const rowContent = (
     <div
       data-tree-node
-      className={`group flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors
+      className={`group flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer
         ${isSelected ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent hover:text-accent-foreground"}
         ${isDragging ? "opacity-40" : ""}
         ${isDragOver && (isValidDropTarget || draggingPath === null) ? "ring-2 ring-primary bg-primary/10" : ""}
       `}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       draggable={!isFile && !isEditing && !readOnly}
+      onClick={isEditing ? undefined : handleClick}
       onContextMenu={() => onSelectPath?.(node.path)}
       onDragStart={
         readOnly || isFile
@@ -221,10 +222,15 @@ export function TreeNode({
             }
       }
     >
-      <button
-        type="button"
+      <span
+        role="button"
         className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-        onClick={() => hasChildren && onToggleExpand(node.path)}
+        onClick={(e) => {
+          if (hasChildren) {
+            e.stopPropagation();
+            onToggleExpand(node.path);
+          }
+        }}
         aria-label={node.expanded ? "축소" : "확장"}
       >
         {hasChildren ? (
@@ -234,7 +240,7 @@ export function TreeNode({
             <ChevronRight className="h-3 w-3" />
           )
         ) : null}
-      </button>
+      </span>
 
       {checkable && (
         <input
@@ -267,11 +273,7 @@ export function TreeNode({
           />
         </div>
       ) : (
-        <button
-          type="button"
-          className="flex items-center gap-1.5 text-left"
-          onClick={handleClick}
-        >
+        <span className="flex items-center gap-1.5 text-left">
           {isFile ? (
             <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : node.expanded ? (
@@ -285,7 +287,7 @@ export function TreeNode({
               ({node.count})
             </span>
           )}
-        </button>
+        </span>
       )}
     </div>
   );

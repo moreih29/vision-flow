@@ -92,9 +92,9 @@ const ImageGridCard = memo(function ImageGridCard({
             draggable={!isRenaming}
             onDragStart={(e) => onDragStart(e, item)}
             onDragEnd={onDragEnd}
-            onDragOver={(e) => onFolderDragOver(e, item)}
+            onDragOver={(e) => onFolderDragOver?.(e, item)}
             onDragLeave={onFolderDragLeave}
-            onDrop={(e) => onFolderDrop(e, item)}
+            onDrop={(e) => onFolderDrop?.(e, item)}
           >
             <div
               className={`overflow-hidden rounded-lg border shadow-sm transition-colors ${

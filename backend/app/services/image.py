@@ -4,6 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from natsort import natsort_keygen
+
 import aiofiles  # type: ignore[import-untyped]
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import case, func, select, update
@@ -31,6 +33,9 @@ def _normalize_folder_path(path: str) -> str:
             detail="Path must not contain '..' segments",
         )
     return path
+
+
+_natsort_key = natsort_keygen()
 
 
 def _escape_like(s: str) -> str:
@@ -190,7 +195,7 @@ class ImageService:
         result = await db.execute(
             select(Image)
             .where(Image.data_store_id == data_store_id)
-            .order_by(Image.created_at.desc())
+            .order_by(Image.original_filename.asc())
             .offset(skip)
             .limit(limit)
         )
@@ -315,11 +320,10 @@ class ImageService:
             select(Image)
             .where(Image.data_store_id == data_store_id)
             .where(Image.folder_path == normalized_path)
-            .order_by(Image.created_at.desc())
-            .offset(skip)
-            .limit(limit)
         )
-        images = [ImageResponse.model_validate(img) for img in images_result.scalars().all()]
+        all_images = sorted(images_result.scalars().all(), key=lambda img: _natsort_key(img.original_filename)
+)
+        images = [ImageResponse.model_validate(img) for img in all_images[skip : skip + limit]]
 
         return FolderContentsResponse(
             current_path=normalized_path,

@@ -549,6 +549,7 @@ export default function DataPoolTab({
       selectByKey(key);
       setScrollToItemKey(key);
       onPathChange(parentPath);
+      viewerRef.current?.focus();
     },
     [onPathChange, selectByKey],
   );
@@ -692,11 +693,13 @@ export default function DataPoolTab({
                 onImageDoubleClick={() => {
                   setQuickLookOpen(true);
                 }}
-                onContextMenu={(_contextItem, index) => {
-                  handleItemClick(
-                    index,
-                    new MouseEvent("click") as unknown as React.MouseEvent,
-                  );
+                onContextMenu={(contextItem, index) => {
+                  if (!selectedKeys.has(contextItem.key)) {
+                    handleItemClick(
+                      index,
+                      new MouseEvent("click") as unknown as React.MouseEvent,
+                    );
+                  }
                 }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
@@ -729,11 +732,13 @@ export default function DataPoolTab({
                 onImageDoubleClick={() => {
                   setQuickLookOpen(true);
                 }}
-                onContextMenu={(_contextItem, index) => {
-                  handleItemClick(
-                    index,
-                    new MouseEvent("click") as unknown as React.MouseEvent,
-                  );
+                onContextMenu={(contextItem, index) => {
+                  if (!selectedKeys.has(contextItem.key)) {
+                    handleItemClick(
+                      index,
+                      new MouseEvent("click") as unknown as React.MouseEvent,
+                    );
+                  }
                 }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
@@ -778,7 +783,8 @@ export default function DataPoolTab({
 
       {dataStore && (
         <FolderPickerDialog
-          dataStoreId={dataStore.id}
+          fetchFolderContents={fetchFolderContents}
+          fetchAllFolders={fetchAllFolders}
           open={moveDialogOpen}
           onClose={() => setMoveDialogOpen(false)}
           onSelect={(targetFolder) => {

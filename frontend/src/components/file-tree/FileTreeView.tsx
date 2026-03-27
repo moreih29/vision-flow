@@ -52,10 +52,10 @@ function PlaceholderRow({ depth }: { depth: number }) {
 function sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {
   const folders = nodes
     .filter((n) => n.type === "folder")
-    .sort((a, b) => a.path.localeCompare(b.path));
+    .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
   const files = nodes
     .filter((n) => n.type === "file")
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   return [...folders, ...files];
 }
 
@@ -843,6 +843,19 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       setDragOverPath(null);
     }
     function handleDragOver(_e: React.DragEvent, path: string) {
+      const types = Array.from(_e.dataTransfer.types);
+      const hasAcceptedItems = acceptDropTypes.some((t) => types.includes(t));
+      const hasExternalFiles = types.includes("Files") && !hasAcceptedItems;
+      if (!hasAcceptedItems && !hasExternalFiles && !draggingPath) return;
+      _e.preventDefault();
+      _e.stopPropagation();
+      if (hasAcceptedItems) {
+        _e.dataTransfer.dropEffect = "move";
+      } else if (hasExternalFiles) {
+        _e.dataTransfer.dropEffect = "copy";
+      } else {
+        _e.dataTransfer.dropEffect = "move";
+      }
       setDragOverPath(path);
       fileDropTargetRef.current = path;
     }

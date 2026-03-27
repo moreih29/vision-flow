@@ -109,9 +109,9 @@ const ImageListRow = memo(function ImageListRow({
             draggable={!isRenaming}
             onDragStart={(e) => onDragStart(e, item)}
             onDragEnd={onDragEnd}
-            onDragOver={(e) => onFolderDragOver(e, item)}
+            onDragOver={(e) => onFolderDragOver?.(e, item)}
             onDragLeave={onFolderDragLeave}
-            onDrop={(e) => onFolderDrop(e, item)}
+            onDrop={(e) => onFolderDrop?.(e, item)}
           >
             <div
               className="w-10 shrink-0 flex items-center justify-center cursor-pointer"

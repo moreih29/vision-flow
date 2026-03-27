@@ -1,121 +1,146 @@
-import { useEffect, useState } from 'react'
-import { Folder, FolderOpen } from 'lucide-react'
-import { imagesApi } from '@/api/images'
-import { Button } from '@/components/ui/button'
+import { FolderOpen } from "lucide-react";
+import {
+  FileTreeView,
+  type FileContentsResult,
+} from "@/components/file-tree/FileTreeView";
+import { imagesApi } from "@/api/images";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from "@/components/ui/dialog";
+import { useMemo, useState } from "react";
 
 interface FolderPickerDialogProps {
-  dataStoreId: number
-  open: boolean
-  onClose: () => void
-  onSelect: (targetFolder: string) => void
-  excludePaths?: string[]
+  dataStoreId?: number;
+  fetchFolderContents?: (
+    path: string,
+    skip?: number,
+    limit?: number,
+  ) => Promise<FileContentsResult>;
+  fetchAllFolders?: () => Promise<string[]>;
+  /** @deprecated fetchAllFolders를 사용하세요 */
+  fetchFolders?: () => Promise<string[]>;
+  open: boolean;
+  onClose: () => void;
+  onSelect: (targetFolder: string) => void;
+  excludePaths?: string[];
+  title?: string;
+  confirmLabel?: string;
 }
 
 export default function FolderPickerDialog({
   dataStoreId,
+  fetchFolderContents,
+  fetchAllFolders,
+  fetchFolders,
   open,
   onClose,
   onSelect,
   excludePaths = [],
+  title = "이동할 폴더 선택",
+  confirmLabel = "이동",
 }: FolderPickerDialogProps) {
-  const [folders, setFolders] = useState<string[]>([])
-  const [selected, setSelected] = useState<string>('')
-  const [loading, setLoading] = useState(false)
+  const [selectedFolder, setSelectedFolder] = useState<string>("");
+  const excludeSet = useMemo(() => new Set(excludePaths), [excludePaths]);
 
-  useEffect(() => {
-    if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoading(true)
-      setSelected('')
-      imagesApi
-        .getAllFolders(dataStoreId)
-        .then((res) => setFolders(res.data))
-        .catch(() => setFolders([]))
-        .finally(() => setLoading(false))
-    }
-  }, [open, dataStoreId])
+  // 폴더만 표시 — files는 항상 빈 배열로 강제
+  const resolvedFetchFolderContents = useMemo(() => {
+    const base: (
+      path: string,
+      skip?: number,
+      limit?: number,
+    ) => Promise<FileContentsResult> = fetchFolderContents
+      ? fetchFolderContents
+      : dataStoreId != null
+        ? async (path, skip, limit) => {
+            const res = await imagesApi.getFolderContents(
+              dataStoreId,
+              path,
+              skip,
+              limit,
+            );
+            return {
+              folders: res.data.folders.map((f) => ({
+                path: f.path,
+                name: f.name,
+                count: f.image_count,
+                subfolder_count: f.subfolder_count,
+              })),
+              files: [],
+            };
+          }
+        : async () => ({ folders: [], files: [] });
+    return async (
+      path: string,
+      skip?: number,
+      limit?: number,
+    ): Promise<FileContentsResult> => {
+      const result = await base(path, skip, limit);
+      return { ...result, files: [], totalFiles: 0 };
+    };
+  }, [fetchFolderContents, dataStoreId]);
 
-  const excludeSet = new Set(excludePaths)
-  const available = folders.filter((f) => !excludeSet.has(f))
+  const resolvedFetchAllFolders = useMemo(
+    () =>
+      fetchAllFolders
+        ? fetchAllFolders
+        : fetchFolders
+          ? fetchFolders
+          : dataStoreId != null
+            ? () => imagesApi.getAllFolders(dataStoreId).then((res) => res.data)
+            : () => Promise.resolve([]),
+    [fetchAllFolders, fetchFolders, dataStoreId],
+  );
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) onClose()
+        if (!o) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="w-[520px] max-w-2xl">
         <DialogHeader>
-          <DialogTitle>이동할 폴더 선택</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="max-h-64 overflow-y-auto -mx-4 px-2">
-          {loading ? (
-            <p className="p-4 text-center text-sm text-muted-foreground">
-              로딩 중...
-            </p>
-          ) : (
-            <>
-              <button
-                type="button"
-                className={`w-full flex items-center gap-2 rounded px-3 py-2 text-sm hover:bg-accent ${
-                  selected === '' ? 'bg-accent font-medium' : ''
-                }`}
-                onClick={() => setSelected('')}
-              >
-                <FolderOpen className="h-4 w-4 shrink-0" />
-                루트 (최상위)
-              </button>
-              {available.map((path) => {
-                const depth = path.split('/').length - 2
-                const name = path.replace(/\/$/, '').split('/').pop()
-                return (
-                  <button
-                    key={path}
-                    type="button"
-                    className={`w-full flex items-center gap-2 rounded py-2 text-sm hover:bg-accent ${
-                      selected === path ? 'bg-accent font-medium' : ''
-                    }`}
-                    style={{
-                      paddingLeft: `${depth * 16 + 12}px`,
-                      paddingRight: '12px',
-                    }}
-                    onClick={() => setSelected(path)}
-                  >
-                    <Folder className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{name}</span>
-                  </button>
-                )
-              })}
-              {available.length === 0 && !loading && (
-                <p className="p-4 text-center text-xs text-muted-foreground">
-                  다른 폴더가 없습니다.
-                </p>
-              )}
-            </>
+        <div className="h-[400px] overflow-auto rounded-md border flex flex-col">
+          {open && (
+            <FileTreeView
+              readOnly
+              fetchFolderContents={resolvedFetchFolderContents}
+              fetchAllFolders={resolvedFetchAllFolders}
+              rootLabel="루트 (최상위)"
+              rootIcon={<FolderOpen className="h-4 w-4 shrink-0" />}
+              selectedPath={selectedFolder}
+              onSelectPath={(path) => {
+                if (!excludeSet.has(path)) {
+                  setSelectedFolder(path);
+                }
+              }}
+            />
           )}
         </div>
 
         <DialogFooter>
-          <DialogClose>
-            <Button variant="outline" size="sm">
-              취소
-            </Button>
-          </DialogClose>
-          <Button size="sm" onClick={() => onSelect(selected)}>
-            이동
+          <Button variant="outline" size="sm" onClick={onClose}>
+            취소
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              onSelect(selectedFolder);
+              onClose();
+            }}
+          >
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

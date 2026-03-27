@@ -80,6 +80,13 @@ export default function VirtualGrid<T extends ViewerItem>({
     virtualizer.measure();
   }, [itemSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 폴더 이동 시 virtualizer 캐시 무효화 + 스크롤 리셋
+  const firstItemKey = items[0]?.key;
+  useEffect(() => {
+    virtualizer.measure();
+    parentRef.current?.scrollTo(0, 0);
+  }, [firstItemKey, hasParentItem]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // scrollToItemKey 변경 시 해당 아이템 행으로 스크롤
   useEffect(() => {
     if (!scrollToItemKey) return;

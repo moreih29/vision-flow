@@ -417,10 +417,14 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
       <AlertDialog
         open={!!restoreTarget}
         onOpenChange={(open) => {
-          if (!open) setRestoreTarget(null);
+          if (!open && !restoreMutation.isPending) setRestoreTarget(null);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          onEscapeKeyDown={(e) => {
+            if (restoreMutation.isPending) e.preventDefault();
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>버전 복원</AlertDialogTitle>
             {isDirty ? (
@@ -443,7 +447,10 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRestoreTarget(null)}>
+            <AlertDialogCancel
+              onClick={() => setRestoreTarget(null)}
+              disabled={restoreMutation.isPending}
+            >
               취소
             </AlertDialogCancel>
             {isDirty ? (

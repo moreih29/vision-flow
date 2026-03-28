@@ -13,8 +13,7 @@ class TaskSnapshot(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
     major_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    data_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    label_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    minor_version: Mapped[int] = mapped_column(Integer, nullable=False)
     is_stash: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -25,6 +24,9 @@ class TaskSnapshot(Base):
     image_set_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     annotation_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     label_classes_snapshot: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    restored_from_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("task_snapshots.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -36,8 +38,7 @@ class TaskSnapshot(Base):
             "ix_task_snapshots_version_unique",
             "task_id",
             "major_version",
-            "data_version",
-            "label_version",
+            "minor_version",
             unique=True,
             postgresql_where=text("is_stash = false"),
         ),
@@ -45,8 +46,8 @@ class TaskSnapshot(Base):
 
     @property
     def version_string(self) -> str:
-        return f"v{self.major_version}.{self.data_version}.{self.label_version}"
+        return f"v{self.major_version}.{self.minor_version}"
 
     # relationships
-    task: Mapped["Task"] = relationship(back_populates="snapshots")
+    task: Mapped["Task"] = relationship(back_populates="snapshots", foreign_keys=[task_id])
     items: Mapped[list["TaskSnapshotItem"]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")

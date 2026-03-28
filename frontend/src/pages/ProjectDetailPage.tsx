@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Database, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageBreadcrumb } from "@/components/layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
@@ -15,19 +17,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import DataPoolTab from "@/components/DataPoolTab";
 import TasksTab from "@/components/TasksTab";
 import { useProject, useUpdateProject } from "@/hooks/use-projects";
 import { useDataStores } from "@/hooks/use-data-stores";
-import { useTasks } from "@/hooks/use-tasks";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") ?? "pool";
-  const currentPath = searchParams.get("folder") ?? "";
   const projectId = Number(id);
   const { confirmDialog, showAlert } = useConfirmDialog();
 
@@ -37,41 +33,12 @@ export default function ProjectDetailPage() {
 
   const { data: project, isLoading, isError } = useProject(projectId);
   const { data: dataStores } = useDataStores(projectId);
-  const { data: tasks } = useTasks(projectId);
   const updateProject = useUpdateProject(projectId);
 
   const poolImageCount = dataStores
     ? dataStores.reduce((sum, d) => sum + d.image_count, 0)
     : null;
-  const taskCount = tasks?.length ?? null;
-
-  function handleTabChange(newTab: string | number | null) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (newTab === "pool") {
-        next.delete("tab");
-      } else {
-        next.set("tab", newTab as string);
-      }
-      next.delete("folder");
-      return next;
-    });
-  }
-
-  const handlePathChange = useCallback(
-    (path: string) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (path) {
-          next.set("folder", path);
-        } else {
-          next.delete("folder");
-        }
-        return next;
-      });
-    },
-    [setSearchParams],
-  );
+  const dataStoreCount = dataStores?.length ?? null;
 
   function openEditDialog() {
     if (!project) return;
@@ -97,76 +64,74 @@ export default function ProjectDetailPage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <header className="border-b">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/projects")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          {isLoading ? (
-            <Skeleton className="h-6 w-48" />
-          ) : (
-            <div className="flex flex-1 items-center gap-2">
-              <div>
-                <h1 className="text-xl font-bold">{project?.name}</h1>
-                {project?.description && (
-                  <p className="text-sm text-muted-foreground">
-                    {project.description}
-                  </p>
-                )}
-              </div>
+          <PageBreadcrumb
+            items={[
+              { label: "프로젝트 목록", href: "/projects" },
+              { label: isLoading ? "..." : (project?.name ?? "") },
+            ]}
+          />
+          {!isLoading && (
+            <div className="flex items-center gap-2">
+              {project?.description && (
+                <span className="text-sm text-muted-foreground hidden sm:inline">
+                  {project.description}
+                </span>
+              )}
               <Button variant="ghost" size="icon" onClick={openEditDialog}>
                 <Pencil className="h-4 w-4" />
               </Button>
             </div>
           )}
+          {isLoading && <Skeleton className="h-5 w-48" />}
         </div>
       </header>
 
-      <main className="px-6 py-4 flex-1 flex flex-col overflow-hidden min-h-0">
+      <main className="px-6 py-4 flex-1 flex flex-col overflow-hidden min-h-0 gap-6">
         {isError && (
-          <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             프로젝트를 불러오지 못했습니다.
           </div>
         )}
 
-        <Tabs
-          value={tab}
-          onValueChange={handleTabChange}
-          className="flex flex-col flex-1 min-h-0"
-        >
-          <TabsList className="mb-6">
-            <TabsTrigger value="pool">
-              Data Pool
-              {poolImageCount !== null && (
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {poolImageCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="tasks">
-              Tasks
-              {taskCount !== null && (
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {taskCount}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+        {/* 데이터풀 요약 카드 */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Database className="h-4 w-4 text-muted-foreground" />
+              데이터풀
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/projects/${projectId}/data-pool`)}
+            >
+              관리
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-8">
+              <div>
+                <p className="text-2xl font-bold">
+                  {poolImageCount !== null
+                    ? poolImageCount.toLocaleString()
+                    : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">전체 이미지</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold">
+                  {dataStoreCount !== null ? dataStoreCount : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">데이터 스토어</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          <TabsContent value="pool" className="flex-1 min-h-0 flex flex-col">
-            <DataPoolTab
-              projectId={projectId}
-              currentPath={currentPath}
-              onPathChange={handlePathChange}
-            />
-          </TabsContent>
-
-          <TabsContent value="tasks" className="flex-1 min-h-0 overflow-auto">
-            <TasksTab projectId={projectId} />
-          </TabsContent>
-        </Tabs>
+        {/* 태스크 목록 */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          <TasksTab projectId={projectId} />
+        </div>
       </main>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

@@ -8,7 +8,7 @@ from app.database import Base
 
 class TaskImage(Base):
     __tablename__ = "task_images"
-    __table_args__ = (UniqueConstraint("task_id", "image_id"),)
+    __table_args__ = (UniqueConstraint("task_id", "image_id", "folder_path"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)

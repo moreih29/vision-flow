@@ -1,4 +1,5 @@
 <!-- tags: dev, docker, setup, ports, scripts, tools -->
+<!-- tags: dev, docker, setup, ports, scripts, tools -->
 <!-- tags: dev, docker, setup, ports, scripts -->
 
 # 개발 환경
@@ -56,4 +57,15 @@ alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```
 
-현재 마이그레이션 9개 (initial → task_snapshot → version_split → 3level_version_stash)
+현재 마이그레이션 목록 (순서대로):
+
+- `a1b2c3d4e5f6_add_task_snapshots_tables.py`
+- `b2c3d4e5f6a7_fix_fk_ondelete_task_snapshot_items_task_images.py`
+- `c3d4e5f6a7b8_fix_fk_ondelete_cascade_all_tables.py`
+- `d4e5f6a7b8c9_add_label_classes_snapshot_to_task_snapshots.py`
+- `e5f6a7b8c9d0_split_version_into_major_minor.py`
+- `f6a7b8c9d0e1_add_3level_version_stash_hashes.py`
+- `c4d5e6f7a8b9_fix_task_snapshot_items_unique_constraint_add_folder_path.py`
+- `d5e6f7a8b9c0_add_current_snapshot_id_to_tasks.py`
+- `c3e5f287ddf6_add_restored_from_id_to_task_snapshots.py`
+- `deaad1ba7e2d_set_ondelete_set_null_for_annotations_.py`

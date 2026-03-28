@@ -27,6 +27,7 @@ interface ImageGridCardProps {
   onDeleteImage: (id: number) => void;
   onImageDoubleClick?: (index: number) => void;
   onContextMenu: (item: DataPoolItem, index: number) => void;
+  onOpenLabeling?: (imageId: number) => void;
   onDragStart: (e: React.DragEvent, item: DataPoolItem) => void;
   onDragEnd: () => void;
   onFolderDragOver: (e: React.DragEvent, item: DataPoolItem) => void;
@@ -54,6 +55,7 @@ const ImageGridCard = memo(function ImageGridCard({
   onDeleteImage,
   onImageDoubleClick,
   onContextMenu,
+  onOpenLabeling,
   onDragStart,
   onDragEnd,
   onFolderDragOver,
@@ -71,6 +73,7 @@ const ImageGridCard = memo(function ImageGridCard({
     onDeleteSelected,
     onDeleteFolder,
     onDeleteImage,
+    onOpenLabeling,
   };
 
   if (item.type === "folder" && item.folder) {

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { snapshotsApi } from "@/api/snapshots";
-import type { SnapshotCreate } from "@/types/snapshot";
+import type { SnapshotCreate, VersionStatus } from "@/types/snapshot";
 
 export function useSnapshots(taskId: number) {
   return useQuery({
@@ -19,7 +19,12 @@ export function useCreateSnapshot(taskId: number) {
     mutationFn: (data: SnapshotCreate) =>
       snapshotsApi.create(taskId, data).then((res) => res.data),
     onSuccess: () => {
+      qc.setQueryData<VersionStatus>(
+        ["tasks", taskId, "version-status"],
+        (old) => (old ? { ...old, is_dirty: false, changes: {} } : old),
+      );
       qc.invalidateQueries({ queryKey: ["snapshots", taskId] });
+      qc.invalidateQueries({ queryKey: ["tasks", taskId, "version-status"] });
     },
   });
 }
@@ -27,9 +32,21 @@ export function useCreateSnapshot(taskId: number) {
 export function useRestoreSnapshot(taskId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, confirm }: { id: number; confirm: boolean }) =>
-      snapshotsApi.restore(id, confirm).then((res) => res.data),
+    mutationKey: ["restore-snapshot", taskId],
+    mutationFn: ({
+      id,
+      confirm,
+      skipStash,
+    }: {
+      id: number;
+      confirm: boolean;
+      skipStash?: boolean;
+    }) => snapshotsApi.restore(id, confirm, skipStash).then((res) => res.data),
     onSuccess: () => {
+      qc.setQueryData<VersionStatus>(
+        ["tasks", taskId, "version-status"],
+        (old) => (old ? { ...old, is_dirty: false, changes: {} } : old),
+      );
       qc.invalidateQueries({ queryKey: ["snapshots", taskId] });
       qc.invalidateQueries({ queryKey: ["stash", taskId] });
       qc.invalidateQueries({ queryKey: ["tasks", taskId, "version-status"] });
@@ -55,7 +72,7 @@ export function useVersionStatus(taskId: number) {
     queryKey: ["tasks", taskId, "version-status"],
     queryFn: () =>
       snapshotsApi.getVersionStatus(taskId).then((res) => res.data),
-    refetchInterval: 10_000,
+    staleTime: Infinity,
   });
 }
 

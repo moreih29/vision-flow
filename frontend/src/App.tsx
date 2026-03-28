@@ -11,6 +11,7 @@ import RegisterPage from "@/pages/RegisterPage";
 import ProjectsPage from "@/pages/ProjectsPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import TaskDetailPage from "@/pages/TaskDetailPage";
+import DataPoolPage from "@/pages/DataPoolPage";
 import LabelingPage from "@/pages/LabelingPage";
 
 function App() {
@@ -53,6 +54,16 @@ function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <ProjectDetailPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:id/data-pool"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <DataPoolPage />
                 </AppLayout>
               </ProtectedRoute>
             }

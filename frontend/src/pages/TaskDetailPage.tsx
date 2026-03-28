@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useQueryClient, useIsMutating } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Database,
@@ -17,23 +18,17 @@ import {
   ImageQuickLook,
   type QuickLookItem,
 } from "@/components/content-viewer/ImageQuickLook";
-import { labelClassesApi } from "@/api/label-classes";
 import type { Task } from "@/types/task";
-import type { LabelClass } from "@/types/label-class";
 import type { DataPoolItem, ImageMeta } from "@/types/image";
 import type { DataStore } from "@/types/data-store";
+import type { VersionStatus } from "@/types/snapshot";
 import { Button } from "@/components/ui/button";
 import FolderBreadcrumb from "@/components/FolderBreadcrumb";
-import {
-  TaskDetailHeader,
-  TaskClassPanel,
-  VersionPanel,
-} from "@/components/task-detail";
+import { TaskDetailHeader } from "@/components/task-detail";
 import {
   FileTreeView as FolderTreeView,
   type FileTreeRef as FolderTreeRef,
 } from "@/components/file-tree";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ImageGridCard, ImageListRow } from "@/components/data-pool";
 import { ContentArea } from "@/components/content-viewer";
 import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
@@ -53,20 +48,21 @@ const VIEW_MODE_KEY = "task_preview_mode";
 export default function TaskDetailPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const projectId = Number(id);
   const taskIdNum = Number(taskId);
   const { confirmDialog, confirm, showAlert } = useConfirmDialog();
-  const initialTab =
-    searchParams.get("tab") === "versions" ? "snapshots" : "classes";
+  const queryClient = useQueryClient();
+  const isRestoring =
+    useIsMutating({ mutationKey: ["restore-snapshot", taskIdNum] }) > 0;
 
   // -- Viewer mode --
   const [viewerMode, setViewerMode] = useState<"task" | "pool">("task");
+  const [poolPanelOpen, setPoolPanelOpen] = useState(false);
+  const effectiveViewerMode = poolPanelOpen ? viewerMode : "task";
   const [poolCurrentPath, setPoolCurrentPath] = useState("");
 
   // -- Core state --
   const [task, setTask] = useState<Task | null>(null);
-  const [classes, setClasses] = useState<LabelClass[]>([]);
   const [quickLookOpen, setQuickLookOpen] = useState(false);
   const [taskLoading, setTaskLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,23 +82,6 @@ export default function TaskDetailPage() {
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [scrollToItemKey, setScrollToItemKey] = useState<string | null>(null);
   const [gridColumns, setGridColumns] = useState(5);
-  const [addingClass, setAddingClass] = useState(false);
-  const [newClassName, setNewClassName] = useState("");
-  const CLASS_COLORS = [
-    "#3b82f6",
-    "#ef4444",
-    "#22c55e",
-    "#f59e0b",
-    "#8b5cf6",
-    "#ec4899",
-    "#06b6d4",
-    "#f97316",
-    "#14b8a6",
-    "#6366f1",
-  ];
-  const nextColor = CLASS_COLORS[classes.length % CLASS_COLORS.length];
-  const [newClassColor, setNewClassColor] = useState(nextColor);
-  const [savingClass, setSavingClass] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<FolderTreeRef>(null);
   const poolTreeRef = useRef<FolderTreeRef>(null);
@@ -193,6 +172,17 @@ export default function TaskDetailPage() {
     await treeRef.current?.refresh();
   }, [invalidateAll]);
 
+  const handleRestoreSuccess = useCallback(async () => {
+    await refreshAll();
+    try {
+      const taskRes = await tasksApi.get(taskIdNum);
+      setTask(taskRes.data);
+      queryClient.invalidateQueries({ queryKey: ["label-classes", taskIdNum] });
+    } catch {
+      // silently fail
+    }
+  }, [refreshAll, taskIdNum, queryClient]);
+
   const refreshPoolTree = useCallback(async () => {
     try {
       const res = await dataStoresApi.list(projectId);
@@ -269,17 +259,17 @@ export default function TaskDetailPage() {
   } = useMultiSelect(poolItemKeys, poolCurrentPath);
 
   // 활성 모드에 따른 통합 뷰 데이터
-  const activeItems = viewerMode === "pool" ? poolItems : items;
+  const activeItems = effectiveViewerMode === "pool" ? poolItems : items;
   const activeSelectedKeys =
-    viewerMode === "pool" ? poolSelectedKeys : selectedKeys;
+    effectiveViewerMode === "pool" ? poolSelectedKeys : selectedKeys;
   const activeSelectedCount =
-    viewerMode === "pool" ? poolSelectedCount : selectedCount;
+    effectiveViewerMode === "pool" ? poolSelectedCount : selectedCount;
   const activeHandleItemClick =
-    viewerMode === "pool" ? poolHandleItemClick : handleItemClick;
+    effectiveViewerMode === "pool" ? poolHandleItemClick : handleItemClick;
   const activeClearSelection =
-    viewerMode === "pool" ? poolClearSelection : clearSelection;
+    effectiveViewerMode === "pool" ? poolClearSelection : clearSelection;
   const activeCursorIndexRef =
-    viewerMode === "pool" ? poolCursorIndexRef : cursorIndexRef;
+    effectiveViewerMode === "pool" ? poolCursorIndexRef : cursorIndexRef;
 
   // 현재 cursor 위치 아이템 기반 QuickLookItem 계산 (활성 모드 기준)
   const quickLookItem = useMemo((): QuickLookItem | null => {
@@ -299,7 +289,7 @@ export default function TaskDetailPage() {
       );
       const imgIdx = activeImageItems.indexOf(cursorItem);
       const activeTotalImages =
-        viewerMode === "pool" ? poolTotalImages : totalImages;
+        effectiveViewerMode === "pool" ? poolTotalImages : totalImages;
       return {
         type: "image",
         id: cursorItem.image.id,
@@ -324,7 +314,7 @@ export default function TaskDetailPage() {
     activeSelectedKeys,
     activeItems,
     activeCursorIndexRef,
-    viewerMode,
+    effectiveViewerMode,
     poolTotalImages,
     totalImages,
   ]);
@@ -587,31 +577,35 @@ export default function TaskDetailPage() {
       if (!data) return;
       const { taskImageIds, imageIds, folderPaths, source } = JSON.parse(data);
       if (source === "pool" && dataStore) {
+        const toastId = toast.loading("추가 중...");
         const counter = { completed: 0, total: 0 };
         const noop = () => {};
-        // 이미지 직접 추가
-        if (imageIds && imageIds.length > 0) {
-          await tasksApi.addImages(taskIdNum, imageIds, targetPath);
-        }
-        // 폴더 재귀 추가
-        if (folderPaths && folderPaths.length > 0) {
-          for (const fp of folderPaths) {
-            const folderName = fp.replace(/\/$/, "").split("/").pop() || "";
-            const taskTarget = targetPath
-              ? `${targetPath}${folderName}/`
-              : `${folderName}/`;
-            await addPoolFoldersToTask(
-              dataStore.id,
-              fp,
-              taskTarget,
-              noop,
-              counter,
-            );
+        try {
+          // 이미지 직접 추가
+          if (imageIds && imageIds.length > 0) {
+            await tasksApi.addImages(taskIdNum, imageIds, targetPath);
           }
+          // 폴더 재귀 추가
+          if (folderPaths && folderPaths.length > 0) {
+            for (const fp of folderPaths) {
+              const folderName = fp.replace(/\/$/, "").split("/").pop() || "";
+              const taskTarget = targetPath
+                ? `${targetPath}${folderName}/`
+                : `${folderName}/`;
+              await addPoolFoldersToTask(
+                dataStore.id,
+                fp,
+                taskTarget,
+                noop,
+                counter,
+              );
+            }
+          }
+          await handleImagesAdded();
+          toast.success("추가되었습니다.", { id: toastId });
+        } catch {
+          toast.error("추가에 실패했습니다.", { id: toastId });
         }
-        await refreshAll();
-        const res = await tasksApi.get(taskIdNum);
-        setTask(res.data);
       } else {
         await dropItems.mutate(
           taskImageIds ?? imageIds ?? [],
@@ -646,7 +640,7 @@ export default function TaskDetailPage() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (moveDialogOpen) return;
-      const isPool = viewerMode === "pool";
+      const isPool = effectiveViewerMode === "pool";
       const activeSelectAll = isPool ? poolSelectAll : selectAll;
       const activeClear = isPool ? poolClearSelection : clearSelection;
       const activeSKeys = isPool ? poolSelectedKeys : selectedKeys;
@@ -776,7 +770,7 @@ export default function TaskDetailPage() {
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
   }, [
-    viewerMode,
+    effectiveViewerMode,
     selectAll,
     poolSelectAll,
     clearSelection,
@@ -982,18 +976,61 @@ export default function TaskDetailPage() {
     }
   }
 
-  // -- Task + Classes 로드 --
+  // -- Pool 전체 추가 (선택 무시, 현재 폴더 기준) --
+  async function handlePoolAddAllToTask() {
+    if (!dataStore || poolAdding) return;
+    setPoolAdding(true);
+    setPoolProgress({ completed: 0, total: 0 });
+    let totalAdded = 0;
+    let totalMoved = 0;
+    let totalFailed = 0;
+    const counter = { completed: 0, total: 0 };
+    const onProgress = (completed: number, total: number) => {
+      setPoolProgress({ completed, total });
+    };
+    try {
+      const folderName = poolCurrentPath
+        ? poolCurrentPath.replace(/\/$/, "").split("/").pop()!
+        : "";
+      const taskTarget = folderName
+        ? currentPath
+          ? `${currentPath}${folderName}/`
+          : `${folderName}/`
+        : currentPath;
+      const result = await addPoolFoldersToTask(
+        dataStore.id,
+        poolCurrentPath || "",
+        taskTarget,
+        onProgress,
+        counter,
+      );
+      totalAdded += result.added;
+      totalMoved += result.moved;
+      totalFailed += result.failed;
+      await handleImagesAdded();
+      if (totalFailed > 0) {
+        await showAlert({
+          title: `${totalAdded}개 추가됨, ${totalFailed}개 실패`,
+        });
+      } else if (totalMoved > 0) {
+        toast.info(`${totalAdded}개 추가, ${totalMoved}개 기존 이미지 이동`);
+      }
+    } catch {
+      await showAlert({ title: "추가 중 오류가 발생했습니다." });
+    } finally {
+      setPoolAdding(false);
+      setPoolProgress(null);
+    }
+  }
+
+  // -- Task 로드 --
   useEffect(() => {
     async function fetchMeta() {
       setTaskLoading(true);
       setError(null);
       try {
-        const [taskRes, classesRes] = await Promise.all([
-          tasksApi.get(taskIdNum),
-          labelClassesApi.list(taskIdNum),
-        ]);
+        const taskRes = await tasksApi.get(taskIdNum);
         setTask(taskRes.data);
-        setClasses(classesRes.data);
       } catch {
         setError("데이터를 불러오지 못했습니다.");
       } finally {
@@ -1003,68 +1040,39 @@ export default function TaskDetailPage() {
     fetchMeta();
   }, [taskIdNum]);
 
-  // -- Class CRUD --
-  async function handleAddClass() {
-    if (!newClassName.trim()) return;
-    setSavingClass(true);
-    try {
-      const res = await labelClassesApi.create(taskIdNum, {
-        name: newClassName.trim(),
-        color: newClassColor,
-      });
-      setClasses((prev) => [...prev, res.data]);
-      setTask((prev) =>
-        prev ? { ...prev, class_count: prev.class_count + 1 } : prev,
-      );
-      setNewClassName("");
-      setNewClassColor(
-        CLASS_COLORS[(classes.length + 1) % CLASS_COLORS.length],
-      );
-      setAddingClass(false);
-    } catch {
-      await showAlert({ title: "클래스 추가에 실패했습니다." });
-    } finally {
-      setSavingClass(false);
-    }
-  }
-
-  async function handleDeleteClass(classId: number) {
-    const confirmed = await confirm({
-      title: "클래스 삭제",
-      description: "클래스를 삭제하시겠습니까?",
-      confirmLabel: "삭제",
-      variant: "destructive",
-    });
-    if (!confirmed) return;
-    try {
-      await labelClassesApi.delete(classId);
-      setClasses((prev) => prev.filter((c) => c.id !== classId));
-      setTask((prev) =>
-        prev
-          ? { ...prev, class_count: Math.max(0, prev.class_count - 1) }
-          : prev,
-      );
-    } catch {
-      await showAlert({ title: "클래스 삭제에 실패했습니다." });
-    }
-  }
-
   async function handleImagesAdded() {
+    queryClient.setQueryData<VersionStatus>(
+      ["tasks", taskIdNum, "version-status"],
+      (old) =>
+        old
+          ? {
+              ...old,
+              is_dirty: true,
+              changes: { ...old.changes, data_changed: true },
+            }
+          : old,
+    );
     await refreshAll();
     const res = await tasksApi.get(taskIdNum);
     setTask(res.data);
+    queryClient.invalidateQueries({
+      queryKey: ["tasks", taskIdNum, "version-status"],
+    });
+    queryClient.invalidateQueries({ queryKey: ["tasks", taskIdNum] });
   }
 
   // -- Toolbar --
   const activeCurrentPath =
-    viewerMode === "pool" ? poolCurrentPath : currentPath;
+    effectiveViewerMode === "pool" ? poolCurrentPath : currentPath;
   const activeNavigate =
-    viewerMode === "pool" ? handlePoolNavigateFolder : handleNavigateFolder;
+    effectiveViewerMode === "pool"
+      ? handlePoolNavigateFolder
+      : handleNavigateFolder;
   const activeContentsLoading =
-    viewerMode === "pool" ? poolContentsLoading : contentsLoading;
-  const activeFolders = viewerMode === "pool" ? poolFolders : folders;
+    effectiveViewerMode === "pool" ? poolContentsLoading : contentsLoading;
+  const activeFolders = effectiveViewerMode === "pool" ? poolFolders : folders;
   const activeTotalImages =
-    viewerMode === "pool" ? poolTotalImages : totalImages;
+    effectiveViewerMode === "pool" ? poolTotalImages : totalImages;
 
   const toolbar = (
     <div className="mb-4 select-none shrink-0 space-y-1">
@@ -1072,7 +1080,7 @@ export default function TaskDetailPage() {
         currentPath={activeCurrentPath}
         onNavigate={(path) => activeNavigate(path ? path + "/" : "")}
         prefix={
-          viewerMode === "pool" ? (
+          effectiveViewerMode === "pool" ? (
             <span className="shrink-0 text-blue-500 font-medium">
               Data Pool
             </span>
@@ -1086,25 +1094,51 @@ export default function TaskDetailPage() {
           {activeContentsLoading
             ? "로딩 중..."
             : `${activeFolders.length > 0 ? `${activeFolders.length}개 폴더, ` : ""}${activeTotalImages}개 이미지`}
+          {effectiveViewerMode === "pool" &&
+            !activeContentsLoading &&
+            (poolSelectedCount > 0 ? (
+              <span className="ml-2 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                {poolSelectedCount}개 선택됨
+              </span>
+            ) : (
+              <span className="ml-2 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+                💡 이미지를 선택하여 추가
+              </span>
+            ))}
         </span>
         <div className="flex items-center gap-2">
-          {viewerMode === "pool" && (
-            <Button
-              size="sm"
-              className="h-7 text-xs"
-              disabled={poolAdding}
-              onClick={() => setAddTargetDialogOpen(true)}
-            >
-              {poolAdding
-                ? poolProgress
-                  ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
-                  : "추가 중..."
-                : poolSelectedCount > 0
-                  ? `Task에 추가 (${poolSelectedCount})`
+          {effectiveViewerMode === "pool" && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={poolAdding}
+                onClick={handlePoolAddAllToTask}
+              >
+                {poolAdding && poolSelectedCount === 0
+                  ? poolProgress
+                    ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
+                    : "추가 중..."
                   : "전체 추가"}
-            </Button>
+              </Button>
+              {poolSelectedCount > 0 && (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={poolAdding}
+                  onClick={() => setAddTargetDialogOpen(true)}
+                >
+                  {poolAdding
+                    ? poolProgress
+                      ? `추가 중... (${poolProgress.completed}/${poolProgress.total})`
+                      : "추가 중..."
+                    : "Task에 추가 →"}
+                </Button>
+              )}
+            </>
           )}
-          {viewerMode === "task" && (
+          {effectiveViewerMode === "task" && (
             <Button
               variant="outline"
               size="sm"
@@ -1144,15 +1178,41 @@ export default function TaskDetailPage() {
     </div>
   );
 
+  function handleTogglePoolPanel() {
+    if (poolPanelOpen) {
+      setViewerMode("task");
+      poolClearSelection();
+    } else {
+      setViewerMode("pool");
+    }
+    setPoolPanelOpen((prev) => !prev);
+  }
+
   return (
     <div className="flex flex-1 flex-col min-h-0">
       <TaskDetailHeader
         task={task}
         loading={taskLoading}
-        onBack={() => navigate(`/projects/${projectId}`)}
+        poolPanelOpen={poolPanelOpen}
+        onTogglePoolPanel={handleTogglePoolPanel}
+        onLabelingClick={() =>
+          navigate(`/projects/${projectId}/tasks/${taskIdNum}/label`)
+        }
+        onRestoreSuccess={handleRestoreSuccess}
+        isRestoring={isRestoring}
       />
 
-      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
+      <main className="relative mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
+        {isRestoring && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-md bg-background px-4 py-2 shadow-md border">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span className="text-sm text-muted-foreground">
+                버전을 복원하는 중...
+              </span>
+            </div>
+          </div>
+        )}
         {error && (
           <div className="mb-4 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive select-text">
             {error}
@@ -1160,50 +1220,56 @@ export default function TaskDetailPage() {
         )}
 
         <div className="flex flex-1 gap-6 min-h-0">
-          {/* 좌측: Pool + Task 수직 사이드바 */}
+          {/* 좌측: Task 트리 (항상 표시) + Pool 트리 (토글) */}
           <div className="w-64 shrink-0 flex flex-col gap-2 min-h-0">
-            {/* Pool 섹션 */}
-            <div
-              className={`flex-1 rounded-lg border flex flex-col min-h-0 transition-opacity ${
-                viewerMode === "pool"
-                  ? "border-blue-400 ring-1 ring-blue-400"
-                  : "opacity-50"
-              }`}
-            >
-              {!dataStore ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  Data Pool이 없습니다.
-                </p>
-              ) : (
-                <FolderTreeView
-                  ref={poolTreeRef}
-                  readOnly
-                  fetchFolderContents={fetchPoolFolderContents}
-                  fetchAllFolders={fetchPoolAllFolders}
-                  rootLabel="Data Pool"
-                  rootIcon={
-                    <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  }
-                  rootCount={dataStore.image_count ?? 0}
-                  onRefresh={refreshPoolTree}
-                  selectedPath={
-                    viewerMode === "pool" ? poolCurrentPath : undefined
-                  }
-                  onSelectPath={(path) => {
-                    setViewerMode("pool");
-                    handlePoolNavigateFolder(path);
-                  }}
-                  onFileClick={handlePoolFileClick}
-                />
-              )}
-            </div>
+            {/* Pool 섹션 — poolPanelOpen일 때만 렌더링 */}
+            {poolPanelOpen && (
+              <div
+                className={`flex-1 rounded-lg border flex flex-col min-h-0 ${
+                  effectiveViewerMode === "pool"
+                    ? "border-blue-400 ring-1 ring-blue-400"
+                    : "border-muted opacity-50"
+                }`}
+              >
+                {!dataStore ? (
+                  <p className="py-4 text-center text-xs text-muted-foreground">
+                    Data Pool이 없습니다.
+                  </p>
+                ) : (
+                  <FolderTreeView
+                    ref={poolTreeRef}
+                    readOnly
+                    fetchFolderContents={fetchPoolFolderContents}
+                    fetchAllFolders={fetchPoolAllFolders}
+                    rootLabel="Data Pool"
+                    rootIcon={
+                      <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    }
+                    rootCount={dataStore.image_count ?? 0}
+                    onRefresh={refreshPoolTree}
+                    selectedPath={
+                      effectiveViewerMode === "pool"
+                        ? poolCurrentPath
+                        : undefined
+                    }
+                    onSelectPath={(path) => {
+                      setViewerMode("pool");
+                      handlePoolNavigateFolder(path);
+                    }}
+                    onFileClick={handlePoolFileClick}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Task 섹션 */}
             <div
-              className={`flex-1 rounded-lg border p-2 flex flex-col overflow-hidden min-h-0 transition-opacity ${
-                viewerMode === "task"
-                  ? "border-emerald-500 ring-1 ring-emerald-500"
-                  : "opacity-50"
+              className={`rounded-lg border p-2 flex flex-col overflow-hidden min-h-0 flex-1 ${
+                !poolPanelOpen
+                  ? "border"
+                  : effectiveViewerMode === "task"
+                    ? "border-emerald-500 ring-1 ring-emerald-500"
+                    : "border-muted opacity-50"
               }`}
             >
               <FolderTreeView
@@ -1239,7 +1305,11 @@ export default function TaskDetailPage() {
             ref={viewerRef}
             tabIndex={-1}
             className={`min-w-0 flex-1 flex flex-col min-h-0 outline-none rounded-lg border transition-colors ${
-              viewerMode === "pool" ? "border-blue-400" : "border-emerald-500"
+              !poolPanelOpen
+                ? "border"
+                : effectiveViewerMode === "pool"
+                  ? "border-blue-400"
+                  : "border-emerald-500"
             } p-2`}
             onMouseDown={() => viewerRef.current?.focus()}
           >
@@ -1250,15 +1320,17 @@ export default function TaskDetailPage() {
               previewMode={previewMode}
               selectedKeys={activeSelectedKeys}
               hasMore={
-                viewerMode === "pool"
+                effectiveViewerMode === "pool"
                   ? poolImages.length < poolTotalImages
                   : taskImages.length < totalImages
               }
               loadingMore={
-                viewerMode === "pool" ? poolLoadingMore : loadingMore
+                effectiveViewerMode === "pool" ? poolLoadingMore : loadingMore
               }
               onLoadMore={
-                viewerMode === "pool" ? poolLoadMoreImages : loadMoreImages
+                effectiveViewerMode === "pool"
+                  ? poolLoadMoreImages
+                  : loadMoreImages
               }
               onItemClick={activeHandleItemClick}
               onClearSelection={activeClearSelection}
@@ -1267,7 +1339,7 @@ export default function TaskDetailPage() {
               }
               onNavigateUp={
                 activeCurrentPath
-                  ? viewerMode === "pool"
+                  ? effectiveViewerMode === "pool"
                     ? handlePoolNavigateUp
                     : handleNavigateUp
                   : undefined
@@ -1281,7 +1353,7 @@ export default function TaskDetailPage() {
               onScrollComplete={() => setScrollToItemKey(null)}
               onColumnsChange={(cols) => setGridColumns(cols)}
               renderBgMenu={
-                viewerMode === "task"
+                effectiveViewerMode === "task"
                   ? (close) => (
                       <button
                         type="button"
@@ -1305,53 +1377,67 @@ export default function TaskDetailPage() {
                   isSelected={isSelected}
                   selectedCount={activeSelectedCount}
                   renamingFolderPath={
-                    viewerMode === "task" ? renamingFolderPath : null
+                    effectiveViewerMode === "task" ? renamingFolderPath : null
                   }
                   dragOverFolderKey={
-                    viewerMode === "task" ? dragOverFolderKey : null
+                    effectiveViewerMode === "task" ? dragOverFolderKey : null
                   }
                   deleteLabel="제거"
                   onItemClick={activeHandleItemClick}
                   onCheckboxClick={
-                    viewerMode === "pool" ? poolToggleItem : toggleItem
+                    effectiveViewerMode === "pool" ? poolToggleItem : toggleItem
                   }
                   onNavigateFolder={
-                    viewerMode === "pool"
+                    effectiveViewerMode === "pool"
                       ? handlePoolNavigateFolder
                       : handleNavigateFolder
                   }
                   onRenameFolder={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? (path) => setRenamingFolderPath(path)
                       : undefined
                   }
                   onFinishRenameFolder={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? handleFinishRenameInViewer
                       : undefined
                   }
                   onCancelRenameFolder={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? () => setRenamingFolderPath(null)
                       : undefined
                   }
                   onMoveSelected={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? () => setMoveDialogOpen(true)
                       : undefined
                   }
                   onDeleteSelected={
-                    viewerMode === "task" ? handleBulkRemove : undefined
+                    effectiveViewerMode === "task"
+                      ? handleBulkRemove
+                      : undefined
                   }
                   onDeleteFolder={
-                    viewerMode === "task" ? handleDeleteFolder : undefined
+                    effectiveViewerMode === "task"
+                      ? handleDeleteFolder
+                      : undefined
                   }
                   onDeleteImage={
-                    viewerMode === "task" ? handleRemoveImage : undefined
+                    effectiveViewerMode === "task"
+                      ? handleRemoveImage
+                      : undefined
                   }
                   onImageDoubleClick={() => {
                     setQuickLookOpen(true);
                   }}
+                  onOpenLabeling={
+                    effectiveViewerMode === "task"
+                      ? (imageId) =>
+                          navigate(
+                            `/projects/${projectId}/tasks/${taskIdNum}/label?imageId=${imageId}`,
+                          )
+                      : undefined
+                  }
                   onContextMenu={(contextItem, index) => {
                     if (!activeSelectedKeys.has(contextItem.key)) {
                       activeHandleItemClick(
@@ -1361,21 +1447,29 @@ export default function TaskDetailPage() {
                     }
                   }}
                   onDragStart={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? handleDragStart
                       : poolHandleDragStart
                   }
                   onDragEnd={
-                    viewerMode === "task" ? handleDragEnd : poolHandleDragEnd
+                    effectiveViewerMode === "task"
+                      ? handleDragEnd
+                      : poolHandleDragEnd
                   }
                   onFolderDragOver={
-                    viewerMode === "task" ? handleFolderDragOver : undefined
+                    effectiveViewerMode === "task"
+                      ? handleFolderDragOver
+                      : undefined
                   }
                   onFolderDragLeave={
-                    viewerMode === "task" ? handleFolderDragLeave : undefined
+                    effectiveViewerMode === "task"
+                      ? handleFolderDragLeave
+                      : undefined
                   }
                   onFolderDrop={
-                    viewerMode === "task" ? handleFolderDrop : undefined
+                    effectiveViewerMode === "task"
+                      ? handleFolderDrop
+                      : undefined
                   }
                 />
               )}
@@ -1394,53 +1488,67 @@ export default function TaskDetailPage() {
                   isSelected={isSelected}
                   selectedCount={activeSelectedCount}
                   renamingFolderPath={
-                    viewerMode === "task" ? renamingFolderPath : null
+                    effectiveViewerMode === "task" ? renamingFolderPath : null
                   }
                   dragOverFolderKey={
-                    viewerMode === "task" ? dragOverFolderKey : null
+                    effectiveViewerMode === "task" ? dragOverFolderKey : null
                   }
                   deleteLabel="제거"
                   onItemClick={activeHandleItemClick}
                   onCheckboxClick={
-                    viewerMode === "pool" ? poolToggleItem : toggleItem
+                    effectiveViewerMode === "pool" ? poolToggleItem : toggleItem
                   }
                   onNavigateFolder={
-                    viewerMode === "pool"
+                    effectiveViewerMode === "pool"
                       ? handlePoolNavigateFolder
                       : handleNavigateFolder
                   }
                   onRenameFolder={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? (path) => setRenamingFolderPath(path)
                       : undefined
                   }
                   onFinishRenameFolder={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? handleFinishRenameInViewer
                       : undefined
                   }
                   onCancelRenameFolder={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? () => setRenamingFolderPath(null)
                       : undefined
                   }
                   onMoveSelected={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? () => setMoveDialogOpen(true)
                       : undefined
                   }
                   onDeleteSelected={
-                    viewerMode === "task" ? handleBulkRemove : undefined
+                    effectiveViewerMode === "task"
+                      ? handleBulkRemove
+                      : undefined
                   }
                   onDeleteFolder={
-                    viewerMode === "task" ? handleDeleteFolder : undefined
+                    effectiveViewerMode === "task"
+                      ? handleDeleteFolder
+                      : undefined
                   }
                   onDeleteImage={
-                    viewerMode === "task" ? handleRemoveImage : undefined
+                    effectiveViewerMode === "task"
+                      ? handleRemoveImage
+                      : undefined
                   }
                   onImageDoubleClick={() => {
                     setQuickLookOpen(true);
                   }}
+                  onOpenLabeling={
+                    effectiveViewerMode === "task"
+                      ? (imageId) =>
+                          navigate(
+                            `/projects/${projectId}/tasks/${taskIdNum}/label?imageId=${imageId}`,
+                          )
+                      : undefined
+                  }
                   onContextMenu={(contextItem, index) => {
                     if (!activeSelectedKeys.has(contextItem.key)) {
                       activeHandleItemClick(
@@ -1450,21 +1558,29 @@ export default function TaskDetailPage() {
                     }
                   }}
                   onDragStart={
-                    viewerMode === "task"
+                    effectiveViewerMode === "task"
                       ? handleDragStart
                       : poolHandleDragStart
                   }
                   onDragEnd={
-                    viewerMode === "task" ? handleDragEnd : poolHandleDragEnd
+                    effectiveViewerMode === "task"
+                      ? handleDragEnd
+                      : poolHandleDragEnd
                   }
                   onFolderDragOver={
-                    viewerMode === "task" ? handleFolderDragOver : undefined
+                    effectiveViewerMode === "task"
+                      ? handleFolderDragOver
+                      : undefined
                   }
                   onFolderDragLeave={
-                    viewerMode === "task" ? handleFolderDragLeave : undefined
+                    effectiveViewerMode === "task"
+                      ? handleFolderDragLeave
+                      : undefined
                   }
                   onFolderDrop={
-                    viewerMode === "task" ? handleFolderDrop : undefined
+                    effectiveViewerMode === "task"
+                      ? handleFolderDrop
+                      : undefined
                   }
                 />
               )}
@@ -1482,11 +1598,11 @@ export default function TaskDetailPage() {
                 <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    {viewerMode === "pool"
+                    {effectiveViewerMode === "pool"
                       ? "Data Pool에 항목이 없습니다."
                       : "이 Task에 항목이 없습니다."}
                   </p>
-                  {viewerMode === "task" && (
+                  {effectiveViewerMode === "task" && (
                     <p className="text-xs text-muted-foreground">
                       좌측 Data Pool에서 항목을 추가하세요.
                     </p>
@@ -1494,45 +1610,6 @@ export default function TaskDetailPage() {
                 </div>
               )}
             />
-          </div>
-
-          {/* 우측: 클래스 + 스냅샷 탭 패널 */}
-          <div className="w-64 shrink-0 flex flex-col min-h-0">
-            <Tabs defaultValue={initialTab} className="flex flex-col h-full">
-              <TabsList className="w-full shrink-0">
-                <TabsTrigger value="classes" className="flex-1">
-                  클래스
-                </TabsTrigger>
-                <TabsTrigger value="snapshots" className="flex-1">
-                  버전
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent
-                value="classes"
-                className="flex-1 overflow-y-auto mt-2"
-              >
-                <TaskClassPanel
-                  classes={classes}
-                  loading={taskLoading}
-                  addingClass={addingClass}
-                  newClassName={newClassName}
-                  newClassColor={newClassColor}
-                  savingClass={savingClass}
-                  onStartAdding={() => setAddingClass(true)}
-                  onCancelAdding={() => setAddingClass(false)}
-                  onNewClassNameChange={setNewClassName}
-                  onNewClassColorChange={setNewClassColor}
-                  onAddClass={handleAddClass}
-                  onDeleteClass={handleDeleteClass}
-                />
-              </TabsContent>
-              <TabsContent
-                value="snapshots"
-                className="flex-1 overflow-hidden mt-2"
-              >
-                <VersionPanel taskId={taskIdNum} />
-              </TabsContent>
-            </Tabs>
           </div>
         </div>
       </main>
@@ -1569,6 +1646,16 @@ export default function TaskDetailPage() {
         open={quickLookOpen}
         onOpenChange={(open) => setQuickLookOpen(open)}
         getImageUrl={(id) => imagesApi.getFileUrl(id)}
+        onOpenLabeling={
+          effectiveViewerMode === "task"
+            ? (imageId) => {
+                setQuickLookOpen(false);
+                navigate(
+                  `/projects/${projectId}/tasks/${taskIdNum}/label?imageId=${imageId}`,
+                );
+              }
+            : undefined
+        }
       />
 
       {confirmDialog}

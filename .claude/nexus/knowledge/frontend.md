@@ -1,5 +1,6 @@
 <!-- tags: frontend, react, typescript, components, routing, state -->
 <!-- tags: frontend, react, typescript, components, routing, state -->
+<!-- tags: frontend, react, typescript, components, routing, state -->
 
 # Frontend
 
@@ -29,8 +30,9 @@ frontend/src/
 │   ├── ui/            # shadcn/ui 기본 컴포넌트
 │   ├── layout/        # 레이아웃 (GNB 등)
 │   ├── file-tree/     # FileTreeView (일반화된 트리)
+│   ├── content-viewer/ # VirtualGrid, VirtualList, ContentArea, ImageQuickLook, types
 │   ├── labeling/      # 라벨링 캔버스, 도구
-│   ├── task-detail/   # 태스크 상세 패널
+│   ├── task-detail/   # 태스크 상세 패널 (VersionPanel, ClassManagePopover, TaskDetailHeader 포함)
 │   └── data-pool/     # 데이터풀 전용 컴포넌트
 ├── hooks/             # 커스텀 훅 (API 호출, 상태 관리)
 ├── api/               # axios 클라이언트 + API 모듈
@@ -47,8 +49,8 @@ frontend/src/
 | RegisterPage | `/register` | 회원가입 |
 | ProjectsPage | `/` | 프로젝트 목록 |
 | ProjectDetailPage | `/projects/:id` | 프로젝트 상세 (데이터풀/태스크 탭) |
-| TaskDetailPage | `/projects/:id/tasks/:taskId` | 태스크 상세 (트리+뷰어+풀) |
-| LabelingPage | `/projects/:id/tasks/:taskId/labeling` | 라벨링 작업 |
+| TaskDetailPage | `/projects/:id/tasks/:taskId` | 태스크 상세 (2-column + toggleable pool panel 구조) |
+| LabelingPage | `/projects/:id/tasks/:taskId/labeling` | 라벨링 작업 (좌우 사이드 활용 + 폴더 트리) |
 
 ## 핵심 컴포넌트
 
@@ -63,6 +65,18 @@ frontend/src/
 - **노드 타입**: folder (`path`가 `/`로 끝남) / file (`fileId` 보유)
 - **키 전략**: `${node.path}:${node.fileId}` (동일 이미지 다른 폴더 중복 허용)
 
+### content-viewer (`components/content-viewer/`)
+
+VirtualGrid / VirtualList 통합 뷰어 (react-virtual 기반). ContentArea가 그리드/리스트 전환 및 폴더 네비게이션을 담당. ImageQuickLook으로 이미지 미리보기 모달 제공.
+
+### VersionPanel (`components/task-detail/`)
+
+타임라인 커밋 로그 스타일 버전 패널. 수직선 + ●/○ dot, HEAD 마커 표시. dirty 상태에서 인라인 확정(버전 생성) 및 "변경사항 버리기" 지원.
+
+### ClassManagePopover (`components/task-detail/`)
+
+자체 상태 관리 팝오버. 헤더 칩 형태로 노출. 라벨 클래스 CRUD.
+
 ### LabelingCanvas (`components/labeling/`)
 
 Konva 기반 이미지 라벨링 캔버스.
@@ -70,6 +84,15 @@ Konva 기반 이미지 라벨링 캔버스.
 - ToolPanel: 도구 선택 (bbox, polygon 등)
 - ClassPanel: 라벨 클래스 선택
 - FilmStrip: 이미지 목록 네비게이션
+
+## 주요 훅
+
+| 훅 | 위치 | 역할 |
+|----|------|------|
+| useSnapshots, useCreateSnapshot, useRestoreSnapshot, useVersionStatus, useStash | `hooks/use-snapshots.ts` | 버전 관리 API 연동 |
+| (drag & drop) | `hooks/use-image-drag-drop.ts` | 이미지 드래그 & 드롭 통합 |
+| (context menu) | `hooks/use-image-context-menu.ts` | 이미지 컨텍스트 메뉴 |
+| (bulk operations) | `hooks/use-task-bulk-operations.ts` | 벌크 삭제/이동/드롭 |
 
 ## API 클라이언트
 

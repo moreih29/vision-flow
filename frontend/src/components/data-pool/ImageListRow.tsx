@@ -29,6 +29,7 @@ interface ImageListRowProps {
   onDeleteImage: (id: number) => void;
   onImageDoubleClick?: (index: number) => void;
   onContextMenu: (item: DataPoolItem, index: number) => void;
+  onOpenLabeling?: (imageId: number) => void;
   onDragStart: (e: React.DragEvent, item: DataPoolItem) => void;
   onDragEnd: () => void;
   onFolderDragOver: (e: React.DragEvent, item: DataPoolItem) => void;
@@ -58,6 +59,7 @@ const ImageListRow = memo(function ImageListRow({
   onDeleteImage,
   onImageDoubleClick,
   onContextMenu,
+  onOpenLabeling,
   onDragStart,
   onDragEnd,
   onFolderDragOver,
@@ -84,6 +86,7 @@ const ImageListRow = memo(function ImageListRow({
     onDeleteSelected,
     onDeleteFolder,
     onDeleteImage,
+    onOpenLabeling,
   };
 
   if (item.type === "folder" && item.folder) {

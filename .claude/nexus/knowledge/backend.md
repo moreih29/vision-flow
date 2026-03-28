@@ -1,5 +1,6 @@
 <!-- tags: backend, fastapi, sqlalchemy, api, models, services -->
 <!-- tags: backend, fastapi, sqlalchemy, api, models, services -->
+<!-- tags: backend, fastapi, sqlalchemy, api, models, services -->
 
 # Backend
 
@@ -33,12 +34,13 @@ backend/app/
 | DataStore | 프로젝트별 데이터 저장소 |
 | Image | 업로드 이미지 (hash 기반 중복 관리) |
 | FolderMeta | 데이터풀 폴더 메타데이터 |
-| Task | 라벨링 태스크 |
-| TaskImage | 태스크에 할당된 이미지 (M:N 관계) |
+| Task | 라벨링 태스크 (`current_snapshot_id` FK → task_snapshots, ondelete=SET NULL, use_alter=True) |
+| TaskImage | 태스크에 할당된 이미지 (M:N 관계, unique: `(task_id, image_id, folder_path)`) |
 | TaskFolderMeta | 태스크 폴더 메타데이터 |
-| TaskSnapshot / TaskSnapshotItem | 태스크 버전 스냅샷 (시맨틱 버전) |
+| TaskSnapshot | 태스크 버전 스냅샷 (시맨틱 버전, `restored_from_id` 자기 참조 FK) |
+| TaskSnapshotItem | 스냅샷 아이템 |
 | LabelClass | 라벨 클래스 정의 |
-| Annotation | 이미지별 어노테이션 (바운딩 박스 등) |
+| Annotation | 이미지별 어노테이션 (`label_class_id` ondelete=SET NULL) |
 
 ## API 라우트
 
@@ -53,7 +55,7 @@ backend/app/
 | tasks | 태스크 CRUD, 이미지 할당, 폴더 관리 |
 | label_classes | 라벨 클래스 CRUD |
 | annotations | 어노테이션 저장/조회 |
-| snapshots | 태스크 스냅샷 생성/조회 |
+| snapshots | 태스크 스냅샷 생성/조회/복원. restore 엔드포인트에 `skip_stash` 파라미터 지원. version-status 응답에 `counts`(image_added/removed/moved, class_added/removed) 및 `current_snapshot_id` 포함 |
 
 ## 주요 설정 (환경변수)
 

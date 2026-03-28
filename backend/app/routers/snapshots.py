@@ -142,6 +142,7 @@ async def diff_snapshots(
 async def restore_snapshot(
     snapshot_id: int,
     confirm: bool = Body(..., embed=True, description="true여야 복원이 실행됩니다."),
+    skip_stash: bool = Body(False, embed=True, description="true면 stash 생성 없이 복원"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SnapshotResponse | dict:
@@ -166,7 +167,7 @@ async def restore_snapshot(
             "message": "confirm=true로 재요청하면 복원이 실행됩니다.",
         }
 
-    restored = await snapshot_service.restore_snapshot(db, snapshot_id, current_user.id)
+    restored = await snapshot_service.restore_snapshot(db, snapshot_id, current_user.id, skip_stash=skip_stash)
     return SnapshotResponse.model_validate(restored)
 
 

@@ -4,8 +4,7 @@ export interface Snapshot {
   id: number;
   task_id: number;
   major_version: number;
-  data_version: number;
-  label_version: number;
+  minor_version: number;
   is_stash: boolean;
   name: string;
   description: string | null;
@@ -16,6 +15,7 @@ export interface Snapshot {
   image_set_hash: string | null;
   annotation_hash: string | null;
   label_classes_snapshot: Record<string, unknown>[];
+  restored_from_id: number | null;
   created_at: string;
 }
 
@@ -58,13 +58,22 @@ export interface SnapshotDiff {
 export interface VersionChanges {
   class_changed: boolean;
   data_changed: boolean;
-  label_changed: boolean;
+}
+
+export interface ChangeCounts {
+  image_added: number;
+  image_removed: number;
+  image_moved: number;
+  class_added: number;
+  class_removed: number;
 }
 
 export interface VersionStatus {
   current_version: string | null;
+  current_snapshot_id: number | null;
   is_dirty: boolean;
   changes: Partial<VersionChanges>;
+  counts?: ChangeCounts;
 }
 
 export interface SnapshotRestoreDryRun {

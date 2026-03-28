@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import axios from "axios";
 import { imagesApi } from "@/api/images";
 import { dataStoresApi } from "@/api/data-stores";
 import type { DataStore } from "@/types/data-store";
@@ -93,8 +94,9 @@ export function useFolderOperations(
         await imagesApi.createFolder(dataStore.id, folderPath);
         await callbacks.invalidateFolderContents();
       } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
+        const detail = axios.isAxiosError(e)
+          ? e.response?.data?.detail
+          : undefined;
         await callbacks.showAlert({
           title: detail || "폴더 생성에 실패했습니다.",
         });
@@ -110,8 +112,9 @@ export function useFolderOperations(
       try {
         await imagesApi.updateFolder(dataStore.id, oldPath, newPath);
       } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
+        const detail = axios.isAxiosError(e)
+          ? e.response?.data?.detail
+          : undefined;
         await callbacks.showAlert({
           title: detail || "폴더 업데이트에 실패했습니다.",
         });

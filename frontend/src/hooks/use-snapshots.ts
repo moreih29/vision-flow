@@ -72,7 +72,8 @@ export function useVersionStatus(taskId: number) {
     queryKey: ["tasks", taskId, "version-status"],
     queryFn: () =>
       snapshotsApi.getVersionStatus(taskId).then((res) => res.data),
-    staleTime: Infinity,
+    staleTime: 30_000,
+    enabled: !!taskId,
   });
 }
 

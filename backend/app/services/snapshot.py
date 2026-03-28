@@ -98,18 +98,20 @@ class SnapshotService:
 
         label_classes_data = [{"id": lc.id, "name": lc.name, "color": lc.color} for lc in label_classes]
 
-        # 복원 후 생성인지 판단 (current_snapshot_id가 최신이 아닌 경우)
-        task = await db.get(Task, task_id)
-        restored_from_id = None
-        if task and task.current_snapshot_id:
-            pre_latest = await self._get_latest_snapshot(db, task_id)
-            if pre_latest and task.current_snapshot_id != pre_latest.id:
-                restored_from_id = task.current_snapshot_id
-
         # 3레벨 버전 결정 + snapshot 생성 (UniqueViolation 발생 시 최대 3회 retry)
         snapshot = None
         for attempt in range(3):
             try:
+                # retry 시 세션 상태가 초기화되므로 task와 latest를 매 시도마다 새로 조회
+                task = await db.get(Task, task_id)
+
+                # 복원 후 생성인지 판단 (current_snapshot_id가 최신이 아닌 경우)
+                restored_from_id = None
+                if task and task.current_snapshot_id:
+                    pre_latest = await self._get_latest_snapshot(db, task_id)
+                    if pre_latest and task.current_snapshot_id != pre_latest.id:
+                        restored_from_id = task.current_snapshot_id
+
                 latest = await self._get_latest_snapshot(db, task_id)
                 if latest is None:
                     major, minor = 1, 0
@@ -161,7 +163,7 @@ class SnapshotService:
                         status_code=status.HTTP_409_CONFLICT,
                         detail="버전 생성에 실패했습니다. 다시 시도해주세요.",
                     ) from exc
-                # retry: 다음 반복에서 latest를 다시 조회하여 새 버전 번호 계산
+                # retry: rollback 후 세션이 초기화되므로 다음 반복에서 새로 조회
 
         # snapshot_items 벌크 생성
         items = []
@@ -372,7 +374,7 @@ class SnapshotService:
                 TaskSnapshotItem.folder_path,
             ).where(TaskSnapshotItem.snapshot_id == snapshot_id)
         )
-        snap_pairs = {(r.image_id, r.folder_path) for r in snap_items_result}
+        snap_pairs = {(r.image_id, r.folder_path or "") for r in snap_items_result}
         snap_image_ids = {r[0] for r in snap_pairs}
 
         current_pairs = {(ti.image_id, ti.folder_path or "") for ti in task_images}
@@ -403,7 +405,29 @@ class SnapshotService:
         user_id: int,
     ) -> None:
         snapshot = await self.get_snapshot(db, snapshot_id)
-        await task_service.check_ownership(db, snapshot.task_id, user_id)
+        task_id = snapshot.task_id
+        await task_service.check_ownership(db, task_id, user_id)
+
+        # 삭제 대상이 현재 HEAD인 경우, 이전 스냅샷으로 HEAD 이동
+        task = await db.get(Task, task_id)
+        if task and task.current_snapshot_id == snapshot_id:
+            # 삭제 대상을 제외한 가장 최근 스냅샷 조회
+            prev_result = await db.execute(
+                select(TaskSnapshot)
+                .where(
+                    TaskSnapshot.task_id == task_id,
+                    TaskSnapshot.is_stash.is_(False),
+                    TaskSnapshot.id != snapshot_id,
+                )
+                .order_by(
+                    TaskSnapshot.major_version.desc(),
+                    TaskSnapshot.minor_version.desc(),
+                )
+                .limit(1)
+            )
+            prev_snapshot = prev_result.scalar_one_or_none()
+            task.current_snapshot_id = prev_snapshot.id if prev_snapshot else None
+
         await db.delete(snapshot)
         await db.commit()
 
@@ -571,119 +595,134 @@ class SnapshotService:
         await task_service.check_ownership(db, task_id, user_id)
 
         # dirty 상태면 자동 stash 생성 (skip_stash=True면 건너뜀)
+        stash_created_id: int | None = None
         if not skip_stash:
             version_status = await self.get_version_status(db, task_id)
             if version_status["is_dirty"]:
-                await self.create_stash(db, task_id, user_id)
+                stash = await self.create_stash(db, task_id, user_id)
+                stash_created_id = stash.id
 
-        # 스냅샷 아이템 조회
-        items_result = await db.execute(select(TaskSnapshotItem).where(TaskSnapshotItem.snapshot_id == snapshot_id))
-        snapshot_items = list(items_result.scalars().all())
+        try:
+            # 스냅샷 아이템 조회
+            items_result = await db.execute(select(TaskSnapshotItem).where(TaskSnapshotItem.snapshot_id == snapshot_id))
+            snapshot_items = list(items_result.scalars().all())
 
-        # 기존 데이터 삭제 (annotations → task_images → label_classes → folder_meta)
-        await db.execute(delete(TaskImage).where(TaskImage.task_id == task_id))
-        await db.execute(delete(LabelClass).where(LabelClass.task_id == task_id))
-        await db.execute(delete(TaskFolderMeta).where(TaskFolderMeta.task_id == task_id))
-        await db.flush()
-
-        # LabelClass 복원 + old_id → new_id 매핑
-        class_id_map: dict[int, int] = {}
-        new_label_classes: list[LabelClass] = []
-        for cls_data in snapshot.label_classes_snapshot:
-            new_class = LabelClass(
-                task_id=task_id,
-                name=cls_data["name"],
-                color=cls_data["color"],
-            )
-            db.add(new_class)
+            # 기존 데이터 삭제 (annotations → task_images → label_classes → folder_meta)
+            await db.execute(delete(TaskImage).where(TaskImage.task_id == task_id))
+            await db.execute(delete(LabelClass).where(LabelClass.task_id == task_id))
+            await db.execute(delete(TaskFolderMeta).where(TaskFolderMeta.task_id == task_id))
             await db.flush()
-            class_id_map[cls_data["id"]] = new_class.id
-            new_label_classes.append(new_class)
 
-        # 스냅샷에서 TaskImage 복원
-        new_task_images = []
-        for item in snapshot_items:
-            # image_id가 NULL이거나 이미지가 삭제된 경우 건너뜀
-            if item.image_id is None:
-                continue
-            img_result = await db.execute(select(Image).where(Image.id == item.image_id))
-            if img_result.scalar_one_or_none() is None:
-                continue
-            new_task_images.append(
-                TaskImage(
+            # LabelClass 복원 + old_id → new_id 매핑
+            class_id_map: dict[int, int] = {}
+            new_label_classes: list[LabelClass] = []
+            for cls_data in snapshot.label_classes_snapshot:
+                new_class = LabelClass(
                     task_id=task_id,
-                    image_id=item.image_id,
-                    folder_path=item.folder_path,
+                    name=cls_data["name"],
+                    color=cls_data["color"],
                 )
-            )
+                db.add(new_class)
+                await db.flush()
+                class_id_map[cls_data["id"]] = new_class.id
+                new_label_classes.append(new_class)
 
-        db.add_all(new_task_images)
-        await db.flush()
-
-        # task_image_id 매핑 ((image_id, folder_path) → 새 TaskImage)
-        ti_map: dict[tuple[int, str], TaskImage] = {(ti.image_id, ti.folder_path): ti for ti in new_task_images}
-
-        # Annotation 복원 (class_id_map으로 label_class_id 변환)
-        new_annotations = []
-        for item in snapshot_items:
-            ti = ti_map.get((item.image_id, item.folder_path))
-            if ti is None:
-                continue
-            for ann_data in item.annotation_data:
-                old_class_id = ann_data.get("label_class_id")
-                new_class_id = class_id_map.get(old_class_id) if old_class_id else None
-                new_annotations.append(
-                    Annotation(
-                        task_image_id=ti.id,
-                        label_class_id=new_class_id,
-                        annotation_type=ann_data.get("annotation_type", ""),
-                        data=ann_data.get("data", {}),
+            # 스냅샷에서 TaskImage 복원
+            new_task_images = []
+            for item in snapshot_items:
+                # image_id가 NULL이거나 이미지가 삭제된 경우 건너뜀
+                if item.image_id is None:
+                    continue
+                img_result = await db.execute(select(Image).where(Image.id == item.image_id))
+                if img_result.scalar_one_or_none() is None:
+                    continue
+                new_task_images.append(
+                    TaskImage(
+                        task_id=task_id,
+                        image_id=item.image_id,
+                        folder_path=item.folder_path,
                     )
                 )
 
-        if new_annotations:
-            db.add_all(new_annotations)
+            db.add_all(new_task_images)
+            await db.flush()
 
-        # TaskFolderMeta 재생성 (복원된 이미지의 folder_path 기반)
-        folder_paths: set[str] = set()
-        for ti in new_task_images:
-            if ti.folder_path:
-                parts = ti.folder_path.strip("/").split("/")
-                for i in range(len(parts)):
-                    folder_paths.add("/".join(parts[: i + 1]) + "/")
-        for fp in folder_paths:
-            db.add(TaskFolderMeta(task_id=task_id, path=fp))
+            # task_image_id 매핑 ((image_id, folder_path) → 새 TaskImage)
+            ti_map: dict[tuple[int, str], TaskImage] = {(ti.image_id, ti.folder_path): ti for ti in new_task_images}
 
-        # current_snapshot_id 업데이트
-        task = await db.get(Task, task_id)
-        if snapshot.is_stash:
-            # stash pop: 원래 HEAD로 복귀
-            task.current_snapshot_id = snapshot.restored_from_id
-        else:
-            task.current_snapshot_id = snapshot.id
+            # Annotation 복원 (class_id_map으로 label_class_id 변환)
+            new_annotations = []
+            for item in snapshot_items:
+                ti = ti_map.get((item.image_id, item.folder_path))
+                if ti is None:
+                    continue
+                for ann_data in item.annotation_data:
+                    old_class_id = ann_data.get("label_class_id")
+                    new_class_id = class_id_map.get(old_class_id) if old_class_id else None
+                    new_annotations.append(
+                        Annotation(
+                            task_image_id=ti.id,
+                            label_class_id=new_class_id,
+                            annotation_type=ann_data.get("annotation_type", ""),
+                            data=ann_data.get("data", {}),
+                        )
+                    )
 
-        # 복원 후 해시 재저장 — 재생성된 데이터 기준으로 해시 재계산
-        # annotations relationship 로드를 위해 DB에서 다시 조회
-        await db.flush()
-        refreshed_images_result = await db.execute(
-            select(TaskImage).where(TaskImage.task_id == task_id).options(selectinload(TaskImage.annotations))
-        )
-        refreshed_images = list(refreshed_images_result.scalars().all())
-        snapshot.class_schema_hash = _compute_class_schema_hash(new_label_classes)
-        snapshot.image_set_hash = _compute_image_set_hash(refreshed_images)
-        snapshot.annotation_hash = _compute_annotation_hash(refreshed_images)
+            if new_annotations:
+                db.add_all(new_annotations)
 
-        if snapshot.is_stash:
-            original_head_id = snapshot.restored_from_id
-            await db.delete(snapshot)
-            await db.commit()
-            if original_head_id:
-                return await self.get_snapshot(db, original_head_id)
-            latest = await self._get_latest_snapshot(db, task_id)
-            return latest
-        else:
-            await db.commit()
-            return snapshot
+            # TaskFolderMeta 재생성 (복원된 이미지의 folder_path 기반)
+            folder_paths: set[str] = set()
+            for ti in new_task_images:
+                if ti.folder_path:
+                    parts = ti.folder_path.strip("/").split("/")
+                    for i in range(len(parts)):
+                        folder_paths.add("/".join(parts[: i + 1]) + "/")
+            for fp in folder_paths:
+                db.add(TaskFolderMeta(task_id=task_id, path=fp))
+
+            # current_snapshot_id 업데이트
+            task = await db.get(Task, task_id)
+            if snapshot.is_stash:
+                # stash pop: 원래 HEAD로 복귀
+                task.current_snapshot_id = snapshot.restored_from_id
+            else:
+                task.current_snapshot_id = snapshot.id
+
+            # 복원 후 해시 재저장 — 재생성된 데이터 기준으로 해시 재계산
+            # annotations relationship 로드를 위해 DB에서 다시 조회
+            await db.flush()
+            refreshed_images_result = await db.execute(
+                select(TaskImage).where(TaskImage.task_id == task_id).options(selectinload(TaskImage.annotations))
+            )
+            refreshed_images = list(refreshed_images_result.scalars().all())
+            snapshot.class_schema_hash = _compute_class_schema_hash(new_label_classes)
+            snapshot.image_set_hash = _compute_image_set_hash(refreshed_images)
+            snapshot.annotation_hash = _compute_annotation_hash(refreshed_images)
+
+            if snapshot.is_stash:
+                original_head_id = snapshot.restored_from_id
+                await db.delete(snapshot)
+                await db.commit()
+                if original_head_id:
+                    return await self.get_snapshot(db, original_head_id)
+                latest = await self._get_latest_snapshot(db, task_id)
+                return latest
+            else:
+                await db.commit()
+                return snapshot
+        except Exception:
+            # 복원 실패 시 rollback 후 앞서 별도 커밋된 stash를 보상 삭제
+            await db.rollback()
+            if stash_created_id is not None:
+                try:
+                    stash_to_delete = await db.get(TaskSnapshot, stash_created_id)
+                    if stash_to_delete is not None:
+                        await db.delete(stash_to_delete)
+                        await db.commit()
+                except Exception:
+                    pass
+            raise
 
 
 snapshot_service = SnapshotService()

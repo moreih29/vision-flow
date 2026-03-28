@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Archive, MoreVertical, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -170,7 +170,16 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
     }
   }
 
-  let prevMajor: number | null = null;
+  const snapshotsWithGap = useMemo(() => {
+    if (!snapshots) return [];
+    let prevMajor: number | null = null;
+    return snapshots.map((snapshot) => {
+      const showMajorGap =
+        prevMajor !== null && snapshot.major_version !== prevMajor;
+      prevMajor = snapshot.major_version;
+      return { snapshot, showMajorGap };
+    });
+  }, [snapshots]);
 
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -244,11 +253,14 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
                     {createMutation.isPending ? "확정 중..." : "확정"}
                   </Button>
                 </div>
-                {buildChangeSummary() && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {buildChangeSummary()}
-                  </p>
-                )}
+                {(() => {
+                  const summary = buildChangeSummary();
+                  return summary ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {summary}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             )}
 
@@ -262,12 +274,9 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
                 </p>
               </div>
             ) : (
-              snapshots.map((snapshot) => {
+              snapshotsWithGap.map(({ snapshot, showMajorGap }) => {
                 const isHead =
                   versionLabel(snapshot) === versionStatus?.current_version;
-                const showMajorGap =
-                  prevMajor !== null && snapshot.major_version !== prevMajor;
-                prevMajor = snapshot.major_version;
 
                 return (
                   <div key={snapshot.id}>

@@ -26,9 +26,11 @@ export function useTaskBulkRemove(
         await tasksApi.batchRemoveImages(taskId, taskImageIds);
       }
       if (folderPaths.length > 0) {
-        for (const path of folderPaths) {
-          await tasksApi.deleteFolder(taskId, path);
-        }
+        const results = await Promise.allSettled(
+          folderPaths.map((path) => tasksApi.deleteFolder(taskId, path)),
+        );
+        const failCount = results.filter((r) => r.status === "rejected").length;
+        if (failCount > 0) throw new Error(`${failCount}개 폴더 삭제 실패`);
       }
     },
     onMutate: () => {

@@ -22,8 +22,6 @@ interface FolderPickerDialogProps {
     limit?: number,
   ) => Promise<FileContentsResult>;
   fetchAllFolders?: () => Promise<string[]>;
-  /** @deprecated fetchAllFolders를 사용하세요 */
-  fetchFolders?: () => Promise<string[]>;
   open: boolean;
   onClose: () => void;
   onSelect: (targetFolder: string) => void;
@@ -36,7 +34,6 @@ export default function FolderPickerDialog({
   dataStoreId,
   fetchFolderContents,
   fetchAllFolders,
-  fetchFolders,
   open,
   onClose,
   onSelect,
@@ -88,12 +85,10 @@ export default function FolderPickerDialog({
     () =>
       fetchAllFolders
         ? fetchAllFolders
-        : fetchFolders
-          ? fetchFolders
-          : dataStoreId != null
-            ? () => imagesApi.getAllFolders(dataStoreId).then((res) => res.data)
-            : () => Promise.resolve([]),
-    [fetchAllFolders, fetchFolders, dataStoreId],
+        : dataStoreId != null
+          ? () => imagesApi.getAllFolders(dataStoreId).then((res) => res.data)
+          : () => Promise.resolve([]),
+    [fetchAllFolders, dataStoreId],
   );
 
   return (

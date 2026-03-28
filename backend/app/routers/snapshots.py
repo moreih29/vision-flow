@@ -101,8 +101,20 @@ async def list_snapshot_items(
     snapshot = await snapshot_service.get_snapshot(db, snapshot_id)
     await task_service.check_ownership(db, snapshot.task_id, current_user.id)
     items, total = await snapshot_service.get_snapshot_items(db, snapshot_id, path, skip, limit)
+
+    # label_class_id → name 매핑 (스냅샷에 저장된 클래스 스냅샷 활용)
+    class_name_map: dict[int, str] = {cls["id"]: cls["name"] for cls in (snapshot.label_classes_snapshot or [])}
+
+    def _enrich_item(item) -> SnapshotItemResponse:
+        enriched_annotations = [
+            {**ann, "label_class_name": class_name_map.get(ann.get("label_class_id")) or ""}
+            for ann in (item.annotation_data or [])
+        ]
+        item.annotation_data = enriched_annotations
+        return SnapshotItemResponse.model_validate(item)
+
     return SnapshotItemListResponse(
-        items=[SnapshotItemResponse.model_validate(item) for item in items],
+        items=[_enrich_item(item) for item in items],
         total=total,
         skip=skip,
         limit=limit,

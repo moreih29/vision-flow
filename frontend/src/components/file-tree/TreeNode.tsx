@@ -138,9 +138,9 @@ export function TreeNode({
       }
       return;
     }
-    handleSingleClick();
     clickTimerRef.current = setTimeout(() => {
       clickTimerRef.current = null;
+      handleSingleClick();
     }, 300);
   }
 

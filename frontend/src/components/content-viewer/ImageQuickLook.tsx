@@ -96,7 +96,7 @@ export function ImageQuickLook({
                 {item.filename}
               </span>
               <div className="flex items-center gap-3 text-white/60 text-xs">
-                {item.width && item.height && (
+                {item.width != null && item.height != null && (
                   <span>
                     {item.width} × {item.height}
                   </span>

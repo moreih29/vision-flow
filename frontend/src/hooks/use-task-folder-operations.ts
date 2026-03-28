@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { tasksApi } from "@/api/tasks";
 import type { FolderInfo } from "@/types/image";
 import type { VersionStatus } from "@/types/snapshot";
@@ -109,8 +110,9 @@ export function useTaskFolderOperations(
         await tasksApi.createFolder(taskId, folderPath);
         await callbacks.invalidateFolderContents();
       } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
+        const detail = axios.isAxiosError(e)
+          ? e.response?.data?.detail
+          : undefined;
         await callbacks.showAlert({
           title: detail || "폴더 생성에 실패했습니다.",
         });
@@ -127,8 +129,9 @@ export function useTaskFolderOperations(
         await tasksApi.updateFolder(taskId, oldPath, newPath);
         setDirty();
       } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
+        const detail = axios.isAxiosError(e)
+          ? e.response?.data?.detail
+          : undefined;
         await callbacks.showAlert({
           title: detail || "폴더 업데이트에 실패했습니다.",
         });

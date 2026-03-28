@@ -10,8 +10,11 @@ export default function DataPoolPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPath = searchParams.get("folder") ?? "";
   const projectId = Number(id);
+  const validProjectId = !isNaN(projectId) && projectId > 0;
 
-  const { data: project, isLoading } = useProject(projectId);
+  const { data: project, isLoading } = useProject(
+    validProjectId ? projectId : 0,
+  );
 
   const handlePathChange = useCallback(
     (path: string) => {
@@ -46,11 +49,13 @@ export default function DataPoolPage() {
       </header>
 
       <main className="px-6 py-4 flex-1 flex flex-col overflow-hidden min-h-0">
-        <DataPoolTab
-          projectId={projectId}
-          currentPath={currentPath}
-          onPathChange={handlePathChange}
-        />
+        {validProjectId && (
+          <DataPoolTab
+            projectId={projectId}
+            currentPath={currentPath}
+            onPathChange={handlePathChange}
+          />
+        )}
       </main>
     </div>
   );

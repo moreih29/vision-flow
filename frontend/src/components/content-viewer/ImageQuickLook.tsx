@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Folder } from "lucide-react";
+import { Folder, Tag } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ImageItem {
   type: "image";
@@ -27,6 +28,7 @@ interface ImageQuickLookProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   getImageUrl: (imageId: number) => string;
+  onOpenLabeling?: (imageId: number) => void;
 }
 
 export function ImageQuickLook({
@@ -34,6 +36,7 @@ export function ImageQuickLook({
   open,
   onOpenChange,
   getImageUrl,
+  onOpenLabeling,
 }: ImageQuickLookProps) {
   // Space/Escape로 닫기: capture phase에서 잡아서 부모 handler까지 전파 차단
   useEffect(() => {
@@ -93,7 +96,7 @@ export function ImageQuickLook({
                 {item.filename}
               </span>
               <div className="flex items-center gap-3 text-white/60 text-xs">
-                {item.width && item.height && (
+                {item.width != null && item.height != null && (
                   <span>
                     {item.width} × {item.height}
                   </span>
@@ -102,6 +105,20 @@ export function ImageQuickLook({
                   {item.indexInFolder + 1} / {item.totalInFolder}
                 </span>
               </div>
+              {onOpenLabeling && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-1 h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenLabeling(item.id);
+                  }}
+                >
+                  <Tag className="mr-1 h-3.5 w-3.5" />
+                  라벨링 열기
+                </Button>
+              )}
             </div>
           </>
         ) : (

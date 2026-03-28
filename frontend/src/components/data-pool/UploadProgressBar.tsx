@@ -1,17 +1,21 @@
-import type { UploadProgress } from '@/hooks/use-image-upload'
+import type { UploadProgress } from "@/hooks/use-image-upload";
 
 interface UploadProgressBarProps {
-  progress: UploadProgress
+  progress: UploadProgress;
 }
 
-export default function UploadProgressBar({ progress }: UploadProgressBarProps) {
+export default function UploadProgressBar({
+  progress,
+}: UploadProgressBarProps) {
+  const pct =
+    progress.total > 0 ? (progress.uploaded / progress.total) * 100 : 0;
   return (
     <div className="mb-3 flex items-center gap-3">
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
         <div
           className="h-full bg-primary transition-all duration-300"
           style={{
-            width: `${Math.round((progress.uploaded / progress.total) * 100)}%`,
+            width: `${Math.round(pct)}%`,
           }}
         />
       </div>
@@ -19,5 +23,5 @@ export default function UploadProgressBar({ progress }: UploadProgressBarProps) 
         {progress.uploaded}/{progress.total} 업로드 중...
       </span>
     </div>
-  )
+  );
 }

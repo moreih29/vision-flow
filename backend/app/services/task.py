@@ -18,7 +18,6 @@ from app.schemas.task_image import TaskFolderContentsResponse, TaskImageResponse
 from app.services.image import _escape_like, _normalize_folder_path
 from app.services.project import project_service
 
-
 _natsort_key = natsort_keygen()
 
 
@@ -133,22 +132,17 @@ class TaskService:
                 detail=f"Images not found: {sorted(missing)}",
             )
         normalized_folder_path = _normalize_folder_path(folder_path)
+        # 같은 (task_id, image_id, folder_path) 조합이 이미 있는지 확인
         existing_result = await db.execute(
             select(TaskImage).where(
                 TaskImage.task_id == task_id,
                 TaskImage.image_id.in_(image_ids),
+                TaskImage.folder_path == normalized_folder_path,
             )
         )
-        existing_images = list(existing_result.scalars().all())
-        existing_ids = {ti.image_id for ti in existing_images}
+        existing_keys = {ti.image_id for ti in existing_result.scalars().all()}
 
-        moved_count = 0
-        for ti in existing_images:
-            if ti.folder_path != normalized_folder_path:
-                ti.folder_path = normalized_folder_path
-                moved_count += 1
-
-        new_ids = [iid for iid in image_ids if iid not in existing_ids]
+        new_ids = [iid for iid in image_ids if iid not in existing_keys]
         task_images = [TaskImage(task_id=task_id, image_id=iid, folder_path=normalized_folder_path) for iid in new_ids]
         db.add_all(task_images)
         await db.commit()
@@ -158,11 +152,12 @@ class TaskService:
                 .where(
                     TaskImage.task_id == task_id,
                     TaskImage.image_id.in_(new_ids),
+                    TaskImage.folder_path == normalized_folder_path,
                 )
                 .options(selectinload(TaskImage.image))
             )
-            return list(result.scalars().all()), moved_count  # type: ignore[arg-type]
-        return [], moved_count
+            return list(result.scalars().all()), 0  # type: ignore[arg-type]
+        return [], 0
 
     async def remove_images(self, db: AsyncSession, task_id: int, image_ids: list[int]) -> None:
         await self.get_task(db, task_id)

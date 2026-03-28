@@ -1,6 +1,9 @@
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { tasksApi } from "@/api/tasks";
 import type { FolderInfo } from "@/types/image";
+import type { VersionStatus } from "@/types/snapshot";
 
 interface TaskFolderOperationsCallbacks {
   confirm: (options: {
@@ -25,6 +28,27 @@ export function useTaskFolderOperations(
   folders: FolderInfo[],
   callbacks: TaskFolderOperationsCallbacks,
 ) {
+  const queryClient = useQueryClient();
+
+  const setDirty = useCallback(() => {
+    if (!taskId) return;
+    queryClient.setQueryData<VersionStatus>(
+      ["tasks", taskId, "version-status"],
+      (old) =>
+        old
+          ? {
+              ...old,
+              is_dirty: true,
+              changes: { ...old.changes, data_changed: true },
+            }
+          : old,
+    );
+    queryClient.invalidateQueries({
+      queryKey: ["tasks", taskId, "version-status"],
+    });
+    queryClient.invalidateQueries({ queryKey: ["tasks", taskId] });
+  }, [taskId, queryClient]);
+
   const handleRemoveImage = useCallback(
     async (taskImageId: number) => {
       const confirmed = await callbacks.confirm({
@@ -37,13 +61,14 @@ export function useTaskFolderOperations(
       if (!taskId) return;
       try {
         await tasksApi.batchRemoveImages(taskId, [taskImageId]);
+        setDirty();
         await callbacks.invalidateFolderContents();
         callbacks.refreshTree();
       } catch {
         await callbacks.showAlert({ title: "이미지 제거에 실패했습니다." });
       }
     },
-    [taskId, callbacks],
+    [taskId, callbacks, setDirty],
   );
 
   const handleDeleteFolder = useCallback(
@@ -60,6 +85,7 @@ export function useTaskFolderOperations(
       if (!confirmed) return;
       try {
         await tasksApi.deleteFolder(taskId, folderPath);
+        setDirty();
         if (currentPath === folderPath || currentPath.startsWith(folderPath)) {
           const parts = folderPath.replace(/\/$/, "").split("/");
           parts.pop();
@@ -74,7 +100,7 @@ export function useTaskFolderOperations(
         await callbacks.showAlert({ title: "폴더 제거에 실패했습니다." });
       }
     },
-    [taskId, currentPath, callbacks],
+    [taskId, currentPath, callbacks, setDirty],
   );
 
   const handleCreateFolder = useCallback(
@@ -84,8 +110,9 @@ export function useTaskFolderOperations(
         await tasksApi.createFolder(taskId, folderPath);
         await callbacks.invalidateFolderContents();
       } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
+        const detail = axios.isAxiosError(e)
+          ? e.response?.data?.detail
+          : undefined;
         await callbacks.showAlert({
           title: detail || "폴더 생성에 실패했습니다.",
         });
@@ -100,9 +127,11 @@ export function useTaskFolderOperations(
       if (!taskId) return;
       try {
         await tasksApi.updateFolder(taskId, oldPath, newPath);
+        setDirty();
       } catch (e: unknown) {
-        const detail = (e as { response?: { data?: { detail?: string } } })
-          ?.response?.data?.detail;
+        const detail = axios.isAxiosError(e)
+          ? e.response?.data?.detail
+          : undefined;
         await callbacks.showAlert({
           title: detail || "폴더 업데이트에 실패했습니다.",
         });
@@ -117,7 +146,7 @@ export function useTaskFolderOperations(
       }
       callbacks.refreshTree();
     },
-    [taskId, currentPath, callbacks],
+    [taskId, currentPath, callbacks, setDirty],
   );
 
   const handleCreateFolderInCurrentPath = useCallback(async () => {

@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import type { DataPoolItem } from "@/types/image";
 
 interface UseImageContextMenuOptions {
   selectedKeys: Set<string>;
-  onItemClick: (index: number, event: React.MouseEvent) => void;
+  onItemClick: (
+    index: number,
+    event: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+  ) => void;
   onClearSelection: () => void;
 }
 
@@ -33,18 +37,18 @@ export function useImageContextMenu({
         shiftKey: false,
         metaKey: false,
         ctrlKey: false,
-      } as React.MouseEvent);
+      });
     }
   }
 
-  function handleBgContextMenu(e: React.MouseEvent) {
+  function handleBgContextMenu(e: MouseEvent) {
     if ((e.target as HTMLElement).closest("[data-pool-item]")) return;
     e.preventDefault();
     setBgMenu({ x: e.clientX, y: e.clientY });
     onClearSelection();
   }
 
-  function handleBgClick(e: React.MouseEvent) {
+  function handleBgClick(e: MouseEvent) {
     if ((e.target as HTMLElement).closest("[data-pool-item]")) return;
     onClearSelection();
   }

@@ -23,7 +23,14 @@ class TaskSnapshotItem(Base):
         nullable=False,
     )
 
-    __table_args__ = (UniqueConstraint("snapshot_id", "image_id"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "snapshot_id",
+            "image_id",
+            "folder_path",
+            name="uq_task_snapshot_items_snapshot_image_folder",
+        ),
+    )
 
     # relationships
     snapshot: Mapped["TaskSnapshot"] = relationship(back_populates="items")

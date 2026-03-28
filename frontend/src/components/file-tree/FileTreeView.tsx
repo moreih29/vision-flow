@@ -73,6 +73,8 @@ function buildFileNodes(result: {
   return { visibleFiles, hiddenCount };
 }
 
+const EMPTY_SET = new Set<string>();
+
 // -- 타입 정의 --
 
 export interface FileContentsResult {
@@ -206,8 +208,13 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
     ref,
   ) {
     const [rootNodes, setRootNodes] = useState<FileTreeNode[]>([]);
+    const rootNodesRef = useRef<FileTreeNode[]>([]);
+    useEffect(() => {
+      rootNodesRef.current = rootNodes;
+    }, [rootNodes]);
     const [rootHiddenFileCount, setRootHiddenFileCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [editingPath, setEditingPath] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
@@ -270,9 +277,13 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       [onSelectPath],
     );
 
+    // 초기 마운트 시의 selectedPath만 사용 — 이후 변경은 무시
+    const initialSelectedPathRef = useRef(selectedPath);
+
     useEffect(() => {
       async function loadRoot() {
         setLoading(true);
+        setLoadError(null);
         try {
           const result = await fetchFolderContents("", 0, FILE_PAGE_SIZE);
           const folderNodes = result.folders.map(buildFolderNode);
@@ -280,13 +291,14 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
           setRootNodes(sortNodes([...folderNodes, ...visibleFiles]));
           setRootHiddenFileCount(hiddenCount);
         } catch {
-          // silently fail
+          setLoadError("폴더를 불러올 수 없습니다");
         } finally {
           setLoading(false);
         }
         // 초기 마운트 시 selectedPath가 있으면 해당 경로까지 자동 펼침
-        if (selectedPath) {
-          const segments = selectedPath
+        const initialPath = initialSelectedPathRef.current;
+        if (initialPath) {
+          const segments = initialPath
             .replace(/\/$/, "")
             .split("/")
             .filter(Boolean);
@@ -298,7 +310,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         }
       }
       loadRoot();
-    }, [fetchFolderContents]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [fetchFolderContents]);
 
     // -- 가상화 --
     const { flatNodes, maxDepth } = useMemo(() => {
@@ -327,7 +339,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
     });
 
     // -- 전체 선택 체크박스 상태 --
-    const resolvedCheckedPaths = checkedPaths ?? new Set<string>();
+    const resolvedCheckedPaths = checkedPaths ?? EMPTY_SET;
     const allRootPaths = rootNodes.map((n) => n.path);
     const allChecked =
       allRootPaths.length > 0 &&
@@ -420,36 +432,39 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         const pathsToUpdate = collectExpandedPaths(expandedNodes).sort(
           (a, b) => a.split("/").length - b.split("/").length,
         );
-        let updatedNodes = expandedNodes;
-        await Promise.all(
+        const fetchResults = await Promise.all(
           pathsToUpdate.map(async (p) => {
             try {
               const childResult = await fetchFolderContents(p);
-              const childFolders = childResult.folders;
-              const childFileNodes = (childResult.files ?? []).map(
-                buildFileNode,
-              );
-              updatedNodes = updateNodeInTree(updatedNodes, p, (n) => ({
-                ...n,
-                children: [
-                  ...(n.children?.map((c) => {
-                    const info = childFolders.find((f) => f.path === c.path);
-                    return info
-                      ? {
-                          ...c,
-                          count: info.count,
-                          subfolder_count: info.subfolder_count,
-                        }
-                      : c;
-                  }) ?? []),
-                  ...childFileNodes,
-                ],
-              }));
+              return { path: p, childResult };
             } catch {
-              // skip
+              return null;
             }
           }),
         );
+        let updatedNodes = expandedNodes;
+        for (const result of fetchResults) {
+          if (!result) continue;
+          const { path: p, childResult } = result;
+          const childFolders = childResult.folders;
+          const childFileNodes = (childResult.files ?? []).map(buildFileNode);
+          updatedNodes = updateNodeInTree(updatedNodes, p, (n) => ({
+            ...n,
+            children: [
+              ...(n.children?.map((c) => {
+                const info = childFolders.find((f) => f.path === c.path);
+                return info
+                  ? {
+                      ...c,
+                      count: info.count,
+                      subfolder_count: info.subfolder_count,
+                    }
+                  : c;
+              }) ?? []),
+              ...childFileNodes,
+            ],
+          }));
+        }
         // 루트 레벨 카운트도 업데이트
         try {
           const rootResult = await fetchFolderContents("");
@@ -671,15 +686,8 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       },
     }));
 
-    // 최신 rootNodes를 functional updater 경유로 읽기
-    // React가 pending state updates를 체이닝하므로 항상 최신 상태를 반환
-    function getLatestRootNodes(): Promise<FileTreeNode[]> {
-      return new Promise((resolve) => {
-        setRootNodes((prev) => {
-          resolve(prev);
-          return prev;
-        });
-      });
+    function getLatestRootNodes(): FileTreeNode[] {
+      return rootNodesRef.current;
     }
 
     async function expandNode(path: string) {
@@ -694,7 +702,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         return undefined;
       };
 
-      const latestNodes = await getLatestRootNodes();
+      const latestNodes = getLatestRootNodes();
       const node = findNode(latestNodes);
       if (!node) return;
       if (node.expanded && node.loaded) return; // 이미 확장됨
@@ -1099,6 +1107,12 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
           ))}
         </div>
       );
+    }
+
+    // -- 에러 상태 --
+
+    if (loadError) {
+      return <div className="p-3 text-sm text-destructive">{loadError}</div>;
     }
 
     // -- bgMenu 엘리먼트 --

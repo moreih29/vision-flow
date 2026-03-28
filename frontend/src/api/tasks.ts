@@ -1,6 +1,5 @@
 import client from "@/api/client";
 import type { Task, TaskType } from "@/types/task";
-import type { ImageMeta } from "@/types/image";
 import type {
   TaskFolderContentsResponse,
   TaskImageResponse,
@@ -38,11 +37,9 @@ export const tasksApi = {
     }),
   getImages: (taskId: number, skip?: number, limit?: number) =>
     client.get(`/tasks/${taskId}/images`, { params: { skip, limit } }),
-  getAllImages: async (
-    taskId: number,
-  ): Promise<{ image: ImageMeta; image_id: number }[]> => {
+  getAllImages: async (taskId: number): Promise<TaskImageResponse[]> => {
     const first = await client.get<{
-      images: { image: ImageMeta; image_id: number }[];
+      images: TaskImageResponse[];
       total: number;
       skip: number;
       limit: number;

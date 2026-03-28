@@ -14,8 +14,7 @@ class SnapshotResponse(BaseModel):
     id: int
     task_id: int
     major_version: int
-    data_version: int
-    label_version: int
+    minor_version: int
     is_stash: bool
     name: str
     description: str | None
@@ -26,6 +25,7 @@ class SnapshotResponse(BaseModel):
     image_set_hash: str | None
     annotation_hash: str | None
     label_classes_snapshot: list[dict]
+    restored_from_id: int | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -57,13 +57,22 @@ class SnapshotDiffResponse(BaseModel):
     class_compatible: bool
 
 
+class ChangeCounts(BaseModel):
+    image_added: int = 0
+    image_removed: int = 0
+    image_moved: int = 0
+    class_added: int = 0
+    class_removed: int = 0
+
+
 class VersionChanges(BaseModel):
     class_changed: bool = False
     data_changed: bool = False
-    label_changed: bool = False
 
 
 class VersionStatusResponse(BaseModel):
     current_version: str | None
+    current_snapshot_id: int | None = None
     is_dirty: bool
     changes: VersionChanges
+    counts: ChangeCounts = Field(default_factory=ChangeCounts)

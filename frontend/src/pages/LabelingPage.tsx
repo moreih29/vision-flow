@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Keyboard, ZoomIn } from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { FolderOpen, FolderTree, Keyboard, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -16,9 +16,11 @@ import { tasksApi } from "@/api/tasks";
 import { labelClassesApi } from "@/api/label-classes";
 import { annotationsApi } from "@/api/annotations";
 import { snapshotsApi } from "@/api/snapshots";
+import { useProject } from "@/hooks/use-projects";
+import { PageBreadcrumb } from "@/components/layout";
 import type { Task } from "@/types/task";
 import type { LabelClass } from "@/types/label-class";
-import type { ImageMeta } from "@/types/image";
+import type { TaskImageResponse } from "@/types/task-image";
 import { useLabelingStore } from "@/stores/labeling-store";
 import {
   LabelingCanvas,
@@ -30,19 +32,27 @@ import {
   LabelingFilter,
   KeyboardShortcutsOverlay,
 } from "@/components/labeling";
+import { FileTreeView, type FileContentsResult } from "@/components/file-tree";
 
 const TOKEN_KEY = "auth_token";
 
 export default function LabelingPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const projectId = Number(id);
   const taskIdNum = Number(taskId);
+  const initialImageId = searchParams.get("imageId")
+    ? Number(searchParams.get("imageId"))
+    : null;
+
+  const { data: project } = useProject(projectId);
 
   const [task, setTask] = useState<Task | null>(null);
   const [classes, setClasses] = useState<LabelClass[]>([]);
-  const [images, setImages] = useState<ImageMeta[]>([]);
+  const [images, setImages] = useState<TaskImageResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [folderTreeOpen, setFolderTreeOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showShortcutsOverlay, setShowShortcutsOverlay] = useState(false);
   const [dirtyDialogOpen, setDirtyDialogOpen] = useState(false);
@@ -76,7 +86,7 @@ export default function LabelingPage() {
   } = useLabelingStore();
 
   // 현재 이미지 ref (saveCurrentAnnotations 클로저용)
-  const currentImageRef = useRef<ImageMeta | null>(null);
+  const currentImageRef = useRef<TaskImageResponse | null>(null);
   const isDirtyRef = useRef(isDirty);
   const annotationsRef = useRef(annotations);
 
@@ -103,8 +113,11 @@ export default function LabelingPage() {
       ]);
       setTask(taskRes.data);
       setClasses(classesRes.data);
-      const rawImages = imagesRes as { image: ImageMeta }[];
-      setImages(rawImages.map((si) => si.image));
+      setImages(imagesRes);
+      if (initialImageId != null) {
+        const idx = imagesRes.findIndex((ti) => ti.image.id === initialImageId);
+        if (idx >= 0) setCurrentImageIndex(idx);
+      }
     } catch {
       // 에러 처리 -- 빈 상태 유지
     } finally {
@@ -119,11 +132,11 @@ export default function LabelingPage() {
   const filteredIndices = useMemo(() => {
     if (filter === "all") return images.map((_, i) => i);
     return images
-      .map((img, i) => ({ img, i }))
-      .filter(({ img }) =>
+      .map((ti, i) => ({ ti, i }))
+      .filter(({ ti }) =>
         filter === "labeled"
-          ? labeledImageIds.has(img.id)
-          : !labeledImageIds.has(img.id),
+          ? labeledImageIds.has(ti.image.id)
+          : !labeledImageIds.has(ti.image.id),
       )
       .map(({ i }) => i);
   }, [filter, images, labeledImageIds]);
@@ -137,13 +150,16 @@ export default function LabelingPage() {
 
   // 현재 이미지의 파일 URL 구성
   const imageUrl = currentImage
-    ? `/api/v1/images/${currentImage.id}/file?token=${localStorage.getItem(TOKEN_KEY) ?? ""}`
+    ? `/api/v1/images/${currentImage.image.id}/file?token=${localStorage.getItem(TOKEN_KEY) ?? ""}`
     : null;
+
+  // 현재 이미지의 폴더 경로
+  const currentFolderPath = currentImage?.folder_path ?? null;
 
   // 저장 함수 (ref 값 사용해 최신 상태 읽음)
   const saveCurrentAnnotations = useCallback(
     async (targetImageId?: number) => {
-      const imageId = targetImageId ?? currentImageRef.current?.id;
+      const imageId = targetImageId ?? currentImageRef.current?.image.id;
       if (!imageId) return;
       if (!isDirtyRef.current) return;
 
@@ -180,12 +196,15 @@ export default function LabelingPage() {
       // 이전 이미지 저장 (currentImage가 바뀌기 전 ref로 이전 imageId 접근 불가 —
       // 이미지 전환은 currentImageIndex 변경이므로 저장은 navigateToImage에서 처리)
       try {
-        const res = await annotationsApi.list(taskIdNum, currentImage!.id);
+        const res = await annotationsApi.list(
+          taskIdNum,
+          currentImage!.image.id,
+        );
         if (!cancelled) {
           setAnnotations(res.data);
           setSelectedAnnotationId(null);
           // 라벨링 상태 갱신
-          setLabeledImageId(currentImage!.id, res.data.length > 0);
+          setLabeledImageId(currentImage!.image.id, res.data.length > 0);
         }
       } catch {
         if (!cancelled) {
@@ -198,13 +217,13 @@ export default function LabelingPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentImage?.id, taskIdNum, setAnnotations]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentImage?.image.id, taskIdNum, setAnnotations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 어노테이션 변경 시 현재 이미지의 라벨링 상태 실시간 반영
   useEffect(() => {
     if (!currentImage) return;
-    setLabeledImageId(currentImage.id, annotations.length > 0);
-  }, [annotations.length, currentImage?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    setLabeledImageId(currentImage.image.id, annotations.length > 0);
+  }, [annotations.length, currentImage?.image.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ImageNavigator의 이미지 전환을 가로채기 위한 래퍼
   // ImageNavigator는 store의 setCurrentImageIndex를 직접 호출하므로,
@@ -326,7 +345,7 @@ export default function LabelingPage() {
           }
         } else {
           annotationsApi
-            .create(taskIdNum, imageAtKey.id, {
+            .create(taskIdNum, imageAtKey.image.id, {
               label_class_id: classId,
               annotation_type: "classification",
               data: {},
@@ -407,7 +426,7 @@ export default function LabelingPage() {
 
   function handleCommitAndLeave() {
     setDirtyDialogOpen(false);
-    navigate(`${taskDetailPath}?tab=versions`);
+    navigate(taskDetailPath);
   }
 
   const handleScaleChange = useCallback(
@@ -441,11 +460,15 @@ export default function LabelingPage() {
       } else {
         // 새 classification annotation 생성
         try {
-          const res = await annotationsApi.create(taskIdNum, currentImage.id, {
-            label_class_id: classId,
-            annotation_type: "classification",
-            data: {},
-          });
+          const res = await annotationsApi.create(
+            taskIdNum,
+            currentImage.image.id,
+            {
+              label_class_id: classId,
+              annotation_type: "classification",
+              data: {},
+            },
+          );
           addAnnotation(res.data);
         } catch {
           // 에러 무시
@@ -466,6 +489,72 @@ export default function LabelingPage() {
   );
 
   const taskType = task?.task_type ?? null;
+
+  // 폴더 트리: fetchFolderContents (파일 포함)
+  const fetchFolderContents = useCallback(
+    async (
+      path: string,
+      skip?: number,
+      limit?: number,
+    ): Promise<FileContentsResult> => {
+      const res = await tasksApi.getFolderContents(
+        taskIdNum,
+        path,
+        skip,
+        limit,
+      );
+      const data = res.data;
+      return {
+        folders: data.folders.map((f) => ({
+          path: f.path,
+          name: f.name,
+          count: f.image_count,
+          subfolder_count: f.subfolder_count,
+        })),
+        files: data.images.map((ti) => ({
+          id: ti.image.id,
+          name: ti.image.original_filename,
+          path: ti.folder_path
+            ? ti.folder_path + "/" + ti.image.original_filename
+            : ti.image.original_filename,
+        })),
+        totalFiles: data.total_images,
+      };
+    },
+    [taskIdNum],
+  );
+
+  // 폴더 클릭 → 해당 폴더의 첫 번째 이미지로 점프
+  const handleFolderSelect = useCallback(
+    (folderPath: string) => {
+      const idx = images.findIndex((ti) => {
+        if (folderPath === "") return true;
+        return (
+          ti.folder_path === folderPath ||
+          ti.folder_path.startsWith(folderPath + "/")
+        );
+      });
+      if (idx >= 0) setCurrentImageIndex(idx);
+    },
+    [images, setCurrentImageIndex],
+  );
+
+  // 파일 클릭 → 해당 이미지로 점프
+  const handleFileClick = useCallback(
+    (_path: string, fileId?: number) => {
+      if (fileId == null) return;
+      const idx = images.findIndex((ti) => ti.image.id === fileId);
+      if (idx >= 0) setCurrentImageIndex(idx);
+    },
+    [images, setCurrentImageIndex],
+  );
+
+  // 현재 이미지의 파일 트리 path (하이라이트용)
+  const currentFilePath = currentImage
+    ? currentImage.folder_path
+      ? currentImage.folder_path + "/" + currentImage.image.original_filename
+      : currentImage.image.original_filename
+    : undefined;
 
   // 저장 상태 표시
   function SaveStatus() {
@@ -513,19 +602,18 @@ export default function LabelingPage() {
 
       {/* 상단 바 */}
       <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-background px-4 select-none">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={handleBack}
-          disabled={checkingDirty}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-
-        <span className="text-sm font-semibold">
-          {loading ? "로드 중..." : (task?.name ?? "라벨링")}
-        </span>
+        <PageBreadcrumb
+          items={[
+            ...(project
+              ? [{ label: project.name, href: `/projects/${projectId}` }]
+              : []),
+            {
+              label: loading ? "로드 중..." : (task?.name ?? ""),
+              onClick: loading || checkingDirty ? undefined : handleBack,
+            },
+            { label: "라벨링" },
+          ]}
+        />
 
         <div className="mx-2 h-4 w-px bg-border" />
 
@@ -552,8 +640,38 @@ export default function LabelingPage() {
 
         <div className="flex-1" />
 
+        {/* 현재 폴더 경로 */}
+        {currentFolderPath !== null && (
+          <>
+            <div className="mx-2 h-4 w-px bg-border" />
+            <button
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setFolderTreeOpen((v) => !v)}
+              title="폴더 트리 열기"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              <span className="max-w-[180px] truncate">
+                {currentFolderPath || "루트"}
+              </span>
+            </button>
+          </>
+        )}
+
+        <div className="mx-2 h-4 w-px bg-border" />
+
         {/* 저장 상태 */}
         <SaveStatus />
+
+        {/* 폴더 트리 토글 버튼 */}
+        <Button
+          variant={folderTreeOpen ? "secondary" : "ghost"}
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setFolderTreeOpen((v) => !v)}
+          title="폴더 트리"
+        >
+          <FolderTree className="h-4 w-4" />
+        </Button>
 
         {/* 단축키 도움말 버튼 */}
         <Button
@@ -595,7 +713,7 @@ export default function LabelingPage() {
           </div>
         </aside>
 
-        {/* 우측: 캔버스 + 필름스트립 */}
+        {/* 중앙: 캔버스 + 필름스트립 */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* 중앙 캔버스 영역 */}
           <main className="relative flex-1 overflow-hidden bg-neutral-800">
@@ -620,9 +738,34 @@ export default function LabelingPage() {
 
           {/* 하단 필름스트립 */}
           {totalImages > 0 && (
-            <FilmStrip images={images} filteredIndices={filteredIndices} />
+            <FilmStrip
+              images={images.map((ti) => ti.image)}
+              filteredIndices={filteredIndices}
+            />
           )}
         </div>
+
+        {/* 우측 폴더 트리 패널 */}
+        {folderTreeOpen && (
+          <aside className="flex w-56 shrink-0 flex-col border-l bg-background select-none overflow-hidden">
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                폴더 트리
+              </span>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <FileTreeView
+                fetchFolderContents={fetchFolderContents}
+                rootLabel="전체"
+                rootCount={totalImages}
+                selectedPath={currentFilePath ?? currentFolderPath ?? ""}
+                readOnly
+                onSelectPath={handleFolderSelect}
+                onFileClick={handleFileClick}
+              />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

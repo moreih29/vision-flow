@@ -1,4 +1,5 @@
-import { Plus, Trash2 } from "lucide-react";
+import { useRef } from "react";
+import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ interface TaskClassPanelProps {
   onNewClassColorChange: (color: string) => void;
   onAddClass: () => void;
   onDeleteClass: (classId: number) => void;
+  onUpdateClassColor: (classId: number, color: string) => void;
 }
 
 export function TaskClassPanel({
@@ -32,6 +34,7 @@ export function TaskClassPanel({
   onNewClassColorChange,
   onAddClass,
   onDeleteClass,
+  onUpdateClassColor,
 }: TaskClassPanelProps) {
   return (
     <div className="overflow-y-auto select-none">
@@ -85,7 +88,8 @@ export function TaskClassPanel({
                 onClick={onCancelAdding}
                 disabled={savingClass}
               >
-                취소
+                <X className="h-3 w-3 mr-1" />
+                닫기
               </Button>
             </div>
           </div>
@@ -105,36 +109,62 @@ export function TaskClassPanel({
         ) : (
           <div className="space-y-1">
             {classes.map((cls) => (
-              <div
+              <ClassRow
                 key={cls.id}
-                className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
-              >
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: cls.color }}
-                />
-                <span
-                  className="flex-1 truncate text-sm select-text"
-                  title={cls.name}
-                >
-                  {cls.name}
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {cls.label_count}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground"
-                  onClick={() => onDeleteClass(cls.id)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
+                cls={cls}
+                onDeleteClass={onDeleteClass}
+                onUpdateClassColor={onUpdateClassColor}
+              />
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ClassRow({
+  cls,
+  onDeleteClass,
+  onUpdateClassColor,
+}: {
+  cls: LabelClass;
+  onDeleteClass: (id: number) => void;
+  onUpdateClassColor: (id: number, color: string) => void;
+}) {
+  const colorInputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
+      <button
+        type="button"
+        className="h-3 w-3 shrink-0 rounded-full cursor-pointer ring-offset-1 hover:ring-2 hover:ring-muted-foreground transition-shadow"
+        style={{ backgroundColor: cls.color }}
+        onClick={() => colorInputRef.current?.click()}
+        title="색상 변경"
+      />
+      <input
+        ref={colorInputRef}
+        type="color"
+        value={cls.color}
+        onChange={(e) => onUpdateClassColor(cls.id, e.target.value)}
+        className="sr-only"
+        tabIndex={-1}
+      />
+      <span className="flex-1 truncate text-sm select-text" title={cls.name}>
+        {cls.name}
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {cls.label_count}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground"
+        onClick={() => onDeleteClass(cls.id)}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
     </div>
   );
 }

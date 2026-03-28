@@ -47,7 +47,7 @@ export function useImageDragDrop({
       ghost.textContent = `📁 ${item.folder?.name || "폴더"}`;
     } else if (item.type === "image" && item.image) {
       const thumb = document.createElement("img");
-      thumb.src = imagesApi.getFileUrl(item.image.id);
+      thumb.src = imagesApi.getThumbnailUrl(item.image.id);
       thumb.style.cssText =
         "width:28px;height:28px;object-fit:cover;border-radius:3px;flex-shrink:0;";
       const label = document.createElement("span");
@@ -93,7 +93,13 @@ export function useImageDragDrop({
       e.preventDefault();
       e.stopPropagation();
       setDragOverFolderKey(null);
-      const { imageIds, folderPaths } = JSON.parse(data);
+      let parsed;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        return;
+      }
+      const { imageIds, folderPaths } = parsed;
       const filteredFolders = folderPaths.filter(
         (p: string) => p !== item.folder!.path,
       );

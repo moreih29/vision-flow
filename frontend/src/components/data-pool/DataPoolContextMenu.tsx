@@ -1,4 +1,4 @@
-import { FolderInput, FolderOpen, Pencil, Trash2 } from "lucide-react";
+import { FolderInput, FolderOpen, Pencil, Tag, Trash2 } from "lucide-react";
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -17,6 +17,7 @@ interface DataPoolContextMenuProps {
   onDeleteSelected: () => void;
   onDeleteFolder: (path: string) => void;
   onDeleteImage: (id: number) => void;
+  onOpenLabeling?: (imageId: number) => void;
 }
 
 export default function DataPoolContextMenu({
@@ -30,6 +31,7 @@ export default function DataPoolContextMenu({
   onDeleteSelected,
   onDeleteFolder,
   onDeleteImage,
+  onOpenLabeling,
 }: DataPoolContextMenuProps) {
   const isMultiSelected = selectedCount > 1;
 
@@ -79,6 +81,14 @@ export default function DataPoolContextMenu({
   if (item.type === "image" && item.image) {
     return (
       <ContextMenuContent className="w-48">
+        {onOpenLabeling && (
+          <>
+            <ContextMenuItem onClick={() => onOpenLabeling(item.image!.id)}>
+              <Tag className="mr-2 h-3.5 w-3.5" />이 이미지부터 라벨링
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         <ContextMenuItem onClick={onMoveSelected}>
           <FolderInput className="mr-2 h-3.5 w-3.5" />
           이동...

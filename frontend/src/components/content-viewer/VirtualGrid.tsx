@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useImageContextMenu } from "@/hooks/use-image-context-menu";
 import { ArrowUpLeft } from "lucide-react";
@@ -25,6 +25,10 @@ export default function VirtualGrid<T extends ViewerItem>({
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
   const [containerWidth, setContainerWidth] = useState(800);
+  const onScrollCompleteRef = useRef(onScrollComplete);
+  useEffect(() => {
+    onScrollCompleteRef.current = onScrollComplete;
+  });
 
   useEffect(() => {
     const el = parentRef.current;
@@ -75,17 +79,28 @@ export default function VirtualGrid<T extends ViewerItem>({
     overscan: 3,
   });
 
+  const virtualizerMeasure = useCallback(
+    () => virtualizer.measure(),
+    [virtualizer],
+  );
+  const virtualizerScrollToIndex = useCallback(
+    (idx: number, opts?: Parameters<typeof virtualizer.scrollToIndex>[1]) =>
+      virtualizer.scrollToIndex(idx, opts),
+    [virtualizer],
+  );
+
   // containerWidth 변경 시 virtualizer에 행 높이 재계산 요청
   useEffect(() => {
-    virtualizer.measure();
-  }, [itemSize]); // eslint-disable-line react-hooks/exhaustive-deps
+    virtualizerMeasure();
+  }, [itemSize, virtualizerMeasure]);
 
-  // 폴더 이동 시 virtualizer 캐시 무효화 + 스크롤 리셋
+  // 폴더 이동 감지: items[0]?.key는 폴더가 바뀌면 항상 달라지므로 변경 신호로 사용.
+  // (currentPath prop을 추가하면 더 명시적이나, 현재 인터페이스에서는 이 방식으로 충분)
   const firstItemKey = items[0]?.key;
   useEffect(() => {
-    virtualizer.measure();
+    virtualizerMeasure();
     parentRef.current?.scrollTo(0, 0);
-  }, [firstItemKey, hasParentItem]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [firstItemKey, hasParentItem, virtualizerMeasure]);
 
   // scrollToItemKey 변경 시 해당 아이템 행으로 스크롤
   useEffect(() => {
@@ -93,9 +108,9 @@ export default function VirtualGrid<T extends ViewerItem>({
     const idx = gridItems.findIndex((item) => item.key === scrollToItemKey);
     if (idx < 0) return;
     const rowIdx = Math.floor(idx / columns);
-    virtualizer.scrollToIndex(rowIdx, { align: "center" });
-    onScrollComplete?.();
-  }, [scrollToItemKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    virtualizerScrollToIndex(rowIdx, { align: "center" });
+    onScrollCompleteRef.current?.();
+  }, [scrollToItemKey, gridItems, columns, virtualizerScrollToIndex]);
 
   // viewport에 보이는 placeholder 행이 있으면 onLoadMore 호출
   const virtualItems = virtualizer.getVirtualItems();
@@ -264,7 +279,10 @@ export default function VirtualGrid<T extends ViewerItem>({
       {bgMenu && (
         <div
           className="fixed z-50 w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-          style={{ left: bgMenu.x, top: bgMenu.y }}
+          style={{
+            left: Math.min(bgMenu.x, window.innerWidth - 200),
+            top: Math.min(bgMenu.y, window.innerHeight - 150),
+          }}
         >
           {renderBgMenu?.(closeBgMenu)}
         </div>

@@ -26,9 +26,10 @@ export const snapshotsApi = {
   diff: (idA: number, idB: number) =>
     client.get<SnapshotDiff>(`/snapshots/${idA}/diff/${idB}`),
 
-  restore: (id: number, confirm: boolean) =>
+  restore: (id: number, confirm: boolean, skipStash?: boolean) =>
     client.post<Snapshot | SnapshotRestoreDryRun>(`/snapshots/${id}/restore`, {
       confirm,
+      skip_stash: skipStash ?? false,
     }),
 
   delete: (id: number) => client.delete(`/snapshots/${id}`),

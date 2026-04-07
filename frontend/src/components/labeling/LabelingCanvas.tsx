@@ -9,8 +9,7 @@ import { useLabelingStore } from "@/stores/labeling-store";
 import AnnotationLayer from "./AnnotationLayer";
 import CanvasScrollbars from "./CanvasScrollbars";
 import ZoomControls from "./ZoomControls";
-import BBoxDrawTool from "./tools/BBoxDrawTool";
-import BBoxSelectTool from "./tools/BBoxSelectTool";
+import UnifiedBBoxTool from "./tools/UnifiedBBoxTool";
 
 interface LabelingCanvasProps {
   imageUrl: string | null;
@@ -47,6 +46,15 @@ export default function LabelingCanvas({
 
   const tool = useLabelingStore((s) => s.tool);
   const showAnnotations = useLabelingStore((s) => s.showAnnotations);
+  const removeAnnotation = useLabelingStore((s) => s.removeAnnotation);
+  const updateAnnotation = useLabelingStore((s) => s.updateAnnotation);
+
+  const [contextMenu, setContextMenu] = useState<{
+    annotationId: number;
+    x: number;
+    y: number;
+    submenuOpen: boolean;
+  } | null>(null);
   const {
     stageRef,
     scale,
@@ -78,6 +86,45 @@ export default function LabelingCanvas({
       clearCursor("pan");
     }
   }, [isPanning, setCursor, clearCursor]);
+
+  const handleBBoxContextMenu = useCallback(
+    (annotationId: number, stageX: number, stageY: number) => {
+      setContextMenu({
+        annotationId,
+        x: stageX,
+        y: stageY,
+        submenuOpen: false,
+      });
+    },
+    [],
+  );
+
+  const handleDeleteFromMenu = useCallback(() => {
+    if (!contextMenu) return;
+    removeAnnotation(contextMenu.annotationId);
+    setContextMenu(null);
+  }, [contextMenu, removeAnnotation]);
+
+  const handleChangeClass = useCallback(
+    (classId: number) => {
+      if (!contextMenu) return;
+      updateAnnotation(contextMenu.annotationId, { label_class_id: classId });
+      setContextMenu(null);
+    },
+    [contextMenu, updateAnnotation],
+  );
+
+  // 컨텍스트 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!contextMenu) return;
+    function handlePointerDown(e: PointerEvent) {
+      const menu = document.getElementById("bbox-context-menu");
+      if (menu && menu.contains(e.target as Node)) return;
+      setContextMenu(null);
+    }
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [contextMenu]);
 
   // ResizeObserver로 컨테이너 크기 감지
   useEffect(() => {
@@ -200,6 +247,23 @@ export default function LabelingCanvas({
         </div>
       )}
 
+      {loadFailed === imageUrl && imageUrl && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
+          <p className="text-sm text-neutral-400">
+            이미지를 불러올 수 없습니다
+          </p>
+          <button
+            className="rounded-md border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition-colors"
+            onClick={() => {
+              setLoadFailed(null);
+              setLoadedImage(null);
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+
       <Stage
         ref={stageRef}
         width={containerSize.width}
@@ -209,23 +273,8 @@ export default function LabelingCanvas({
         {/* 이미지 레이어 */}
         <Layer>{image && <KonvaImage image={image} />}</Layer>
 
-        {/* 어노테이션 레이어 -- select 도구가 아닐 때 기본 렌더링 */}
-        {tool !== "select" && showAnnotations && (
-          <Layer>
-            {image && (
-              <AnnotationLayer
-                annotations={annotations}
-                labelClasses={labelClasses}
-                imageSize={imageSize}
-                selectedAnnotationId={selectedAnnotationId}
-                onSelect={onSelectAnnotation}
-              />
-            )}
-          </Layer>
-        )}
-
-        {/* select 도구: BBoxSelectTool이 bbox를 직접 렌더링 + 상호작용 */}
-        {tool === "select" && image && (
+        {/* bbox 도구: UnifiedBBoxTool이 bbox를 직접 렌더링 + 그리기/선택/이동/리사이즈 처리 */}
+        {tool === "bbox" && image && (
           <Layer>
             {showAnnotations && (
               <AnnotationLayer
@@ -238,21 +287,30 @@ export default function LabelingCanvas({
                 onSelect={onSelectAnnotation}
               />
             )}
-            <BBoxSelectTool
+            <UnifiedBBoxTool
               annotations={showAnnotations ? annotations : []}
               labelClasses={labelClasses}
               imageSize={imageSize}
               isPanning={isPanning}
               onCursorChange={setCursor}
               onCursorClear={clearCursor}
+              onBBoxContextMenu={handleBBoxContextMenu}
             />
           </Layer>
         )}
 
-        {/* bbox 그리기 도구 */}
-        {tool === "bbox" && image && (
+        {/* classification 도구: 기본 어노테이션 레이어만 렌더링 */}
+        {tool === "classification" && showAnnotations && (
           <Layer>
-            <BBoxDrawTool imageSize={imageSize} isPanning={isPanning} />
+            {image && (
+              <AnnotationLayer
+                annotations={annotations}
+                labelClasses={labelClasses}
+                imageSize={imageSize}
+                selectedAnnotationId={selectedAnnotationId}
+                onSelect={onSelectAnnotation}
+              />
+            )}
           </Layer>
         )}
       </Stage>
@@ -275,6 +333,70 @@ export default function LabelingCanvas({
         onFitToScreen={handleFitToScreen}
         onResetZoom={resetTransform}
       />
+
+      {/* bbox 우클릭 컨텍스트 메뉴 */}
+      {contextMenu && (
+        <div
+          id="bbox-context-menu"
+          className="absolute z-50 min-w-[160px] rounded-md border border bg-popover text-popover-foreground py-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {/* 클래스 변경 */}
+          <div className="group relative">
+            <button
+              className="flex w-full items-center justify-between px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-700"
+              onPointerEnter={() =>
+                setContextMenu((prev) =>
+                  prev ? { ...prev, submenuOpen: true } : prev,
+                )
+              }
+            >
+              <span>클래스 변경</span>
+              <span className="ml-4 text-neutral-400">&#9658;</span>
+            </button>
+            {contextMenu.submenuOpen && (
+              <div
+                className="absolute left-full top-0 min-w-[160px] rounded-md border border bg-popover text-popover-foreground py-1 shadow-lg"
+                onPointerLeave={() =>
+                  setContextMenu((prev) =>
+                    prev ? { ...prev, submenuOpen: false } : prev,
+                  )
+                }
+              >
+                {labelClasses.map((cls) => (
+                  <button
+                    key={cls.id}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-700"
+                    onClick={() => handleChangeClass(cls.id)}
+                  >
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm flex-shrink-0"
+                      style={{ backgroundColor: cls.color }}
+                    />
+                    <span className="truncate">{cls.name}</span>
+                  </button>
+                ))}
+                {labelClasses.length === 0 && (
+                  <span className="block px-3 py-1.5 text-sm text-neutral-500">
+                    클래스 없음
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="my-1 border-t border-neutral-700" />
+
+          {/* 삭제 */}
+          <button
+            className="flex w-full items-center px-3 py-1.5 text-sm text-red-400 hover:bg-neutral-700"
+            onClick={handleDeleteFromMenu}
+          >
+            삭제
+          </button>
+        </div>
+      )}
     </div>
   );
 }

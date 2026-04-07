@@ -130,6 +130,11 @@ export function TreeNode({
   }
 
   function handleClick() {
+    // readOnly 또는 파일 노드는 더블클릭 판별이 불필요 → 즉시 처리
+    if (readOnly || isFile) {
+      handleSingleClick();
+      return;
+    }
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;

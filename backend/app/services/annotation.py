@@ -8,14 +8,9 @@ from app.schemas.annotation import AnnotationCreate, AnnotationUpdate
 
 
 class AnnotationService:
-    async def get_task_image(self, db: AsyncSession, task_id: int, image_id: int) -> TaskImage:
-        """task_id + image_id 조합으로 TaskImage 조회, 없으면 404."""
-        result = await db.execute(
-            select(TaskImage).where(
-                TaskImage.task_id == task_id,
-                TaskImage.image_id == image_id,
-            )
-        )
+    async def get_task_image(self, db: AsyncSession, task_image_id: int) -> TaskImage:
+        """task_image_id(PK)로 TaskImage 조회, 없으면 404."""
+        result = await db.execute(select(TaskImage).where(TaskImage.id == task_image_id))
         task_image = result.scalar_one_or_none()
         if task_image is None:
             raise HTTPException(

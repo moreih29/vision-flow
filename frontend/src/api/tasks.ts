@@ -3,6 +3,7 @@ import type { Task, TaskType } from "@/types/task";
 import type {
   TaskFolderContentsResponse,
   TaskImageResponse,
+  ReviewStatus,
 } from "@/types/task-image";
 
 export const tasksApi = {
@@ -92,5 +93,14 @@ export const tasksApi = {
     client.post<{ removed_count: number }>(
       `/tasks/${taskId}/images/batch-remove`,
       { task_image_ids: taskImageIds },
+    ),
+  updateReviewStatus: (
+    taskId: number,
+    taskImageId: number,
+    reviewStatus: ReviewStatus,
+  ) =>
+    client.patch<TaskImageResponse>(
+      `/tasks/${taskId}/images/${taskImageId}/review-status`,
+      { review_status: reviewStatus },
     ),
 };

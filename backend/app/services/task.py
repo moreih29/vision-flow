@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.annotation import Annotation
+from app.models.enums import ReviewStatus
 from app.models.image import Image
 from app.models.label_class import LabelClass
 from app.models.task import Task
@@ -466,6 +467,31 @@ class TaskService:
         )
         await db.commit()
         return result.rowcount  # type: ignore[attr-defined, no-any-return]
+
+    async def update_review_status(
+        self,
+        db: AsyncSession,
+        task_id: int,
+        image_id: int,
+        user_id: int,
+        review_status: ReviewStatus,
+    ) -> TaskImage:
+        await self.check_ownership(db, task_id, user_id)
+        result = await db.execute(
+            select(TaskImage)
+            .where(TaskImage.task_id == task_id, TaskImage.id == image_id)
+            .options(selectinload(TaskImage.image))
+        )
+        task_image = result.scalar_one_or_none()
+        if task_image is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="TaskImage not found",
+            )
+        task_image.review_status = review_status
+        await db.commit()
+        await db.refresh(task_image)
+        return task_image
 
 
 task_service = TaskService()

@@ -19,55 +19,52 @@ router = APIRouter(tags=["annotations"])
 
 
 @router.get(
-    "/tasks/{task_id}/images/{image_id}/labels",
+    "/task-images/{task_image_id}/labels",
     response_model=list[AnnotationResponse],
 )
 async def list_annotations(
-    task_id: int,
-    image_id: int,
+    task_image_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[AnnotationResponse]:
     """이미지별 어노테이션 목록을 조회합니다."""
-    await task_service.check_ownership(db, task_id, current_user.id)
-    task_image = await annotation_service.get_task_image(db, task_id, image_id)
+    task_image = await annotation_service.get_task_image(db, task_image_id)
+    await task_service.check_ownership(db, task_image.task_id, current_user.id)
     annotations = await annotation_service.get_annotations(db, task_image.id)
     return [AnnotationResponse.model_validate(a) for a in annotations]
 
 
 @router.post(
-    "/tasks/{task_id}/images/{image_id}/labels",
+    "/task-images/{task_image_id}/labels",
     response_model=AnnotationResponse,
     status_code=201,
 )
 async def create_annotation(
-    task_id: int,
-    image_id: int,
+    task_image_id: int,
     annotation_in: AnnotationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> AnnotationResponse:
     """이미지에 어노테이션을 생성합니다."""
-    await task_service.check_ownership(db, task_id, current_user.id)
-    task_image = await annotation_service.get_task_image(db, task_id, image_id)
+    task_image = await annotation_service.get_task_image(db, task_image_id)
+    await task_service.check_ownership(db, task_image.task_id, current_user.id)
     annotation = await annotation_service.create_annotation(db, task_image.id, annotation_in)
     return AnnotationResponse.model_validate(annotation)
 
 
 @router.put(
-    "/tasks/{task_id}/images/{image_id}/labels",
+    "/task-images/{task_image_id}/labels",
     response_model=BulkSaveResponse,
 )
 async def bulk_save_annotations(
-    task_id: int,
-    image_id: int,
+    task_image_id: int,
     body: BulkSaveRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BulkSaveResponse:
     """이미지의 어노테이션을 전체 교체합니다 (Bulk 저장)."""
-    await task_service.check_ownership(db, task_id, current_user.id)
-    task_image = await annotation_service.get_task_image(db, task_id, image_id)
+    task_image = await annotation_service.get_task_image(db, task_image_id)
+    await task_service.check_ownership(db, task_image.task_id, current_user.id)
     annotations = await annotation_service.bulk_save(db, task_image.id, body.annotations)
     return BulkSaveResponse(annotations=[AnnotationResponse.model_validate(a) for a in annotations])
 

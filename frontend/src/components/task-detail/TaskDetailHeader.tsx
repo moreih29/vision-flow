@@ -1,4 +1,4 @@
-import { AlertTriangle, Database, Images } from "lucide-react";
+import { AlertTriangle, ArrowRight, Database, Images } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -163,31 +163,31 @@ export function TaskDetailHeader({
       </header>
 
       <div className="border-b">
-        <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2">
-          <Button variant="secondary" size="sm">
-            목록
-          </Button>
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2">
+          <div>
+            {onTogglePoolPanel && (
+              <Button
+                variant={poolPanelOpen ? "secondary" : "ghost"}
+                size="sm"
+                onClick={onTogglePoolPanel}
+                title="데이터 풀에서 이미지 추가"
+                disabled={isRestoring}
+              >
+                <Database className="mr-1.5 h-3.5 w-3.5" />
+                데이터 추가
+              </Button>
+            )}
+          </div>
           <Button
-            variant="ghost"
+            variant="default"
             size="sm"
             disabled={!hasImages}
             title={hasImages ? "라벨링 시작" : "이미지를 먼저 추가하세요"}
             onClick={handleLabelingClick}
           >
-            라벨링
+            라벨링 시작
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>
-          {onTogglePoolPanel && (
-            <Button
-              variant={poolPanelOpen ? "secondary" : "ghost"}
-              size="sm"
-              onClick={onTogglePoolPanel}
-              title="데이터 풀에서 이미지 추가"
-              disabled={isRestoring}
-            >
-              <Database className="mr-1.5 h-3.5 w-3.5" />
-              데이터 추가
-            </Button>
-          )}
         </div>
       </div>
 

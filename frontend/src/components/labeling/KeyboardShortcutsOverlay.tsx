@@ -10,46 +10,51 @@ interface ShortcutRow {
   description: string;
 }
 
-const SHORTCUTS: { category: string; rows: ShortcutRow[] }[] = [
+interface ShortcutSection {
+  category: string;
+  taskTypes?: string[];
+  rows: ShortcutRow[];
+}
+
+const SHORTCUTS: ShortcutSection[] = [
   {
-    category: "이미지 네비게이션",
+    category: "작업 흐름",
     rows: [
-      { keys: ["←", "→"], description: "이전/다음 이미지" },
-      { keys: ["D"], description: "현재 이미지 완료 표시 + 다음 이미지 이동" },
+      { keys: ["D"], description: "저장하고 다음" },
+      { keys: ["A"], description: "저장하고 이전" },
+      { keys: ["S"], description: "저장" },
+      { keys: ["W"], description: "라벨 삭제" },
+      { keys: ["E"], description: "저장하지 않고 다음" },
+      { keys: ["Q"], description: "저장하지 않고 이전" },
     ],
   },
   {
-    category: "Classification",
-    rows: [
-      {
-        keys: ["Space"],
-        description: "현재 클래스 적용 + 다음 이미지 자동 이동",
-      },
-    ],
-  },
-  {
-    category: "뷰",
-    rows: [
-      { keys: ["F"], description: "화면에 맞추기 (Fit to Screen)" },
-      { keys: ["H"], description: "어노테이션 표시/숨기기" },
-      { keys: ["Ctrl", "+"], description: "확대" },
-      { keys: ["Ctrl", "-"], description: "축소" },
-      { keys: ["Ctrl", "0"], description: "화면에 맞추기" },
-    ],
+    category: "분류",
+    taskTypes: ["classification"],
+    rows: [{ keys: ["Space"], description: "클래스 적용하고 다음" }],
   },
   {
     category: "편집",
+    taskTypes: ["object_detection"],
     rows: [
+      { keys: ["Esc"], description: "그리기 취소 / 선택 해제" },
+      { keys: ["Delete"], description: "선택 삭제" },
+      { keys: ["Tab"], description: "다음 어노테이션 선택" },
       { keys: ["Ctrl", "Z"], description: "실행 취소" },
       { keys: ["Ctrl", "Shift", "Z"], description: "다시 실행" },
-      { keys: ["Ctrl", "S"], description: "저장" },
-      { keys: ["Escape"], description: "bbox 그리기 취소 / 선택 해제" },
-      { keys: ["Tab"], description: "다음 어노테이션 선택 순환" },
     ],
   },
   {
-    category: "기타",
-    rows: [{ keys: ["?"], description: "단축키 도움말 표시/숨기기" }],
+    category: "화면",
+    rows: [
+      { keys: ["F"], description: "화면에 맞추기" },
+      { keys: ["H"], description: "어노테이션 표시 토글" },
+      { keys: ["Ctrl", "+"], description: "확대" },
+      { keys: ["Ctrl", "-"], description: "축소" },
+      { keys: ["Ctrl", "S"], description: "저장" },
+      { keys: ["/"], description: "파일 트리 토글" },
+      { keys: ["?"], description: "단축키 도움말" },
+    ],
   },
 ];
 
@@ -64,21 +69,27 @@ function KbdKey({ label }: { label: string }) {
 interface KeyboardShortcutsOverlayProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  taskType?: string | null;
 }
 
 export default function KeyboardShortcutsOverlay({
   open,
   onOpenChange,
+  taskType,
 }: KeyboardShortcutsOverlayProps) {
+  const filtered = SHORTCUTS.filter(
+    (s) => !s.taskTypes || (taskType && s.taskTypes.includes(taskType)),
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[80vh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>키보드 단축키</DialogTitle>
         </DialogHeader>
 
         <div className="mt-2 space-y-5">
-          {SHORTCUTS.map((section) => (
+          {filtered.map((section) => (
             <div key={section.category}>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {section.category}

@@ -43,6 +43,7 @@ export function TaskClassPanel({
             size="icon"
             className="h-7 w-7"
             onClick={onStartAdding}
+            aria-label="클래스 추가"
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -127,6 +128,7 @@ export function TaskClassPanel({
                   size="icon"
                   className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground"
                   onClick={() => onDeleteClass(cls.id)}
+                  aria-label={`${cls.name} 클래스 삭제`}
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>

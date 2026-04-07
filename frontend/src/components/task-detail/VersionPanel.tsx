@@ -340,6 +340,7 @@ export function VersionPanel({ taskId }: VersionPanelProps) {
                             openMenuId === snapshot.id ? null : snapshot.id,
                           );
                         }}
+                        aria-label="스냅샷 메뉴"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
                       </Button>

@@ -109,6 +109,7 @@ export default function DataPoolToolbar({
                 className="h-7 w-7"
                 onClick={() => onChangePreviewMode("grid")}
                 title="격자 보기"
+                aria-label="격자 보기"
               >
                 <LayoutGrid className="h-4 w-4" />
               </Button>
@@ -118,6 +119,7 @@ export default function DataPoolToolbar({
                 className="h-7 w-7"
                 onClick={() => onChangePreviewMode("list")}
                 title="리스트 보기"
+                aria-label="리스트 보기"
               >
                 <List className="h-4 w-4" />
               </Button>

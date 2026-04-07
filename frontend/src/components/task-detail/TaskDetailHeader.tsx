@@ -30,7 +30,12 @@ export function TaskDetailHeader({
     <>
       <header className="border-b select-none">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            aria-label="뒤로 가기"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           {loading ? (

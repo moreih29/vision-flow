@@ -1,0 +1,393 @@
+{
+  "cycles": [
+    {
+      "completed_at": "2026-04-07T05:31:35.293Z",
+      "branch": "design/ux-philosophy",
+      "meet": {
+        "id": 1,
+        "topic": "UI/UX 디자인 개선 (로그인 → 프로젝트 → 태스크)",
+        "issues": [
+          {
+            "id": 1,
+            "title": "테마/비주얼 아이덴티티: 현재 흰 배경 + 검은 버튼의 무채색 UI에서 프로젝트 정체성 있는 테마 수립",
+            "status": "decided",
+            "decision": "테마 리뉴얼(옵션 B) 채택. 브랜드 primary를 blue 계열(oklch H~250-270)로 변경, 시맨틱 색상(success/warning/info) 추가, 표면 계층(background/card/muted) 분리, 다크모드 토글 추가. 사이드바 네비게이션은 phase 2로 보류. Badge default를 secondary로 변경 검토, 라벨링 ToolPanel의 primary 대비 검증 필요."
+          },
+          {
+            "id": 2,
+            "title": "모드 전환 명시성: TaskDetailPage의 task/pool 암시적 전환 → 사용자 혼란 방지",
+            "status": "decided",
+            "decision": "시각적 강화(A 수정안) 채택. 양쪽 트리 동시 표시 유지(D&D 워크플로우 보존). 뷰어 상단 모드 표시 바(Task=기본, Pool=accent 틴트), Toolbar 모드별 완전 교체, Pool 모드 Delete 시 toast 피드백, 좌측 트리 Task/Pool 섹션 시각적 분리(레이블+구분선)."
+          },
+          {
+            "id": 3,
+            "title": "D&D 발견 가능성 및 힌트: 드래그 가능 요소의 시각적 어포던스 부재",
+            "status": "decided",
+            "decision": "커서 힌트(A안) 채택. 드래그 가능 요소에 hover 시 cursor: grab 추가, 다중 선택 시 드래그 가능 뱃지. 온보딩/빈 상태 안내는 향후 필요 시 추가."
+          },
+          {
+            "id": 4,
+            "title": "키보드 이벤트 관리 구조: 분산된 keydown 리스너의 중앙화 및 충돌 방지",
+            "status": "decided",
+            "decision": "키보드 매니저 중앙화(B안) 채택. useKeyboardManager 훅으로 단축키 등록/해제/우선순위 관리. 현재 범위에서 위험도 증가 없이 향후 라벨링 등 확장 시 충돌 방지 기반 마련."
+          },
+          {
+            "id": 5,
+            "title": "ARIA 및 접근성: 커스텀 컴포넌트의 role/aria 속성 보강",
+            "status": "decided",
+            "decision": "핵심 ARIA만 추가(A안) 채택. 아이콘 버튼에 aria-label, 트리에 role=\"tree\"/aria-expanded, 동적 영역에 aria-live=\"polite\". 전면 접근성 감사는 공개 서비스 단계로 보류."
+          }
+        ],
+        "research_summary": "## 리서치 요약\n\n### 현재 테마/비주얼\n- OKLCH 색공간 기반 CSS 변수 체계 (index.css). Light/Dark 모드 정의 있으나 다크모드 토글 UI 없음\n- Primary: oklch(0.205 0 0) = 거의 검은색. Background: oklch(1 0 0) = 순수 흰색\n- 전체적으로 무채색 팔레트. destructive(빨강) 외 accent 색상 없음\n- 폰트: Geist Variable. Button은 Base UI 기반 + CVA variants\n- Card: ring-1 ring-foreground/10 (미세한 테두리), rounded-xl\n\n### 페이지별 현황\n- Login/Register: 중앙 카드, max-w-sm, Zod 검증, serverError 인라인\n- ProjectsPage: 3열 그리드, Skeleton 로딩, Empty State (아이콘+메시지+CTA)\n- ProjectDetailPage: 탭(Data Pool/Tasks), border-b 헤더, 프로젝트 편집 Dialog\n- TaskDetailPage (가장 복잡): task/pool viewerMode useState, grid/list 토글, 좌측 트리+중앙 콘텐츠+우측 패널 3단 레이아웃\n\n### UX 안정성\n- 키보드: TaskDetailPage에서 viewerRef에 keydown 등록, Ctrl+A/Esc/Delete/Space/Arrow 등 구현. cleanup 있음\n- 모드 전환: viewerMode(\"task\"|\"pool\")가 트리 클릭으로 암시적 전환. previewMode는 localStorage 저장\n- D&D: use-image-drag-drop 훅, ghost image 생성, dragOverFolderKey로 드롭 대상 하이라이트. 단 드래그 가능 힌트(커서/그래버) 없음\n- ARIA: Button에 aria-invalid, Dialog에 sr-only, TabsTrigger에 aria-expanded 정도. role/aria-label/aria-live 부재\n- 에러: Alert Dialog + FormMessage + Toast(Sonner) 조합. 일부 API 에러는 console.error만",
+        "created_at": "2026-04-07T04:55:29.788Z"
+      },
+      "tasks": []
+    },
+    {
+      "completed_at": "2026-04-07T05:48:51.773Z",
+      "branch": "design/ux-philosophy",
+      "plan": {
+        "id": 1,
+        "topic": "진정한 테마 리뉴얼 — 체감되는 비주얼 개선",
+        "issues": [
+          {
+            "id": 1,
+            "title": "표면 계층 + 그림자 시스템: background/card 색상 차이를 눈에 보이게 + shadow 도입",
+            "status": "decided",
+            "decision": "3단계 표면 계층(B안) 채택. background oklch ~0.955(확실한 회색)로 변경, Card에 shadow-sm + border border-border, 헤더에 shadow-sm, 팝오버/다이얼로그에 shadow-lg. 다크모드에서는 card oklch ~0.18, float oklch ~0.22로 밝기 분리."
+          },
+          {
+            "id": 2,
+            "title": "커스텀 스크롤바: 네이티브 → 커스텀 thin 스크롤바",
+            "status": "decided",
+            "decision": "CSS-only 커스텀 스크롤바(A안) 채택. index.css에 scrollbar-width: thin + ::-webkit-scrollbar 스타일 전역 적용. Radix ScrollArea 미도입 (Base UI와 의존성 혼용 방지)."
+          },
+          {
+            "id": 3,
+            "title": "시맨틱 색상 실사용: progress bar, 업로드 상태, task status에 success/warning/info 적용",
+            "status": "decided",
+            "decision": "핵심만 적용(A안) 채택. Task status badge에 시맨틱 색상 매핑(draft→secondary, labeling→info, ready→success, training→warning, completed→success), 업로드 진행 바에 상태별 색상(업로드 중→info, 완료→success). 라벨링 페이지는 범위 밖으로 향후 확장."
+          },
+          {
+            "id": 4,
+            "title": "다크모드 깊이감: border 강화, card 밝기 분리, 평면적 반전 탈피",
+            "status": "decided",
+            "decision": "다크모드 깊이감 확정. background oklch(0.13), card oklch(0.18), float/popover oklch(0.22), border oklch(1 0 0 / 14%). \"올라갈수록 밝다\" 원칙 적용."
+          },
+          {
+            "id": 5,
+            "title": "컴포넌트 밀도: 헤더/카드 패딩 조정, max-width 확장으로 도구 앱다운 밀도",
+            "status": "decided",
+            "decision": "헤더 + TaskDetail만 조정(A안) 채택. AppLayout 헤더 py-4→py-2.5, TaskDetailPage max-w-[1600px]→max-w-full."
+          },
+          {
+            "id": 6,
+            "title": "브랜딩: 헤더 아이콘/마크, 로그인 페이지 브랜드 처리",
+            "status": "decided",
+            "decision": "헤더 + 로그인 페이지(B안) 채택. 헤더에 primary 색상 기하학적 SVG 아이콘 추가, 로그인 페이지에 브랜드 마크 크게 + 배경 미세 그라디언트 적용."
+          }
+        ],
+        "research_summary": "## 리서치 요약\n\n### 핵심 문제 진단\nCSS 변수만 변경하면 체감 안 됨. 변수를 사용하는 컴포넌트가 \"평면 UI\"인 것이 근본 원인:\n1. background(0.978)과 card(1.0) 차이 2.2% — 인간의 눈으로 구분 불가\n2. shadow 사용 전무 (ProjectsPage hover:shadow-md 1개 제외)\n3. 시맨틱 색상 Badge variant에만 존재, 실제 UI 미사용\n4. 네이티브 스크롤바 — 다크모드에서 특히 부조화\n\n### 비교 도구 분석 (CVAT, Labelbox, Roboflow, V7)\n- 3단계 표면 계층: Canvas(배경) → Card(올려진 면) → Popover(떠 있는 면)\n- shadow 적극 사용, 다크모드에서는 border 강화로 대체\n- 커스텀 thin 스크롤바 (CSS scrollbar-width: thin)\n- 진행률 바에 시맨틱 색상 (녹색=완료, 노랑=진행중)\n- 도구 앱 밀도: py-2~3, 넓은 max-width\n- 브랜드 마크/아이콘 헤더에 배치\n\n### 영향도 순위\n1. 표면 계층 + shadow (앱 전체 느낌 변화)\n2. 커스텀 스크롤바 (즉각적 폴리시)\n3. 시맨틱 색상 실사용 (기능적 명확성)\n4. 다크모드 깊이감 (다크 테마 완성도)\n5. 컴포넌트 밀도 (도구 앱 느낌)\n6. 브랜딩 (정체성)",
+        "created_at": "2026-04-07T05:31:35.328Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "색상 체계 재설계 — CSS 변수 + 다크모드 토글",
+          "context": "index.css의 OKLCH CSS 변수를 재설계. primary를 blue 계열(H~250-270)로 변경, 시맨틱 색상(success/warning/info) 추가, 표면 계층(background/card/muted) 분리, 다크모드 토글 UI 추가",
+          "approach": "1) index.css에서 --primary를 blue 계열로 변경, --success/--warning/--info 변수 추가, --background/--card/--muted 계층 분리. Light/Dark 모드 모두 조정. 2) AppLayout 헤더에 다크모드 토글 버튼 추가 (localStorage 저장). 3) Badge에 success/warning variant 추가.",
+          "acceptance": "1) Primary가 blue 계열 유채색으로 표시됨 2) 시맨틱 색상 변수 4종(success/warning/info/destructive) 존재 3) 다크모드 토글 동작 4) Card와 background 시각적 계층 구분 가능",
+          "risk": "ToolPanel의 bg-primary 활성 상태가 blue로 변경 시 캔버스 대비 검증 필요. Badge default가 bg-primary인데 유채색 전환 시 status badge와 충돌 가능 → default를 secondary로 변경 검토.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:09:54.139Z"
+        },
+        {
+          "id": 2,
+          "title": "컴포넌트 색상 적용 검증 및 조정",
+          "context": "테마 변경 후 기존 컴포넌트(Button, Badge, Card, Tabs 등)에서 색상이 의도대로 표현되는지 검증하고 필요 시 조정",
+          "approach": "1) Badge default variant를 secondary로 변경 검토. 2) Button default/outline/ghost variant의 새 primary 색상 대비 확인. 3) Card ring 색상 표면 계층과 조화 확인. 4) 각 페이지 순회하며 시각적 검증.",
+          "acceptance": "모든 대상 페이지(Login, Projects, ProjectDetail, TaskDetail)에서 색상 깨짐 없음. Light/Dark 모두 검증.",
+          "risk": "Badge default 변경이 기존 사용처에 영향. 전수 확인 필요.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:09:59.825Z"
+        },
+        {
+          "id": 3,
+          "title": "TaskDetailPage 모드 전환 시각적 강화",
+          "context": "Task/Pool 모드 전환 시 뷰어 영역의 시각적 변화를 강화하여 현재 모드를 명확히 인지시킴",
+          "approach": "1) 뷰어 상단에 모드 표시 바 추가 (Task=기본, Pool=accent 틴트 배경). 2) Toolbar를 모드별로 완전 교체 (Pool: \"태스크에 추가\" 중심, Task: 삭제/이동 등). 3) Pool 모드에서 Delete 키 시 toast 피드백. 4) 좌측 트리 영역에 Task/Pool 섹션 레이블 + 시각적 분리선.",
+          "acceptance": "1) 모드 전환 시 뷰어 상단 바가 시각적으로 변경됨 2) Toolbar가 모드에 따라 다른 액션 표시 3) Pool 모드 Delete 시 toast 표시 4) 트리 영역에 섹션 구분 존재",
+          "risk": "Toolbar 교체 시 기존 이벤트 핸들러 연결 누락 가능. 모드별 Toolbar 분리로 코드 중복 발생 가능.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:10:07.382Z"
+        },
+        {
+          "id": 4,
+          "title": "D&D cursor: grab 힌트 추가",
+          "context": "드래그 가능 요소(이미지 카드, 폴더)에 hover 시 cursor: grab 적용으로 D&D 어포던스 제공",
+          "approach": "ImageGridCard, ImageListRow 등 draggable 요소에 hover 시 cursor-grab, 드래그 중 cursor-grabbing CSS 클래스 추가.",
+          "acceptance": "draggable 요소 hover 시 grab 커서 표시, 드래그 중 grabbing 커서 표시.",
+          "risk": "낮음. CSS만 추가.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "lead",
+          "created_at": "2026-04-07T05:10:11.454Z"
+        },
+        {
+          "id": 5,
+          "title": "useKeyboardManager 훅 설계 및 구현",
+          "context": "분산된 keydown 리스너를 중앙 관리하는 훅 구현. 단축키 등록/해제/우선순위 관리.",
+          "approach": "1) useKeyboardManager 훅 설계 — 단축키 등록(key combo, handler, priority, scope), 해제, INPUT/TEXTAREA 자동 필터링. 2) TaskDetailPage의 기존 keydown 핸들러를 useKeyboardManager로 마이그레이션. 3) 향후 라벨링 페이지 마이그레이션 기반 마련.",
+          "acceptance": "1) useKeyboardManager 훅 존재 2) TaskDetailPage가 훅을 통해 단축키 등록 3) 기존 키보드 동작 모두 정상 동작 4) INPUT/TEXTAREA 자동 필터링 동작",
+          "risk": "기존 핸들러 마이그레이션 시 미묘한 동작 차이 발생 가능. 기존 테스트/수동 검증 필요.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:10:17.081Z"
+        },
+        {
+          "id": 6,
+          "title": "핵심 ARIA 속성 추가",
+          "context": "커스텀 컴포넌트에 핵심 ARIA 속성 보강 — 아이콘 버튼, 트리, 동적 콘텐츠",
+          "approach": "1) 아이콘 전용 버튼에 aria-label 추가 (삭제, 편집, 설정 등). 2) FileTreeView에 role=\"tree\", 노드에 role=\"treeitem\", aria-expanded 추가. 3) 동적 업데이트 영역(toast, 상태 변경)에 aria-live=\"polite\" 추가.",
+          "acceptance": "1) 모든 아이콘 전용 버튼에 aria-label 존재 2) 트리 컴포넌트에 role/aria-expanded 존재 3) 동적 영역에 aria-live 존재",
+          "risk": "낮음. 속성 추가만으로 기존 동작에 영향 없음.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "lead",
+          "created_at": "2026-04-07T05:10:21.313Z"
+        },
+        {
+          "id": 7,
+          "title": "표면 계층 + 그림자 시스템 + 다크모드 깊이감",
+          "context": "index.css에서 background를 확실한 회색(0.955)으로, card.tsx에 shadow-sm + border, 헤더에 shadow-sm, 다크모드 수치 조정(bg 0.13, card 0.18, popover 0.22, border 14%)",
+          "approach": "1) index.css: --background를 oklch(0.955 0.003 260)으로 변경 (light). Dark: --background oklch(0.13 0.003 260), --card oklch(0.18 0 0), --popover oklch(0.22 0 0), --border oklch(1 0 0 / 14%). 2) card.tsx: ring-1 ring-foreground/10 → shadow-sm border border-border. 3) AppLayout 헤더: border-b → border-b shadow-sm. 4) TasksTab 카드, 트리 패널 등에 shadow-sm 추가.",
+          "acceptance": "1) background와 card가 눈으로 확실히 구분됨 2) 카드에 그림자 존재 3) 다크모드에서 3단계 밝기 계층 확인 4) 다크모드 border가 이전보다 선명",
+          "risk": "shadow-sm이 다크모드에서 안 보일 수 있음 — 다크모드는 border 강화로 보완.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:40:34.628Z"
+        },
+        {
+          "id": 8,
+          "title": "커스텀 스크롤바 CSS 전역 적용",
+          "context": "index.css에 scrollbar-width: thin + ::-webkit-scrollbar 스타일 추가",
+          "approach": "index.css @layer base에 전역 스크롤바 스타일 추가: scrollbar-width: thin, scrollbar-color: var(--muted-foreground) transparent. Webkit: ::-webkit-scrollbar 6px, thumb bg-muted-foreground/30 hover시 /50, track transparent, border-radius.",
+          "acceptance": "1) 모든 스크롤 영역에서 thin 스크롤바 표시 2) 다크/라이트 모두 배경과 조화 3) hover 시 thumb 색상 변화",
+          "risk": "낮음. CSS만 추가. 가상화 스크롤과 무관.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "lead",
+          "created_at": "2026-04-07T05:40:40.057Z"
+        },
+        {
+          "id": 9,
+          "title": "시맨틱 색상 실사용 — Task status badge + 업로드 진행 바",
+          "context": "TasksTab의 task status badge에 시맨틱 색상 매핑, 업로드 진행 바에 상태별 색상 적용",
+          "approach": "1) TasksTab.tsx: task status badge variant를 시맨틱으로 매핑 — draft→secondary, labeling→info, ready→success, training→warning, completed→success. 2) 업로드 관련 진행 바: 업로드 중→bg-info, 완료→bg-success로 변경.",
+          "acceptance": "1) Task status badge가 상태별로 다른 색상 표시 2) 업로드 진행 바가 상태에 따라 색상 변화",
+          "risk": "기존 TASK_COLORS 인라인 색상과 충돌 가능. 전수 교체 필요.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:40:44.966Z"
+        },
+        {
+          "id": 10,
+          "title": "컴포넌트 밀도 조정 — 헤더 + TaskDetail 폭",
+          "context": "AppLayout 헤더 패딩 축소, TaskDetailPage 최대 폭 확장",
+          "approach": "1) AppLayout.tsx 헤더: py-4 → py-2.5. 2) TaskDetailPage: max-w-[1600px] → max-w-full.",
+          "acceptance": "1) 헤더가 더 컴팩트 2) TaskDetail이 와이드 모니터에서 전체 폭 사용",
+          "risk": "낮음. 패딩/max-width만 변경.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "lead",
+          "created_at": "2026-04-07T05:40:47.768Z"
+        },
+        {
+          "id": 11,
+          "title": "브랜딩 — 헤더 아이콘 + 로그인 페이지 브랜드 처리",
+          "context": "헤더에 Vision Flow SVG 아이콘 추가, 로그인 페이지에 브랜드 마크 + 배경 그라디언트",
+          "approach": "1) Vision AI를 상징하는 기하학적 SVG 아이콘 생성 (primary 색상, 눈/렌즈/프레임 모티프). 2) AppLayout 헤더: \"Vision Flow\" 텍스트 옆에 아이콘 배치. 3) LoginPage/RegisterPage: 카드 위에 브랜드 마크 크게 배치, 배경에 primary→transparent 미세 그라디언트 적용.",
+          "acceptance": "1) 헤더에 브랜드 아이콘 존재 2) 로그인 페이지에 브랜드 마크 + 그라디언트 배경 3) Light/Dark 모두 자연스러움",
+          "risk": "SVG 아이콘 디자인 품질. 단순 기하학적 형태로 진행하여 리스크 최소화.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-07T05:40:53.610Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-07T06:29:25.002Z",
+      "branch": "design/ux-philosophy",
+      "meet": {
+        "id": 2,
+        "topic": "AI UI 탈피 — 인터랙션, 위계, 브랜딩 개선",
+        "issues": [
+          {
+            "id": 1,
+            "title": "디자인 라이브러리: shadcn/ui 유지 + 커스터마이징 vs 교체",
+            "status": "decided",
+            "decision": "shadcn/ui 유지 + 커스터마이징(A안) 채택. 라이브러리가 아닌 사용 방식이 문제. 컴포넌트별 호버/트랜지션/위계를 점진적으로 커스터마이징."
+          },
+          {
+            "id": 2,
+            "title": "버튼 호버: default variant에 hover 피드백 누락 — 가장 기본적인 결함",
+            "status": "decided",
+            "decision": "버튼 hover 수정(A안) 채택. default variant의 [a]:hover:bg-primary/80 → hover:bg-primary/90으로 수정. base에 active:translate-y-px 이미 있으므로 추가 눌림 효과 불필요."
+          },
+          {
+            "id": 3,
+            "title": "카드 인터랙션 통일: 프로젝트/태스크 카드의 호버 패턴 불일치 → interactive variant",
+            "status": "pending"
+          },
+          {
+            "id": 4,
+            "title": "애니메이션 튜닝: 다이얼로그 duration, 탭 전환 fade-in, 헤더 스크롤 반응",
+            "status": "pending"
+          },
+          {
+            "id": 5,
+            "title": "아이콘/브랜딩: 카메라 아이콘 제거 → 텍스트 로고 또는 대안",
+            "status": "pending"
+          }
+        ],
+        "research_summary": "## 리서치 요약\n\n### \"AI가 만든 느낌\"의 원인 (디자이너 진단)\n1. 균일한 시각적 리듬 — 모든 카드 동일한 shadow/radius/간격, 위계 없음\n2. 상태 변화 빈곤 — 호버 시 shadow 약간 변화가 전부. 색상/스케일/보더 변화 없음\n3. 정적인 레이아웃 전환 — 페이지/탭 전환 시 콘텐츠 즉시 나타남\n\n### 구체적 결함\n- Button default variant: [a]:hover:bg-primary/80 → <button>에서는 hover 미작동\n- ProjectCard: hover:shadow-md만, 리프트/보더 변화 없음\n- TaskCard: Card 컴포넌트 미사용, hover:bg-accent만. 프로젝트 카드와 패턴 불일치\n- Dialog duration 100ms → 너무 빠름 (150-200ms 적정)\n- Tab 전환: 콘텐츠 애니메이션 없음\n- 헤더: 스크롤 반응 없음 (shadow/blur 변화 없음)\n\n### 라이브러리 결론\nshadcn/ui가 문제가 아님. 라이브러리 교체해도 커스터마이징 없으면 동일한 함정. 현재 headless 기반이라 스타일 자유도 최대.\n\n### 아이콘\n카메라 모티프가 \"촬영\"을 연상 → \"분석/학습\" 부적합. 24px에서 뉴럴 연결선(opacity 0.7) 안 보임 → 사실상 카메라.\n추천: 텍스트 로고(타이포그래피 처리)가 지금 단계에서 최선. 어설픈 아이콘 < 아이콘 없음.",
+        "created_at": "2026-04-07T05:56:58.228Z"
+      },
+      "tasks": []
+    },
+    {
+      "completed_at": "2026-04-07T06:53:01.708Z",
+      "branch": "design/ux-philosophy",
+      "plan": {
+        "id": 2,
+        "topic": "UI 설계 리뉴얼 — 리서치 기반 재설계",
+        "issues": [
+          {
+            "id": 1,
+            "title": "디자인 아이덴티티 수립: border-radius + 타이포그래피 + 색상 톤을 통한 전체 앱 인상 결정",
+            "status": "decided",
+            "decision": "전체 톤 재설계(C안) 채택. Sharp & Professional 방향: radius 0.625rem→0.375rem(6px), 서체 Geist→Plus Jakarta Sans, Primary blue 유지, 단일 테마+dark/light. 참고: Linear, Figma, VS Code."
+          },
+          {
+            "id": 2,
+            "title": "컴포넌트 인터랙션 체계: 버튼 hover 수정 + 카드 hover 통일 + 상태 변화 피드백",
+            "status": "decided",
+            "decision": "인터랙션 체계 수립(B안) 채택. Button default hover:bg-primary/90 수정 + 3단계 인터랙션 정의: 정적(변화없음), 호버(hover:bg-muted), 클릭(hover:-translate-y-0.5 hover:shadow-md transition-all). 클릭 가능 카드 패턴을 공통 상수로 통일 적용."
+          },
+          {
+            "id": 3,
+            "title": "애니메이션 시스템: 다이얼로그/탭 전환/헤더 트랜지션 + Motion 라이브러리 도입 여부",
+            "status": "decided",
+            "decision": "Tailwind/CSS만으로 처리(A안) 채택. Dialog duration 100→180ms, Tab fade-in CSS, 헤더 backdrop-blur 스크롤 반응. Motion 라이브러리는 현재 미도입, 향후 라벨링 등 복잡 UI에서 도입 검토 — 코어에 기록."
+          },
+          {
+            "id": 4,
+            "title": "브랜딩: 카메라 아이콘 제거 + 텍스트 로고 또는 대안",
+            "status": "decided",
+            "decision": "타이포 처리된 텍스트 로고(B안) 채택. 카메라 SVG 제거, \"Vision\" regular + \"Flow\" bold+primary color. 로그인 페이지도 동일 타이포 로고 + 배경 그라디언트 유지."
+          },
+          {
+            "id": 5,
+            "title": "시각적 위계(Composition): 균일한 레이아웃 탈피 — 카드별 개성, 정보 밀도 차등",
+            "status": "decided",
+            "decision": "A+B 조합(C안) 채택. 프로젝트 카드: 좌측 4px 컬러 스트라이프(chart-1~5 순환). 태스크 카드: status 시맨틱 색상으로 좌측 컬러 바. 균일함을 깨되 과하지 않게."
+          }
+        ],
+        "research_summary": "## 리서치 기반 핵심 인사이트\n\n### \"AI가 만든 느낌\"의 본질 = 균일함(uniformity)\n모든 요소가 동일 강도, 동일 리듬, 동일 피드백. 라이브러리 교체로 해결 안 됨.\n\n### shadcn/ui 차별화 핵심 3가지\n1. Primary color + border-radius + font-family 변경이 가장 큰 임팩트\n2. 컴포넌트 코드를 직접 편집하는 것이 의도된 사용법\n3. 호버/트랜지션을 컴포넌트 레벨에서 수정해야 함\n\n### 현재 Vision Flow 결함\n- Button default variant: [a]:hover:bg-primary/80 → <button>에서 hover 미작동\n- 프로젝트 카드 vs 태스크 카드 호버 패턴 불일치\n- Dialog duration 100ms (너무 빠름, 150-200ms 적정)\n- Tab 전환, 페이지 전환에 애니메이션 없음\n- 헤더 스크롤 반응 없음\n- 카메라 아이콘이 진부하고 24px에서 세부 안 보임\n\n### 마이크로 인터랙션 원칙\n- duration 150-300ms, transform/opacity만 애니메이션\n- motion-reduce: variant 필수\n- 2025 스택: Tailwind + Motion(구 framer-motion)\n\n### \"AI UI 탈피\" 원칙\n- 타이포그래피가 진위 도장 (서체가 최종 인상 결정)\n- Composition 다양성 (균일 레이아웃 = AI 느낌)\n- Constraint-first (과적재 → 평균값)\n\n### 참고 프로젝트\n- Dub.co: packages/ui로 UI 독립 패키지 분리\n- Plane: 수평 탭 패턴, Vite 기반\n- CVAT: 고밀도 정보 UI",
+        "created_at": "2026-04-07T06:29:25.042Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "디자인 토큰 변경 — radius + font + CSS 변수",
+          "context": "index.css에서 --radius 변경, Plus Jakarta Sans 서체 설치 및 적용, font-sans CSS 변수 교체",
+          "approach": "1) npm install @fontsource-variable/plus-jakarta-sans. 2) index.css: @import \"@fontsource-variable/plus-jakarta-sans\" 추가, --font-sans를 'Plus Jakarta Sans Variable'로 변경, @fontsource-variable/geist import 제거. 3) --radius: 0.625rem → 0.375rem. 4) package.json에서 @fontsource-variable/geist 제거.",
+          "acceptance": "1) 앱 전체에 Plus Jakarta Sans 적용 2) 모든 radius가 6px 기반으로 렌더링 3) Geist 폰트 참조 제거",
+          "risk": "Plus Jakarta Sans의 한국어 지원 확인 필요 — fallback으로 system sans-serif. Variable font weight 범위 확인.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "lead",
+          "created_at": "2026-04-07T06:47:31.261Z"
+        },
+        {
+          "id": 2,
+          "title": "Button default hover 수정 + 인터랙션 상수 정의",
+          "context": "button.tsx default variant hover 수정, 클릭 가능 카드 공통 hover 패턴 상수화",
+          "approach": "1) button.tsx: default variant의 [a]:hover:bg-primary/80 → hover:bg-primary/90. 2) lib/styles.ts 또는 상수 파일에 인터랙션 패턴 정의: INTERACTIVE_CARD = \"hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer\". 3) ProjectsPage, TasksTab의 클릭 가능 카드에 공통 패턴 적용.",
+          "acceptance": "1) Primary 버튼 hover 시 밝기 변화 확인 2) 프로젝트 카드와 태스크 카드의 hover 패턴 동일 3) 인터랙션 패턴이 상수로 정의됨",
+          "risk": "낮음. CSS 클래스만 변경.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-07T06:47:37.834Z"
+        },
+        {
+          "id": 3,
+          "title": "애니메이션 튜닝 — Dialog duration + Tab fade-in + 헤더 스크롤",
+          "context": "Dialog 진입 애니메이션 속도 조정, Tab 전환 시 fade-in, 헤더 스크롤 반응",
+          "approach": "1) dialog.tsx: duration-100 → duration-150 또는 duration-200으로 조정. 2) ProjectDetailPage TabsContent에 CSS 기반 fade-in 추가 (animate-in fade-in-0 duration-150). 3) AppLayout 헤더: 스크롤 감지 시 backdrop-blur-md + shadow 강화 (useState + scroll event 또는 CSS sticky + backdrop-blur).",
+          "acceptance": "1) Dialog 진입이 자연스러운 속도 2) Tab 전환 시 콘텐츠 fade-in 확인 3) 페이지 스크롤 시 헤더에 blur 효과",
+          "risk": "헤더 scroll 감지 시 성능 — passive listener + requestAnimationFrame 사용 또는 CSS-only 접근.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T06:47:42.899Z"
+        },
+        {
+          "id": 4,
+          "title": "브랜딩 — 카메라 아이콘 제거 + 타이포 로고 적용",
+          "context": "AppLayout, LoginPage, RegisterPage에서 카메라 SVG 제거, 타이포그래피 처리된 텍스트 로고로 교체",
+          "approach": "1) AppLayout: 카메라 SVG 제거, \"Vision\" span(font-normal) + \"Flow\" span(font-bold text-primary)로 교체. 2) LoginPage/RegisterPage: 동일 타이포 로고를 더 큰 크기(text-3xl)로 카드 위에 배치. 배경 그라디언트 유지.",
+          "acceptance": "1) 헤더에 카메라 아이콘 없음 2) \"Vision\" + \"Flow\" 타이포 구분 표시 3) 로그인/회원가입 페이지에 큰 타이포 로고",
+          "risk": "낮음. 텍스트 교체만.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "lead",
+          "created_at": "2026-04-07T06:47:48.842Z"
+        },
+        {
+          "id": 5,
+          "title": "시각적 위계 — 카드 컬러 스트라이프 + status 컬러 바",
+          "context": "프로젝트 카드에 좌측 컬러 스트라이프, 태스크 카드에 status 기반 좌측 컬러 바 추가",
+          "approach": "1) ProjectsPage: 카드 좌측에 4px 컬러 바 추가 — chart-1~5 CSS 변수를 index % 5로 순환. Card에 overflow-hidden + flex-row 구조. 2) TasksTab: 태스크 카드 좌측에 4px status 컬러 바 — TASK_STATUS_VARIANTS 매핑 활용 (draft→secondary, labeling→info, ready/completed→success, training→warning).",
+          "acceptance": "1) 프로젝트 카드마다 다른 색상의 좌측 스트라이프 2) 태스크 카드 좌측에 status 색상 바 3) 카드 간 시각적 다양성 확보",
+          "risk": "Card 레이아웃이 flex-col에서 flex-row로 변경 필요 — 기존 CardHeader/CardContent 구조와 충돌 가능. 래퍼 div로 해결.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-07T06:47:53.643Z"
+        }
+      ]
+    }
+  ]
+}

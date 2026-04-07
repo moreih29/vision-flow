@@ -101,6 +101,7 @@ export default function ProjectDetailPage() {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/projects")}
+            aria-label="프로젝트 목록으로 돌아가기"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -116,7 +117,12 @@ export default function ProjectDetailPage() {
                   </p>
                 )}
               </div>
-              <Button variant="ghost" size="icon" onClick={openEditDialog}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={openEditDialog}
+                aria-label="프로젝트 수정"
+              >
                 <Pencil className="h-4 w-4" />
               </Button>
             </div>

@@ -1,16 +1,21 @@
-import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Plus, FolderOpen, Trash2 } from 'lucide-react'
-import { useProjects, useCreateProject, useDeleteProject } from '@/hooks/use-projects'
-import { Button } from '@/components/ui/button'
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, FolderOpen, Trash2 } from "lucide-react";
+import {
+  useProjects,
+  useCreateProject,
+  useDeleteProject,
+} from "@/hooks/use-projects";
+import { Button } from "@/components/ui/button";
+import { INTERACTIVE_CARD } from "@/lib/styles";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { useConfirmDialog } from '@/hooks/useConfirmDialog'
+} from "@/components/ui/card";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -18,74 +23,75 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Skeleton } from '@/components/ui/skeleton'
-import type { Project } from '@/types/project'
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Project } from "@/types/project";
 
 export default function ProjectsPage() {
-  const navigate = useNavigate()
-  const { confirmDialog, confirm, showAlert } = useConfirmDialog()
+  const navigate = useNavigate();
+  const { confirmDialog, confirm, showAlert } = useConfirmDialog();
 
-  const { data: projects = [], isLoading, isError } = useProjects()
-  const createProject = useCreateProject()
-  const deleteProject = useDeleteProject()
+  const { data: projects = [], isLoading, isError } = useProjects();
+  const createProject = useCreateProject();
+  const deleteProject = useDeleteProject();
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const creatingRef = useRef(false)
-  const deletingRef = useRef<number | null>(null)
-  const [newName, setNewName] = useState('')
-  const [newDesc, setNewDesc] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const deletingRef = useRef<number | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
 
   async function handleCreate() {
-    if (!newName.trim() || creatingRef.current) return
-    creatingRef.current = true
-    setCreating(true)
+    if (!newName.trim() || creatingRef.current) return;
+    creatingRef.current = true;
+    setCreating(true);
     try {
       await createProject.mutateAsync({
         name: newName.trim(),
         description: newDesc.trim() || undefined,
-      })
-      setDialogOpen(false)
-      setNewName('')
-      setNewDesc('')
+      });
+      setDialogOpen(false);
+      setNewName("");
+      setNewDesc("");
     } catch {
-      await showAlert({ title: '프로젝트 생성에 실패했습니다.' })
+      await showAlert({ title: "프로젝트 생성에 실패했습니다." });
     } finally {
-      creatingRef.current = false
-      setCreating(false)
+      creatingRef.current = false;
+      setCreating(false);
     }
   }
 
   async function handleDelete(e: React.MouseEvent, project: Project) {
-    e.stopPropagation()
-    if (deletingRef.current === project.id) return
+    e.stopPropagation();
+    if (deletingRef.current === project.id) return;
     const confirmed = await confirm({
       title: `"${project.name}" 프로젝트를 삭제하시겠습니까?`,
-      description: '프로젝트에 포함된 모든 데이터가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
-      confirmLabel: '삭제',
-      variant: 'destructive',
-    })
-    if (!confirmed) return
-    deletingRef.current = project.id
+      description:
+        "프로젝트에 포함된 모든 데이터가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmLabel: "삭제",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
+    deletingRef.current = project.id;
     try {
-      await deleteProject.mutateAsync(project.id)
+      await deleteProject.mutateAsync(project.id);
     } catch {
-      await showAlert({ title: '프로젝트 삭제에 실패했습니다.' })
+      await showAlert({ title: "프로젝트 삭제에 실패했습니다." });
     } finally {
-      deletingRef.current = null
+      deletingRef.current = null;
     }
   }
 
   function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
+    return new Date(iso).toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   }
 
   return (
@@ -138,36 +144,42 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+            {projects.map((project, index) => (
               <Card
                 key={project.id}
-                className="cursor-pointer transition-shadow hover:shadow-md"
+                className={`flex-row gap-0 py-0 ${INTERACTIVE_CARD}`}
                 onClick={() => navigate(`/projects/${project.id}`)}
               >
-                <CardHeader>
-                  <CardTitle className="text-base">{project.name}</CardTitle>
-                  {project.description && (
-                    <CardDescription className="line-clamp-2">
-                      {project.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>데이터 저장소 {project.data_store_count}개</span>
-                    <div className="flex items-center gap-2">
-                      <span>{formatDate(project.created_at)}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={(e) => handleDelete(e, project)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                <div
+                  className="w-1 shrink-0 rounded-l-xl"
+                  style={{ backgroundColor: `var(--chart-${(index % 5) + 1})` }}
+                />
+                <div className="flex flex-1 flex-col gap-4 py-4">
+                  <CardHeader>
+                    <CardTitle className="text-base">{project.name}</CardTitle>
+                    {project.description && (
+                      <CardDescription className="line-clamp-2">
+                        {project.description}
+                      </CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>데이터 저장소 {project.data_store_count}개</span>
+                      <div className="flex items-center gap-2">
+                        <span>{formatDate(project.created_at)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={(e) => handleDelete(e, project)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
+                  </CardContent>
+                </div>
               </Card>
             ))}
           </div>
@@ -190,7 +202,7 @@ export default function ProjectsPage() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="프로젝트 이름"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -216,12 +228,12 @@ export default function ProjectsPage() {
               onClick={handleCreate}
               disabled={creating || !newName.trim()}
             >
-              {creating ? '생성 중...' : '만들기'}
+              {creating ? "생성 중..." : "만들기"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       {confirmDialog}
     </div>
-  )
+  );
 }

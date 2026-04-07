@@ -1278,6 +1278,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         {!isCollapsed && (
           <div
             ref={scrollRef}
+            role="tree"
             className="flex-1 min-h-0 overflow-y-auto overflow-x-auto select-none"
             onDragOver={readOnly ? undefined : handleRootDragOver}
             onDragLeave={readOnly ? undefined : handleRootDragLeave}

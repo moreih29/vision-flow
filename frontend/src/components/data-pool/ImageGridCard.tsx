@@ -85,7 +85,7 @@ const ImageGridCard = memo(function ImageGridCard({
         <ContextMenuTrigger>
           <div
             data-pool-item
-            className="group relative cursor-pointer"
+            className={`group relative ${isRenaming ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}`}
             onClick={(e) => {
               e.stopPropagation();
               onItemClick(flatIndex, e);
@@ -181,7 +181,7 @@ const ImageGridCard = memo(function ImageGridCard({
         <ContextMenuTrigger>
           <div
             data-pool-item
-            className="group relative cursor-pointer"
+            className="group relative cursor-grab active:cursor-grabbing"
             onClick={(e) => {
               e.stopPropagation();
               onItemClick(flatIndex, e);
@@ -227,6 +227,7 @@ const ImageGridCard = memo(function ImageGridCard({
                     e.stopPropagation();
                     onDeleteImage(image.id);
                   }}
+                  aria-label="이미지 삭제"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>

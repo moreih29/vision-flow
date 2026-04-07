@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Images, Tag, Trash2, X } from "lucide-react";
 import { useTasks, useCreateTask, useDeleteTask } from "@/hooks/use-tasks";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import type { Task, TaskType } from "@/types/task";
-import { TASK_LABELS, TASK_COLORS } from "@/types/task";
+import type { Task, TaskStatus, TaskType } from "@/types/task";
+import { TASK_LABELS, TASK_COLORS, TASK_STATUS_LABELS } from "@/types/task";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -26,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { INTERACTIVE_CARD } from "@/lib/styles";
 
 interface TasksTabProps {
   projectId: number;
@@ -50,6 +52,25 @@ const CLASS_COLORS = [
   "#14b8a6",
   "#6366f1",
 ];
+
+const TASK_STATUS_VARIANTS: Record<
+  TaskStatus,
+  "secondary" | "info" | "success" | "warning"
+> = {
+  draft: "secondary",
+  labeling: "info",
+  ready: "success",
+  training: "warning",
+  completed: "success",
+};
+
+const TASK_STATUS_STRIPE_COLOR: Record<TaskStatus, string> = {
+  draft: "var(--muted-foreground)",
+  labeling: "var(--info)",
+  ready: "var(--success)",
+  training: "var(--warning)",
+  completed: "var(--success)",
+};
 
 function makeInitialClasses() {
   return [
@@ -361,52 +382,63 @@ function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
-      className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+      className={`flex flex-row overflow-hidden rounded-lg border bg-card text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${INTERACTIVE_CARD}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold leading-tight">{task.name}</h3>
-        <span
-          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium text-white ${TASK_COLORS[task.task_type]}`}
-        >
-          {TASK_LABELS[task.task_type]}
-        </span>
-      </div>
-
-      {task.description && (
-        <p className="line-clamp-2 text-sm text-muted-foreground">
-          {task.description}
-        </p>
-      )}
-
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Images className="h-3.5 w-3.5" />
-          {task.image_count}개
-        </span>
-        <span className="flex items-center gap-1">
-          <Tag className="h-3.5 w-3.5" />
-          {task.class_count}개 클래스
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <div className="flex flex-1 flex-col gap-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>라벨링 진행률</span>
-            <span>{labelingProgress}%</span>
+      <div
+        className="w-1 shrink-0"
+        style={{ backgroundColor: TASK_STATUS_STRIPE_COLOR[task.status] }}
+      />
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold leading-tight">{task.name}</h3>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Badge variant={TASK_STATUS_VARIANTS[task.status]}>
+              {TASK_STATUS_LABELS[task.status]}
+            </Badge>
+            <span
+              className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium text-white ${TASK_COLORS[task.task_type]}`}
+            >
+              {TASK_LABELS[task.task_type]}
+            </span>
           </div>
-          <Progress value={labelingProgress} className="h-1.5" />
         </div>
-        <button
-          type="button"
-          className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+
+        {task.description && (
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {task.description}
+          </p>
+        )}
+
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Images className="h-3.5 w-3.5" />
+            {task.image_count}개
+          </span>
+          <span className="flex items-center gap-1">
+            <Tag className="h-3.5 w-3.5" />
+            {task.class_count}개 클래스
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 flex-col gap-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>라벨링 진행률</span>
+              <span>{labelingProgress}%</span>
+            </div>
+            <Progress value={labelingProgress} className="h-1.5" />
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

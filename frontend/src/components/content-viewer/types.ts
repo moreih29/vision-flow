@@ -19,7 +19,10 @@ export interface ContentAreaProps<T extends ViewerItem> {
   contentsLoading?: boolean;
   previewMode: "grid" | "list";
   selectedKeys: Set<string>;
-  onItemClick: (index: number, event: React.MouseEvent) => void;
+  onItemClick: (
+    index: number,
+    event: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+  ) => void;
   onClearSelection?: () => void;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -63,7 +66,10 @@ export interface ContentAreaProps<T extends ViewerItem> {
 export interface VirtualGridProps<T extends ViewerItem> {
   items: T[];
   selectedKeys: Set<string>;
-  onItemClick: (index: number, event: React.MouseEvent) => void;
+  onItemClick: (
+    index: number,
+    event: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+  ) => void;
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -98,7 +104,10 @@ export interface VirtualRowInfo {
 export interface VirtualListProps<T extends ViewerItem> {
   items: T[];
   selectedKeys: Set<string>;
-  onItemClick: (index: number, event: React.MouseEvent) => void;
+  onItemClick: (
+    index: number,
+    event: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+  ) => void;
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;

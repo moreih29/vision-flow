@@ -83,7 +83,9 @@ const PopoverTrigger = React.forwardRef<HTMLButtonElement, PopoverTriggerProps>(
             else if (ref) ref.current = node as HTMLButtonElement;
           },
           onClick: (e: React.MouseEvent) => {
-            (children.props as Record<string, unknown>).onClick?.(e);
+            (
+              children.props as { onClick?: (e: React.MouseEvent) => void }
+            ).onClick?.(e);
             handleClick(e as React.MouseEvent<HTMLButtonElement>);
           },
         },

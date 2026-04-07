@@ -13,7 +13,7 @@ export default function UploadProgressBar({
     <div className="mb-3 flex items-center gap-3">
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full bg-primary transition-all duration-300"
+          className="h-full bg-info transition-all duration-300"
           style={{
             width: `${Math.round(pct)}%`,
           }}

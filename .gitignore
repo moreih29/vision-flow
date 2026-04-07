@@ -1,9 +1,6 @@
 # OMC state
 .omc/
 
-# Nexus runtime state
-.nexus/
-
 # Python
 __pycache__/
 *.py[cod]

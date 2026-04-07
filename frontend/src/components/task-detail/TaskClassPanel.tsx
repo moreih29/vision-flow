@@ -46,6 +46,7 @@ export function TaskClassPanel({
             size="icon"
             className="h-7 w-7"
             onClick={onStartAdding}
+            aria-label="클래스 추가"
           >
             <Plus className="h-4 w-4" />
           </Button>

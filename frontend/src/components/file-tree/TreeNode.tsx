@@ -152,7 +152,10 @@ export function TreeNode({
   const rowContent = (
     <div
       data-tree-node
-      className={`group flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer
+      role="treeitem"
+      aria-expanded={isFile ? undefined : node.expanded}
+      aria-selected={isSelected}
+      className={`group flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors ${!isFile && !isEditing && !readOnly ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
         ${isSelected ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent hover:text-accent-foreground"}
         ${isDragging ? "opacity-40" : ""}
         ${isDragOver && (isValidDropTarget || draggingPath === null) ? "ring-2 ring-primary bg-primary/10" : ""}

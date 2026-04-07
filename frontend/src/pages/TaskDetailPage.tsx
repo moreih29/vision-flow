@@ -10,6 +10,7 @@ import {
   ListTodo,
   Upload,
 } from "lucide-react";
+import { useKeyboardManager } from "@/hooks/use-keyboard-manager";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { tasksApi } from "@/api/tasks";
 import { imagesApi } from "@/api/images";
@@ -637,80 +638,86 @@ export default function TaskDetailPage() {
   });
 
   // -- Keyboard shortcuts --
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (moveDialogOpen) return;
-      const isPool = effectiveViewerMode === "pool";
-      const activeSelectAll = isPool ? poolSelectAll : selectAll;
-      const activeClear = isPool ? poolClearSelection : clearSelection;
-      const activeSKeys = isPool ? poolSelectedKeys : selectedKeys;
-      const activeCount = isPool ? poolSelectedCount : selectedCount;
-      const activeItms = isPool ? poolItems : items;
-      const activeCursor = isPool ? poolCursorIndexRef : cursorIndexRef;
-      const activeNavFolder = isPool
-        ? handlePoolNavigateFolder
-        : handleNavigateFolder;
-      const activeNavUp = isPool ? handlePoolNavigateUp : handleNavigateUp;
-      const activeCurPath = isPool ? poolCurrentPath : currentPath;
-      const activeSelByKey = isPool ? poolSelectByKey : selectByKey;
-      const activeSelTo = isPool ? poolSelectTo : selectTo;
+  const isPool = effectiveViewerMode === "pool";
+  const activeSelectAll = isPool ? poolSelectAll : selectAll;
+  const activeClear = isPool ? poolClearSelection : clearSelection;
+  const activeSKeys = isPool ? poolSelectedKeys : selectedKeys;
+  const activeCount = isPool ? poolSelectedCount : selectedCount;
+  const activeItms = isPool ? poolItems : items;
+  const activeCursor = isPool ? poolCursorIndexRef : cursorIndexRef;
+  const activeNavFolder = isPool
+    ? handlePoolNavigateFolder
+    : handleNavigateFolder;
+  const activeNavUp = isPool ? handlePoolNavigateUp : handleNavigateUp;
+  const activeCurPath = isPool ? poolCurrentPath : currentPath;
+  const activeSelByKey = isPool ? poolSelectByKey : selectByKey;
+  const activeSelTo = isPool ? poolSelectTo : selectTo;
 
-      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+  useKeyboardManager(viewerRef, [
+    {
+      key: "Ctrl+a",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
         e.preventDefault();
         activeSelectAll();
-      }
-      if (e.key === "Escape" && !quickLookOpen) activeClear();
-      // Delete: 풀 모드에서는 차단
-      if (e.key === "Delete" && activeCount > 0 && !isPool) {
+      },
+    },
+    {
+      key: "Escape",
+      enabled: !moveDialogOpen && !quickLookOpen,
+      handler: () => {
+        activeClear();
+      },
+    },
+    {
+      key: "Delete",
+      enabled: !moveDialogOpen && activeCount > 0 && !isPool,
+      handler: (e) => {
         e.preventDefault();
         handleBulkRemoveRef.current();
-      }
-      // Backspace: 상위 폴더 이동 (QuickLook 열림 시 차단)
-      if (e.key === "Backspace" && !quickLookOpen) {
-        const tag = (document.activeElement as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
-        if (activeCurPath) {
-          e.preventDefault();
-          activeNavUp(true);
-        }
-      }
-      // Enter: 폴더 1개 선택 시 진입 (QuickLook 열림 시 차단)
-      if (e.key === "Enter" && !quickLookOpen) {
-        const tag = (document.activeElement as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
-        if (activeSKeys.size === 1) {
-          const selectedKey = [...activeSKeys][0];
-          const selectedItem = activeItms.find((i) => i.key === selectedKey);
-          if (selectedItem?.type === "folder" && selectedItem.folder) {
-            e.preventDefault();
-            activeNavFolder(selectedItem.folder.path, true);
-          }
-        }
-      }
-      // Space 키: QuickLook 열기 (닫기는 모달이 capture phase에서 처리)
-      if (e.key === " ") {
-        const target = e.target as HTMLElement;
-        if (
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable
-        )
-          return;
-        if (activeSKeys.size > 0) {
-          e.preventDefault();
-          setQuickLookOpen(true);
-        }
-      }
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        if (quickLookOpen) {
-          // QuickLook 열려있을 때도 화살표로 뷰어 선택 이동 허용
-        }
-        const tag = (document.activeElement as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
+      },
+    },
+    {
+      key: "Delete",
+      enabled: !moveDialogOpen && isPool,
+      handler: () => {
+        toast.info("Pool 모드에서는 삭제할 수 없습니다");
+      },
+    },
+    {
+      key: "Backspace",
+      enabled: !moveDialogOpen && !quickLookOpen && !!activeCurPath,
+      handler: (e) => {
         e.preventDefault();
-
+        activeNavUp(true);
+      },
+    },
+    {
+      key: "Enter",
+      enabled: !moveDialogOpen && !quickLookOpen && activeSKeys.size === 1,
+      handler: (e) => {
+        const selectedKey = [...activeSKeys][0];
+        const selectedItem = activeItms.find((i) => i.key === selectedKey);
+        if (selectedItem?.type === "folder" && selectedItem.folder) {
+          e.preventDefault();
+          activeNavFolder(selectedItem.folder.path, true);
+        }
+      },
+    },
+    {
+      key: " ",
+      enabled: !moveDialogOpen && activeSKeys.size > 0,
+      handler: (e) => {
+        e.preventDefault();
+        setQuickLookOpen(true);
+      },
+    },
+    {
+      key: "ArrowUp",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
+        e.preventDefault();
         const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
-
         let currentIdx: number;
         if (e.shiftKey && activeSKeys.size > 0) {
           currentIdx =
@@ -726,77 +733,185 @@ export default function TaskDetailPage() {
         } else {
           return;
         }
-
-        let nextIdx = currentIdx;
-        if (previewMode === "list") {
-          if (e.key === "ArrowUp") nextIdx = currentIdx - 1;
-          else if (e.key === "ArrowDown") nextIdx = currentIdx + 1;
-          else if (e.key === "ArrowRight") {
-            if (!quickLookOpen && !e.shiftKey && activeSKeys.size === 1) {
-              const selectedKey = [...activeSKeys][0];
-              const selectedItem = activeItms.find(
-                (i) => i.key === selectedKey,
-              );
-              if (selectedItem?.type === "folder" && selectedItem.folder) {
-                activeNavFolder(selectedItem.folder.path, true);
-              }
-            }
-            return;
-          } else if (e.key === "ArrowLeft") {
-            if (!quickLookOpen && !e.shiftKey && activeCurPath) {
-              activeNavUp(true);
-            }
-            return;
-          } else return;
-        } else {
-          if (e.key === "ArrowLeft") nextIdx = currentIdx - 1;
-          else if (e.key === "ArrowRight") nextIdx = currentIdx + 1;
-          else if (e.key === "ArrowUp") nextIdx = currentIdx - gridColumns;
-          else if (e.key === "ArrowDown") nextIdx = currentIdx + gridColumns;
-        }
-
+        const nextIdx =
+          previewMode === "list" ? currentIdx - 1 : currentIdx - gridColumns;
         if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
         if (e.shiftKey) {
           activeSelTo(nextIdx);
         } else {
-          const nextKey = activeItms[nextIdx].key;
-          activeSelByKey(nextKey);
+          activeSelByKey(activeItms[nextIdx].key);
         }
         setScrollToItemKey(activeItms[nextIdx].key);
-      }
-    };
-    const el = viewerRef.current;
-    if (!el) return;
-    el.addEventListener("keydown", handler);
-    return () => el.removeEventListener("keydown", handler);
-  }, [
-    effectiveViewerMode,
-    selectAll,
-    poolSelectAll,
-    clearSelection,
-    poolClearSelection,
-    selectedCount,
-    poolSelectedCount,
-    moveDialogOpen,
-    selectedKeys,
-    poolSelectedKeys,
-    items,
-    poolItems,
-    quickLookOpen,
-    previewMode,
-    gridColumns,
-    selectByKey,
-    poolSelectByKey,
-    selectTo,
-    poolSelectTo,
-    cursorIndexRef,
-    poolCursorIndexRef,
-    currentPath,
-    poolCurrentPath,
-    handleNavigateFolder,
-    handlePoolNavigateFolder,
-    handleNavigateUp,
-    handlePoolNavigateUp,
+      },
+    },
+    {
+      key: "ArrowDown",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
+        e.preventDefault();
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        let currentIdx: number;
+        if (e.shiftKey && activeSKeys.size > 0) {
+          currentIdx =
+            activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        } else if (activeSKeys.size === 0) {
+          currentIdx = minIdx - 1;
+        } else if (activeCursor.current >= 0) {
+          currentIdx = activeCursor.current;
+        } else if (activeSKeys.size === 1) {
+          const selectedKey = [...activeSKeys][0];
+          currentIdx = activeItms.findIndex((i) => i.key === selectedKey);
+          if (currentIdx < 0) return;
+        } else {
+          return;
+        }
+        const nextIdx =
+          previewMode === "list" ? currentIdx + 1 : currentIdx + gridColumns;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        if (e.shiftKey) {
+          activeSelTo(nextIdx);
+        } else {
+          activeSelByKey(activeItms[nextIdx].key);
+        }
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
+    {
+      key: "ArrowLeft",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
+        e.preventDefault();
+        if (previewMode === "list") {
+          if (!quickLookOpen && !e.shiftKey && activeCurPath) {
+            activeNavUp(true);
+          }
+          return;
+        }
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        let currentIdx: number;
+        if (e.shiftKey && activeSKeys.size > 0) {
+          currentIdx =
+            activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        } else if (activeSKeys.size === 0) {
+          currentIdx = minIdx - 1;
+        } else if (activeCursor.current >= 0) {
+          currentIdx = activeCursor.current;
+        } else if (activeSKeys.size === 1) {
+          const selectedKey = [...activeSKeys][0];
+          currentIdx = activeItms.findIndex((i) => i.key === selectedKey);
+          if (currentIdx < 0) return;
+        } else {
+          return;
+        }
+        const nextIdx = currentIdx - 1;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        if (e.shiftKey) {
+          activeSelTo(nextIdx);
+        } else {
+          activeSelByKey(activeItms[nextIdx].key);
+        }
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
+    {
+      key: "ArrowRight",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
+        e.preventDefault();
+        if (previewMode === "list") {
+          if (!quickLookOpen && !e.shiftKey && activeSKeys.size === 1) {
+            const selectedKey = [...activeSKeys][0];
+            const selectedItem = activeItms.find((i) => i.key === selectedKey);
+            if (selectedItem?.type === "folder" && selectedItem.folder) {
+              activeNavFolder(selectedItem.folder.path, true);
+            }
+          }
+          return;
+        }
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        let currentIdx: number;
+        if (e.shiftKey && activeSKeys.size > 0) {
+          currentIdx =
+            activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        } else if (activeSKeys.size === 0) {
+          currentIdx = minIdx - 1;
+        } else if (activeCursor.current >= 0) {
+          currentIdx = activeCursor.current;
+        } else if (activeSKeys.size === 1) {
+          const selectedKey = [...activeSKeys][0];
+          currentIdx = activeItms.findIndex((i) => i.key === selectedKey);
+          if (currentIdx < 0) return;
+        } else {
+          return;
+        }
+        const nextIdx = currentIdx + 1;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        if (e.shiftKey) {
+          activeSelTo(nextIdx);
+        } else {
+          activeSelByKey(activeItms[nextIdx].key);
+        }
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
+    {
+      key: "Shift+ArrowUp",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
+        e.preventDefault();
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        const currentIdx =
+          activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        const nextIdx =
+          previewMode === "list" ? currentIdx - 1 : currentIdx - gridColumns;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        activeSelTo(nextIdx);
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
+    {
+      key: "Shift+ArrowDown",
+      enabled: !moveDialogOpen,
+      handler: (e) => {
+        e.preventDefault();
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        const currentIdx =
+          activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        const nextIdx =
+          previewMode === "list" ? currentIdx + 1 : currentIdx + gridColumns;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        activeSelTo(nextIdx);
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
+    {
+      key: "Shift+ArrowLeft",
+      enabled: !moveDialogOpen && previewMode !== "list",
+      handler: (e) => {
+        e.preventDefault();
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        const currentIdx =
+          activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        const nextIdx = currentIdx - 1;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        activeSelTo(nextIdx);
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
+    {
+      key: "Shift+ArrowRight",
+      enabled: !moveDialogOpen && previewMode !== "list",
+      handler: (e) => {
+        e.preventDefault();
+        const minIdx = activeItms[0]?.type === "parent" ? 1 : 0;
+        const currentIdx =
+          activeCursor.current >= 0 ? activeCursor.current : minIdx - 1;
+        const nextIdx = currentIdx + 1;
+        if (nextIdx < minIdx || nextIdx >= activeItms.length) return;
+        activeSelTo(nextIdx);
+        setScrollToItemKey(activeItms[nextIdx].key);
+      },
+    },
   ]);
 
   // -- DataStore 로드 --
@@ -1075,7 +1190,21 @@ export default function TaskDetailPage() {
     effectiveViewerMode === "pool" ? poolTotalImages : totalImages;
 
   const toolbar = (
-    <div className="mb-4 select-none shrink-0 space-y-1">
+    <div
+      className={`mb-4 select-none shrink-0 space-y-1 rounded-md px-2 py-1.5 transition-colors ${viewerMode === "pool" ? "bg-info/5" : ""}`}
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        {viewerMode === "pool" ? (
+          <Database className="h-3.5 w-3.5 text-blue-500" />
+        ) : (
+          <ListTodo className="h-3.5 w-3.5 text-emerald-600" />
+        )}
+        <span
+          className={`text-xs font-semibold ${viewerMode === "pool" ? "text-blue-500" : "text-emerald-600"}`}
+        >
+          {viewerMode === "pool" ? "Data Pool" : "Task"}
+        </span>
+      </div>
       <FolderBreadcrumb
         currentPath={activeCurrentPath}
         onNavigate={(path) => activeNavigate(path ? path + "/" : "")}
@@ -1202,7 +1331,7 @@ export default function TaskDetailPage() {
         isRestoring={isRestoring}
       />
 
-      <main className="relative mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
+      <main className="relative mx-auto flex w-full max-w-full flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
         {isRestoring && (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
             <div className="flex items-center gap-2 rounded-md bg-background px-4 py-2 shadow-md border">
@@ -1395,37 +1524,35 @@ export default function TaskDetailPage() {
                   onRenameFolder={
                     effectiveViewerMode === "task"
                       ? (path) => setRenamingFolderPath(path)
-                      : undefined
+                      : () => {}
                   }
                   onFinishRenameFolder={
                     effectiveViewerMode === "task"
                       ? handleFinishRenameInViewer
-                      : undefined
+                      : () => {}
                   }
                   onCancelRenameFolder={
                     effectiveViewerMode === "task"
                       ? () => setRenamingFolderPath(null)
-                      : undefined
+                      : () => {}
                   }
                   onMoveSelected={
                     effectiveViewerMode === "task"
                       ? () => setMoveDialogOpen(true)
-                      : undefined
+                      : () => {}
                   }
                   onDeleteSelected={
-                    effectiveViewerMode === "task"
-                      ? handleBulkRemove
-                      : undefined
+                    effectiveViewerMode === "task" ? handleBulkRemove : () => {}
                   }
                   onDeleteFolder={
                     effectiveViewerMode === "task"
                       ? handleDeleteFolder
-                      : undefined
+                      : () => {}
                   }
                   onDeleteImage={
                     effectiveViewerMode === "task"
                       ? handleRemoveImage
-                      : undefined
+                      : () => {}
                   }
                   onImageDoubleClick={() => {
                     setQuickLookOpen(true);
@@ -1459,17 +1586,15 @@ export default function TaskDetailPage() {
                   onFolderDragOver={
                     effectiveViewerMode === "task"
                       ? handleFolderDragOver
-                      : undefined
+                      : () => {}
                   }
                   onFolderDragLeave={
                     effectiveViewerMode === "task"
                       ? handleFolderDragLeave
-                      : undefined
+                      : () => {}
                   }
                   onFolderDrop={
-                    effectiveViewerMode === "task"
-                      ? handleFolderDrop
-                      : undefined
+                    effectiveViewerMode === "task" ? handleFolderDrop : () => {}
                   }
                 />
               )}
@@ -1506,37 +1631,35 @@ export default function TaskDetailPage() {
                   onRenameFolder={
                     effectiveViewerMode === "task"
                       ? (path) => setRenamingFolderPath(path)
-                      : undefined
+                      : () => {}
                   }
                   onFinishRenameFolder={
                     effectiveViewerMode === "task"
                       ? handleFinishRenameInViewer
-                      : undefined
+                      : () => {}
                   }
                   onCancelRenameFolder={
                     effectiveViewerMode === "task"
                       ? () => setRenamingFolderPath(null)
-                      : undefined
+                      : () => {}
                   }
                   onMoveSelected={
                     effectiveViewerMode === "task"
                       ? () => setMoveDialogOpen(true)
-                      : undefined
+                      : () => {}
                   }
                   onDeleteSelected={
-                    effectiveViewerMode === "task"
-                      ? handleBulkRemove
-                      : undefined
+                    effectiveViewerMode === "task" ? handleBulkRemove : () => {}
                   }
                   onDeleteFolder={
                     effectiveViewerMode === "task"
                       ? handleDeleteFolder
-                      : undefined
+                      : () => {}
                   }
                   onDeleteImage={
                     effectiveViewerMode === "task"
                       ? handleRemoveImage
-                      : undefined
+                      : () => {}
                   }
                   onImageDoubleClick={() => {
                     setQuickLookOpen(true);
@@ -1570,17 +1693,15 @@ export default function TaskDetailPage() {
                   onFolderDragOver={
                     effectiveViewerMode === "task"
                       ? handleFolderDragOver
-                      : undefined
+                      : () => {}
                   }
                   onFolderDragLeave={
                     effectiveViewerMode === "task"
                       ? handleFolderDragLeave
-                      : undefined
+                      : () => {}
                   }
                   onFolderDrop={
-                    effectiveViewerMode === "task"
-                      ? handleFolderDrop
-                      : undefined
+                    effectiveViewerMode === "task" ? handleFolderDrop : () => {}
                   }
                 />
               )}

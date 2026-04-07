@@ -420,11 +420,7 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
           if (!open && !restoreMutation.isPending) setRestoreTarget(null);
         }}
       >
-        <AlertDialogContent
-          onEscapeKeyDown={(e) => {
-            if (restoreMutation.isPending) e.preventDefault();
-          }}
-        >
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>버전 복원</AlertDialogTitle>
             {isDirty ? (

@@ -99,7 +99,7 @@ const ImageListRow = memo(function ImageListRow({
           <div
             data-pool-item
             style={rowStyle}
-            className={`flex items-center border-b last:border-0 cursor-pointer ${
+            className={`flex items-center border-b last:border-0 ${isRenaming ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} ${
               isFolderDropTarget
                 ? "bg-primary/10 ring-2 ring-inset ring-primary"
                 : isSelected
@@ -184,6 +184,7 @@ const ImageListRow = memo(function ImageListRow({
                   e.stopPropagation();
                   onDeleteFolder(item.folder!.path);
                 }}
+                aria-label="폴더 삭제"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -203,7 +204,7 @@ const ImageListRow = memo(function ImageListRow({
           <div
             data-pool-item
             style={rowStyle}
-            className={`flex items-center border-b last:border-0 cursor-pointer ${
+            className={`flex items-center border-b last:border-0 cursor-grab active:cursor-grabbing ${
               isSelected ? "bg-primary/10" : "hover:bg-muted/30"
             }`}
             onClick={(e) => onItemClick(virtualRowIndex, e)}
@@ -261,6 +262,7 @@ const ImageListRow = memo(function ImageListRow({
                   e.stopPropagation();
                   onDeleteImage(image.id);
                 }}
+                aria-label="이미지 삭제"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>

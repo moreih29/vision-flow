@@ -14,6 +14,7 @@ from app.schemas.task_image import (
     TaskImageListResponse,
     TaskImageRemove,
     TaskImageResponse,
+    TaskImageReviewStatusUpdate,
 )
 from app.services.project import project_service
 from app.services.task import task_service
@@ -233,6 +234,19 @@ async def batch_move_task_images(
     await task_service.check_ownership(db, task_id, current_user.id)
     count = await task_service.batch_move_images(db, body.task_image_ids, body.target_folder)
     return {"updated_count": count}
+
+
+@router.patch("/tasks/{task_id}/images/{image_id}/review-status", response_model=TaskImageResponse)
+async def update_task_image_review_status(
+    task_id: int,
+    image_id: int,
+    body: TaskImageReviewStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskImageResponse:
+    """Task 이미지의 검토 상태를 업데이트합니다."""
+    task_image = await task_service.update_review_status(db, task_id, image_id, current_user.id, body.review_status)
+    return TaskImageResponse.model_validate(task_image)
 
 
 @router.post("/tasks/{task_id}/images/batch-remove", status_code=200)

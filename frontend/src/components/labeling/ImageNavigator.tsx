@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLabelingStore } from "@/stores/labeling-store";
@@ -29,9 +30,21 @@ export default function ImageNavigator({ totalImages }: ImageNavigatorProps) {
 
       if (e.key === "ArrowLeft") {
         e.preventDefault();
+        if (useLabelingStore.getState().isDirty) {
+          toast.warning("미저장 변경사항이 있습니다", {
+            description: "S키로 저장하거나 A/D키로 저장 후 이동하세요.",
+            duration: 2000,
+          });
+        }
         if (currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1);
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
+        if (useLabelingStore.getState().isDirty) {
+          toast.warning("미저장 변경사항이 있습니다", {
+            description: "S키로 저장하거나 A/D키로 저장 후 이동하세요.",
+            duration: 2000,
+          });
+        }
         if (currentImageIndex < totalImages - 1)
           setCurrentImageIndex(currentImageIndex + 1);
       }

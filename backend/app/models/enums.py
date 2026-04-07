@@ -21,3 +21,9 @@ class AnnotationType(enum.StrEnum):
     BBOX = "bbox"
     POLYGON = "polygon"
     KEYPOINT = "keypoint"
+
+
+class ReviewStatus(enum.StrEnum):
+    UNREVIEWED = "unreviewed"
+    REVIEWED = "reviewed"
+    EXCLUDED = "excluded"

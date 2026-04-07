@@ -122,6 +122,7 @@ export interface FileTreeViewProps {
   onItemDrop?: (e: React.DragEvent, targetPath: string) => void;
   onExternalFileDrop?: (entries: FileSystemEntry[], targetPath: string) => void;
   onRefresh?: () => void | Promise<void>;
+  syncSelectedPath?: boolean;
   // checkbox 모드
   checkable?: boolean;
   checkedPaths?: Set<string>;
@@ -196,6 +197,7 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
       onItemDrop,
       onExternalFileDrop,
       onRefresh,
+      syncSelectedPath = false,
       checkable = false,
       checkedPaths,
       onCheckPath,
@@ -280,15 +282,65 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
     // 초기 마운트 시의 selectedPath만 사용 — 이후 변경은 무시
     const initialSelectedPathRef = useRef(selectedPath);
 
+    // 상위 폴더 경로를 순차적으로 펼치는 순수 함수 (트리 상태를 직접 전달/반환)
+    async function expandPathSequential(
+      targetPath: string,
+      startNodes: FileTreeNode[],
+    ): Promise<FileTreeNode[]> {
+      const segments = targetPath.replace(/\/$/, "").split("/").filter(Boolean);
+      // 파일 경로면 마지막 세그먼트(파일명)는 제외하고 상위 폴더만 펼침
+      const folderSegments = segments.slice(0, -1);
+      let nodes = startNodes;
+      let current = "";
+      for (const seg of folderSegments) {
+        current += seg + "/";
+        nodes = await expandNodeInTree(current, nodes);
+      }
+      return nodes;
+    }
+
+    // 트리 상태를 받아 단일 노드를 펼치고 새 트리 상태를 반환 (상태를 직접 스레딩)
+    async function expandNodeInTree(
+      path: string,
+      nodes: FileTreeNode[],
+    ): Promise<FileTreeNode[]> {
+      const node = findNodeInTree(nodes, path);
+      if (!node) return nodes;
+      if (node.expanded && node.loaded) return nodes;
+
+      if (!node.loaded) {
+        try {
+          const result = await fetchFolderContents(path, 0, FILE_PAGE_SIZE);
+          const folderChildren = result.folders.map(buildFolderNode);
+          const { visibleFiles: fileChildren, hiddenCount } =
+            buildFileNodes(result);
+          const children = sortNodes([...folderChildren, ...fileChildren]);
+          return updateNodeInTree(nodes, path, (n) => ({
+            ...n,
+            expanded: true,
+            loaded: true,
+            children,
+            totalFiles: hiddenCount > 0 ? hiddenCount : undefined,
+          }));
+        } catch {
+          return nodes;
+        }
+      } else {
+        return updateNodeInTree(nodes, path, (n) => ({ ...n, expanded: true }));
+      }
+    }
+
     useEffect(() => {
       async function loadRoot() {
         setLoading(true);
         setLoadError(null);
+        let rootNodesList: FileTreeNode[] = [];
         try {
           const result = await fetchFolderContents("", 0, FILE_PAGE_SIZE);
           const folderNodes = result.folders.map(buildFolderNode);
           const { visibleFiles, hiddenCount } = buildFileNodes(result);
-          setRootNodes(sortNodes([...folderNodes, ...visibleFiles]));
+          rootNodesList = sortNodes([...folderNodes, ...visibleFiles]);
+          setRootNodes(rootNodesList);
           setRootHiddenFileCount(hiddenCount);
         } catch {
           setLoadError("폴더를 불러올 수 없습니다");
@@ -297,20 +349,63 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         }
         // 초기 마운트 시 selectedPath가 있으면 해당 경로까지 자동 펼침
         const initialPath = initialSelectedPathRef.current;
-        if (initialPath) {
-          const segments = initialPath
-            .replace(/\/$/, "")
-            .split("/")
-            .filter(Boolean);
-          let current = "";
-          for (const seg of segments) {
-            current += seg + "/";
-            await expandNode(current);
-          }
+        if (initialPath && rootNodesList.length > 0) {
+          const expanded = await expandPathSequential(
+            initialPath,
+            rootNodesList,
+          );
+          setRootNodes(expanded);
         }
       }
       loadRoot();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchFolderContents]);
+
+    // syncSelectedPath: selectedPath 변경 시 자동 펼침 + 스크롤
+    const prevSelectedPathRef = useRef(selectedPath);
+    // 마운트 직후 loading이 false로 바뀔 때 초기 선택 경로를 처리하기 위한 플래그
+    const syncPendingRef = useRef(false);
+
+    useEffect(() => {
+      if (!syncSelectedPath) return;
+      const prev = prevSelectedPathRef.current;
+      prevSelectedPathRef.current = selectedPath;
+      if (selectedPath && selectedPath !== prev) {
+        syncPendingRef.current = true;
+      }
+    }, [selectedPath, syncSelectedPath]);
+
+    useEffect(() => {
+      if (!syncSelectedPath) return;
+      if (loading) return;
+      if (!syncPendingRef.current) return;
+      syncPendingRef.current = false;
+
+      const targetPath = selectedPath;
+      if (!targetPath) return;
+
+      async function expandAndScroll() {
+        const currentNodes = rootNodesRef.current;
+        const expanded = await expandPathSequential(targetPath, currentNodes);
+        setRootNodes(expanded);
+        // 상태 갱신 후 다음 프레임에서 스크롤
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const latestFlat: FlatNode[] = [];
+            flattenTree(rootNodesRef.current, 0, latestFlat);
+            const idx = latestFlat.findIndex(
+              (fn) => fn.type === "node" && fn.node.path === targetPath,
+            );
+            if (idx !== -1) {
+              virtualizer.scrollToIndex(idx, { align: "auto" });
+            }
+          });
+        });
+      }
+
+      expandAndScroll();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPath, syncSelectedPath, loading]);
 
     // -- 가상화 --
     const { flatNodes, maxDepth } = useMemo(() => {
@@ -653,11 +748,13 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
           .replace(/\/$/, "")
           .split("/")
           .filter(Boolean);
+        let nodes = rootNodesRef.current;
         let current = "";
         for (const seg of segments) {
           current += seg + "/";
-          await expandNode(current);
+          nodes = await expandNodeInTree(current, nodes);
         }
+        setRootNodes(nodes);
       },
       collapseBelow(path: string) {
         function collapseAllDescendants(nodes: FileTreeNode[]): FileTreeNode[] {
@@ -685,53 +782,6 @@ export const FileTreeView = forwardRef<FileTreeRef, FileTreeViewProps>(
         });
       },
     }));
-
-    function getLatestRootNodes(): FileTreeNode[] {
-      return rootNodesRef.current;
-    }
-
-    async function expandNode(path: string) {
-      const findNode = (nodes: FileTreeNode[]): FileTreeNode | undefined => {
-        for (const n of nodes) {
-          if (n.path === path) return n;
-          if (n.children) {
-            const found = findNode(n.children);
-            if (found) return found;
-          }
-        }
-        return undefined;
-      };
-
-      const latestNodes = getLatestRootNodes();
-      const node = findNode(latestNodes);
-      if (!node) return;
-      if (node.expanded && node.loaded) return; // 이미 확장됨
-
-      if (!node.loaded) {
-        try {
-          const result = await fetchFolderContents(path, 0, FILE_PAGE_SIZE);
-          const folderChildren = result.folders.map(buildFolderNode);
-          const { visibleFiles: fileChildren, hiddenCount } =
-            buildFileNodes(result);
-          const children = sortNodes([...folderChildren, ...fileChildren]);
-          setRootNodes((prev) =>
-            updateNodeInTree(prev, path, (n) => ({
-              ...n,
-              expanded: true,
-              loaded: true,
-              children,
-              totalFiles: hiddenCount > 0 ? hiddenCount : undefined,
-            })),
-          );
-        } catch {
-          // silently fail
-        }
-      } else {
-        setRootNodes((prev) =>
-          updateNodeInTree(prev, path, (n) => ({ ...n, expanded: true })),
-        );
-      }
-    }
 
     async function handleToggleExpand(path: string) {
       const findNode = (nodes: FileTreeNode[]): FileTreeNode | undefined => {

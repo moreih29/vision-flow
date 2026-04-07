@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.models.enums import ReviewStatus
 from app.schemas.image import FolderInfo, ImageResponse
 
 
@@ -14,11 +15,16 @@ class TaskImageRemove(BaseModel):
     image_ids: list[int]
 
 
+class TaskImageReviewStatusUpdate(BaseModel):
+    review_status: ReviewStatus
+
+
 class TaskImageResponse(BaseModel):
     id: int
     task_id: int
     image_id: int
     folder_path: str
+    review_status: ReviewStatus
     added_at: datetime
     image: ImageResponse
 

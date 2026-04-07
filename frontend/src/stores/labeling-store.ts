@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Annotation } from "@/types/annotation";
 
-type LabelingTool = "select" | "classification" | "bbox";
+type LabelingTool = "classification" | "bbox";
 export type LabelingFilter = "all" | "unlabeled" | "labeled";
 
 const MAX_UNDO_STACK = 50;
@@ -20,6 +20,7 @@ interface LabelingState {
 
   // 선택
   selectedAnnotationId: number | null;
+  selectedAnnotationIds: Set<number>;
 
   // 줌
   scale: number;
@@ -41,10 +42,13 @@ interface LabelingState {
   setTool: (tool: LabelingTool) => void;
   setSelectedClassId: (id: number | null) => void;
   setSelectedAnnotationId: (id: number | null) => void;
+  setSelectedAnnotationIds: (ids: Set<number>) => void;
+  toggleAnnotationSelection: (id: number) => void;
   setAnnotations: (annotations: Annotation[]) => void;
   addAnnotation: (annotation: Annotation) => void;
   updateAnnotation: (id: number, data: Partial<Annotation>) => void;
   removeAnnotation: (id: number) => void;
+  removeAnnotations: (ids: number[]) => void;
   setIsDirty: (dirty: boolean) => void;
   setScale: (scale: number) => void;
   reset: () => void;
@@ -63,11 +67,12 @@ interface LabelingState {
 
 const initialState = {
   currentImageIndex: 0,
-  tool: "select" as LabelingTool,
+  tool: "bbox" as LabelingTool,
   selectedClassId: null,
   annotations: [],
   isDirty: false,
   selectedAnnotationId: null,
+  selectedAnnotationIds: new Set<number>(),
   scale: 1,
   past: [] as Annotation[][],
   future: [] as Annotation[][],
@@ -82,12 +87,35 @@ export const useLabelingStore = create<LabelingState>((set, get) => ({
   setCurrentImageIndex: (index) => set({ currentImageIndex: index }),
   setTool: (tool) => set({ tool }),
   setSelectedClassId: (id) => set({ selectedClassId: id }),
-  setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
+  setSelectedAnnotationId: (id) =>
+    set({
+      selectedAnnotationId: id,
+      selectedAnnotationIds: id != null ? new Set([id]) : new Set<number>(),
+    }),
+  setSelectedAnnotationIds: (ids) =>
+    set({
+      selectedAnnotationIds: ids,
+      selectedAnnotationId: ids.size === 1 ? [...ids][0] : null,
+    }),
+  toggleAnnotationSelection: (id) =>
+    set((state) => {
+      const next = new Set(state.selectedAnnotationIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return {
+        selectedAnnotationIds: next,
+        selectedAnnotationId: next.size === 1 ? [...next][0] : null,
+      };
+    }),
   setAnnotations: (annotations) =>
     set({
       annotations,
       isDirty: false,
       selectedAnnotationId: null,
+      selectedAnnotationIds: new Set<number>(),
       past: [],
       future: [],
     }),
@@ -123,9 +151,27 @@ export const useLabelingStore = create<LabelingState>((set, get) => ({
         future: [],
       };
     }),
+  removeAnnotations: (ids) =>
+    set((state) => {
+      const idSet = new Set(ids);
+      const past = [...state.past, state.annotations].slice(-MAX_UNDO_STACK);
+      return {
+        annotations: state.annotations.filter((a) => !idSet.has(a.id)),
+        isDirty: true,
+        selectedAnnotationIds: new Set<number>(),
+        selectedAnnotationId: null,
+        past,
+        future: [],
+      };
+    }),
   setIsDirty: (dirty) => set({ isDirty: dirty }),
   setScale: (scale) => set({ scale }),
-  reset: () => set({ ...initialState, labeledImageIds: new Set<number>() }),
+  reset: () =>
+    set({
+      ...initialState,
+      labeledImageIds: new Set<number>(),
+      selectedAnnotationIds: new Set<number>(),
+    }),
   setFilter: (filter) => set({ filter }),
   toggleAnnotations: () =>
     set((state) => ({ showAnnotations: !state.showAnnotations })),

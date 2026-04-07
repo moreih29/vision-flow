@@ -556,6 +556,408 @@
           "created_at": "2026-04-07T10:07:02.265Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-07T13:32:40.660Z",
+      "branch": "feature/labeling",
+      "meet": {
+        "id": 3,
+        "topic": "태스크 페이지 → 라벨링 페이지 진입 흐름 및 라벨링 페이지 UI/UX 전면 개선",
+        "issues": [
+          {
+            "id": 1,
+            "title": "태스크 페이지 → 라벨링 진입 흐름 개선 (탭 바 UX, 목록 버튼 미구현, 진입 경로)",
+            "status": "decided",
+            "decision": "A안 역할 분리 채택. \"목록\" 버튼 제거(기본 상태이므로 불필요). \"라벨링 시작\"을 primary CTA 버튼으로 우측 배치. \"데이터 추가\"는 좌측 보조 액션(ghost) 유지. 이미지 더블클릭 → 해당 이미지부터 라벨링 진입 경로도 유지."
+          },
+          {
+            "id": 2,
+            "title": "라벨링 페이지 상단 바 정리 (중복 UI 제거, 정보 밀도 최적화)",
+            "status": "decided",
+            "decision": "상단 바 구조적 재배치(B안) + 나가기 버튼 채택. 좌: [← 태스크명] | [◀ N/Total ▶], 중: [프로그레스바] [전체|미라벨|라벨링됨], 우: [저장상태] [폴더트리 토글] [? 단축키]. 제거 항목: breadcrumb → [← 태스크명]으로 교체, 상단 줌% 삭제(캔버스 ZoomControls에만 유지), 폴더경로 텍스트 버튼 삭제(아이콘 버튼으로 통합)."
+          },
+          {
+            "id": 3,
+            "title": "라벨링 페이지 좌측 패널 재설계 (도구 + 클래스 패널 공간 효율)",
+            "status": "decided",
+            "decision": "좌측 패널 3분할: 클래스(상, 선택 전용) + 인스턴스 리스트(중, 컴팩트: 색상+클래스명) + 속성/정보 패널(하, 컨텍스트: 선택 없으면 이미지 정보, 인스턴스 선택 시 속성 표시). 인스턴스 삭제/클래스 변경은 속성 패널 버튼이 아니라 인스턴스 리스트 우클릭 컨텍스트 메뉴로 처리(다중 선택 후 일괄 삭제/클래스 변경 지원). 도구는 캔버스 좌상단 플로팅(2개 이상일 때만 표시), select 도구는 bbox에 통합. 패널 폭 w-48~w-56으로 축소."
+          },
+          {
+            "id": 4,
+            "title": "캔버스 영역 최대화 전략 (레이아웃 비율, 패널 접기/펼치기)",
+            "status": "decided",
+            "decision": "필름스트립 제거(하단 80px 캔버스 환원). 이미지 네비게이션은 상단 바 [◀ N/Total ▶] + 화살표 키로 대체. 우측 폴더 트리는 기존 토글 방식 유지. 캔버스 영역 = 좌측 패널(w-48~w-56) 외 전체. 도구 플로팅은 캔버스 위 오버레이라 공간 차감 없음."
+          },
+          {
+            "id": 5,
+            "title": "이미지 네비게이션 및 자동 저장 정책",
+            "status": "decided",
+            "decision": "QWEASD 키 체계 채택. 아랫줄(ASD)=확정, 윗줄(QWE)=가벼운/반대 동작으로 대칭 설계. A=확인+저장+이전, S=저장(이동없음), D=확인+저장+다음, Q=이전(저장없이 탐색), W=제외 토글(학습에서 제외, S의 반대), E=다음(저장없이 탐색). 화살표 키는 Q/E와 동일 동작으로 보조 유지. Q/E로 이동 시 미저장 변경사항 있으면 토스트 경고. 자동 저장 토글은 별도로 두지 않음 — S/D를 통한 명시적 저장+확인이 기본 모델. 이미지 상태: 미검토(기본) / 검토완료(D or S) / 제외(W)."
+          },
+          {
+            "id": 6,
+            "title": "라벨링 편의 기능 우선순위 (추가 도구, 워크플로우 개선)",
+            "status": "decided",
+            "decision": "편의 기능 결정: (1) bbox 도구에 select 통합 — 빈 영역 드래그/클릭-클릭=새 bbox, 기존 bbox 클릭=선택/이동/리사이즈, (2) 클릭-클릭 bbox 생성 지원 (드래그와 동시 지원, 5px 이동 기준 자동 구분), (3) 클래스 미지정 UX → 첫 번째 클래스 자동 지정(A안), (4) 인스턴스 리스트 우클릭 컨텍스트 메뉴 (다중 선택+일괄 삭제/클래스 변경), (5) 캔버스 bbox 우클릭 컨텍스트 메뉴, (6) ZoomControls 버그 수정 (Maximize→fit-to-screen), (7) \"버전 확정 후 나가기\" dead code 정리."
+          }
+        ],
+        "research_summary": "## 현재 구현 상태\n\n### 태스크 페이지 진입점\n- TaskDetailHeader에 \"목록 | 라벨링 | 데이터추가\" 버튼 바 (border-b 구분)\n- \"목록\" 버튼: variant=\"secondary\"로 활성 탭처럼 보이지만 onClick 없음\n- \"라벨링\" 버튼: hasImages=false이면 disabled, 클릭 시 /projects/:id/tasks/:taskId/label로 navigate\n- \"데이터 추가\" 버튼: poolPanelOpen 토글, 조건부 렌더링\n- 개별 이미지 클릭/우클릭으로도 ?imageId= 쿼리 파라미터로 라벨링 진입 가능\n- LabelingPage는 AppLayout 없이 전체화면 렌더링\n\n### 라벨링 페이지 레이아웃\n- header h-12: breadcrumb, 이전/다음, 프로그레스바, 필터(전체/미라벨/라벨링됨), 줌%, 저장상태, 단축키/나가기 버튼\n- aside w-64: ToolPanel(도구) + ClassPanel(클래스 목록)\n- main: Konva Stage 캔버스 (bg-neutral-800) + ZoomControls(우하단) + CanvasScrollbars\n- FilmStrip h-20: 하단 썸네일 스트립 (react-virtual 가상화, 60x60px)\n- 우측 aside w-56: 토글 가능한 폴더 트리\n\n### 발견된 문제점\n1. ZoomControls: Maximize와 RotateCcw 버튼이 동일 함수(onResetZoom) 호출 — 버그\n2. 줌 퍼센트가 상단 바 + ZoomControls에 중복 표시\n3. 폴더 트리 토글 버튼 2개 나란히 배치 (FolderOpen 텍스트 버튼 + FolderTree 아이콘 버튼)\n4. \"버전 확정 후 나가기\" 버튼이 커밋 API 미호출 (dead code)\n5. 좌측 패널 w-64 고정 — classification 태스크에서 도구 1개뿐인데 동일 너비\n6. FilmStrip h-20 하드코딩\n7. 이미지 전환 시 자동 저장 없음 (Ctrl+S, D 키만)\n\n### 구현된 도구\n- select (BBoxSelectTool): 선택, 이동, 8핸들 리사이즈\n- classification: ClassPanel 클릭으로 분류 어노테이션 생성\n- bbox (BBoxDrawTool): 드래그로 바운딩박스 그리기\n- polygon, keypoint: 백엔드 enum에만 존재, 프론트 미구현\n\n### 백엔드 API\n- Annotation CRUD + Bulk Save (전체 교체 방식)\n- LabelClass CRUD (task별 관리)\n- task_images 중간 테이블로 이미지-태스크 연결\n- color 컬럼 DB String(7) vs Schema max_length=30 불일치",
+        "created_at": "2026-04-07T12:09:09.253Z"
+      },
+      "tasks": []
+    },
+    {
+      "completed_at": "2026-04-07T13:51:29.425Z",
+      "branch": "feature/labeling",
+      "plan": {
+        "id": 3,
+        "topic": "라벨링 페이지 UI/UX 2차 개선 — 디자이너 리뷰 기반",
+        "issues": [
+          {
+            "id": 1,
+            "title": "긴급 버그: Space 키 task_type 미체크 + 저장 실패 피드백 부재",
+            "status": "decided",
+            "decision": "Space 키에 tool === \"classification\" 체크 추가 (detection 모드에서 Space 무시). 저장 실패 시 console.error → toast.error로 교체."
+          },
+          {
+            "id": 2,
+            "title": "커서 정책: bbox 호버 시 move 커서 오해 유발",
+            "status": "decided",
+            "decision": "UnifiedBBoxTool.tsx 160행 onMouseEnter에서 커서를 isSelected ? 'move' : 'pointer'로 변경. 미선택 bbox는 pointer(클릭 가능), 선택된 bbox는 move(이동 가능)."
+          },
+          {
+            "id": 3,
+            "title": "라벨 동기화: 드래그/리사이즈 중 클래스명 라벨 정지",
+            "status": "decided",
+            "decision": "A안 Group 레벨 드래그 채택. draggable을 Rect에서 Group으로 이동하여 라벨이 자동으로 따라오게. 리사이즈는 onTransform 콜백에서 라벨 위치 갱신."
+          },
+          {
+            "id": 4,
+            "title": "폴더 트리 연동: 이미지 전환 시 selectedPath 미반영",
+            "status": "decided",
+            "decision": "A안 syncSelectedPath prop 채택. FileTreeView에 syncSelectedPath?: boolean prop 추가. true이면 selectedPath 변경 시 해당 경로까지 자동 펼침(auto-expand) + 스크롤. 라벨링 페이지에서 syncSelectedPath={true}로 사용."
+          },
+          {
+            "id": 5,
+            "title": "단축키 도움말: task_type별 필터링 없음",
+            "status": "decided",
+            "decision": "KeyboardShortcutsOverlay에 taskType prop 추가. SHORTCUTS 카테고리에 taskTypes 필드 추가하여 현재 task_type에 해당하는 항목만 렌더링. Classification 카테고리는 classification task에서만, bbox 관련은 object_detection에서만 표시. LabelingPage에서 taskType={task?.task_type} 전달."
+          },
+          {
+            "id": 6,
+            "title": "좌측 패널 공간 + InspectorPanel 정보 개선",
+            "status": "decided",
+            "decision": "좌측 패널 폭 w-52→w-60. ClassPanel에 max-h-[40%] overflow-y-auto(InspectorPanel 밀림 방지). InspectorPanel에 overflow-y-auto. 인스턴스 항목: px-3 py-1.5 text-sm, dot h-3 w-3, 번호 우측 정렬(justify-between). InspectorPanel에서 단일 도구 task의 타입 행 숨김. 좌표/크기를 정규화값→픽셀 단위 표시."
+          },
+          {
+            "id": 7,
+            "title": "기타 UI: 이미지 로드 실패 UI, 컨텍스트 메뉴 스타일 통일",
+            "status": "decided",
+            "decision": "이미지 로드 실패 시 에러 메시지 + 재시도 버튼 표시. 캔버스 컨텍스트 메뉴 스타일을 bg-neutral-800 하드코딩 → bg-popover/text-popover-foreground 등 shadcn 테마 변수로 통일."
+          }
+        ],
+        "research_summary": "## 디자이너 리뷰 결과\n\n### P0 긴급\n1. **Space 키 task_type 미체크**: LabelingPage.tsx 321-363행에서 Space 핸들러에 tool/task_type 체크 없음. detection 모드에서 Space 누르면 classification annotation 생성 — 데이터 오염.\n2. **저장 실패 피드백 없음**: LabelingPage.tsx 168행 console.error만 호출. sonner toast 미사용.\n\n### P1 높음\n3. **커서 정책**: UnifiedBBoxTool.tsx 160행에서 미선택 bbox 호버 시 'move' 커서 표시 → 이동 가능 어포던스 거짓. 미선택='pointer', 선택='move'로 변경 필요.\n4. **라벨 동기화**: UnifiedBBoxTool.tsx 141-187행에서 bbox Rect는 draggable이지만 라벨(Rect+Text)은 React state 기반으로 dragEnd 후에만 갱신. 드래그 중 라벨 정지. Group 레벨 드래그 또는 onDragMove 실시간 업데이트 필요.\n5. **폴더 트리**: FileTreeView.tsx 280행에서 initialSelectedPathRef로 초기 마운트 시만 사용, 이후 selectedPath 변경 무시. 이미지 전환 시 auto-expand 안 됨.\n\n### P2 중간\n6. **단축키**: KeyboardShortcutsOverlay.tsx에 taskType prop 없음. SHORTCUTS 배열이 하드코딩. classification 카테고리가 detection에서도 표시.\n7. **좌측 패널**: AnnotationList.tsx 111행 항목이 px-2 py-1 text-xs(~24px). ClassPanel 항목(py-1.5 text-sm)보다 작음 — 시각적 위계 역전. 인스턴스가 더 자주 상호작용하는 대상인데 더 작음.\n8. **InspectorPanel**: annotation_type 무조건 표시(94행). 단일 도구 task에서 불필요. 정규화 좌표만 표시 — 픽셀 좌표도 필요.\n\n### P3 낮음\n9. 캔버스 컨텍스트 메뉴 bg-neutral-800 하드코딩 vs shadcn/ui 컨텍스트 메뉴 스타일 불일치\n10. Inspector 다중 선택 미지원 (selectedAnnotationId 단일만)\n11. 이미지 로드 실패 시 빈 화면 (에러 메시지 없음)",
+        "created_at": "2026-04-07T13:32:40.681Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "태스크 상세 페이지 버튼 바 개편",
+          "context": "TaskDetailHeader의 \"목록 | 라벨링 | 데이터추가\" 버튼 바를 역할 분리 구조로 개편",
+          "approach": "TaskDetailHeader.tsx에서 기존 3-버튼 바 제거. 좌측에 \"데이터 추가\" ghost 버튼, 우측에 \"라벨링 시작\" primary 버튼 배치. flex justify-between으로 양쪽 정렬.",
+          "acceptance": "\"목록\" 버튼 제거됨. \"라벨링 시작\" primary 버튼이 우측에 표시되고 클릭 시 라벨링 페이지로 이동. hasImages=false일 때 disabled. 이미지 더블클릭 진입 기존대로 동작.",
+          "risk": "기존 \"목록\" 버튼의 시각적 상태 표시 역할이 사라지므로, 현재 뷰가 목록인지 데이터풀인지 구분이 필요할 수 있음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:46:50.232Z"
+        },
+        {
+          "id": 2,
+          "title": "라벨링 상단 바 재배치",
+          "context": "LabelingPage 상단 바를 3분할 구조로 재배치. 중복 UI 제거, 나가기 버튼 도입",
+          "approach": "LabelingPage.tsx header 영역 재구성. PageBreadcrumb → [← 태스크명] 나가기 버튼으로 교체. 줌% 표시 제거 (ZoomControls에만 유지). 폴더경로 텍스트 버튼 제거, 아이콘 버튼만 유지. 좌: 나가기+네비게이터, 중: 프로그레스+필터, 우: 저장상태+폴더토글+단축키.",
+          "acceptance": "breadcrumb 대신 [← 태스크명] 버튼 표시. 상단 줌% 없음. 폴더 토글 버튼 1개만. 3영역 구분 명확.",
+          "risk": "나가기 버튼에 dirty 상태 체크(handleBack) 기존 로직 유지 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:00.384Z"
+        },
+        {
+          "id": 3,
+          "title": "필름스트립 제거 + 캔버스 확장",
+          "context": "하단 FilmStrip(h-20) 제거하고 캔버스 영역을 하단까지 확장",
+          "approach": "LabelingPage.tsx에서 FilmStrip 컴포넌트 렌더링 제거. 캔버스 영역이 flex-1로 하단까지 차지하도록 수정. FilmStrip.tsx 파일은 삭제하지 않고 주석 또는 미사용으로 남겨둘지, 완전 삭제할지는 구현 시 판단.",
+          "acceptance": "필름스트립 영역 없음. 캔버스가 상단 바와 좌측 패널 외 전체 영역 차지. 이미지 네비게이션은 상단 바 + 키보드로 동작.",
+          "risk": "필름스트립에서 제공하던 시각적 네비게이션(라벨 완료 표시 등)이 사라짐. 프로그레스바와 필터로 충분히 대체되는지 확인 필요.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "lead",
+          "created_at": "2026-04-07T12:47:07.154Z"
+        },
+        {
+          "id": 4,
+          "title": "이미지 검토 상태 백엔드 구현",
+          "context": "task_images에 review_status 필드 추가 (미검토/검토완료/제외). QWEASD 키 체계의 백엔드 기반.",
+          "approach": "TaskImage 모델에 review_status 컬럼 추가 (String, default='unreviewed', enum: unreviewed/reviewed/excluded). Alembic 마이그레이션 생성. 기존 annotation bulk save API에 review_status 업데이트 로직 추가하거나 별도 PATCH 엔드포인트 생성. GET /tasks/{task_id}/images 응답에 review_status 포함.",
+          "acceptance": "task_images.review_status 컬럼 존재. API로 상태 변경 가능. 이미지 목록 조회 시 상태 반환. 기존 API 호환성 유지.",
+          "risk": "기존 labeled/unlabeled 필터 로직과의 관계 정리 필요. review_status가 기존 annotation 유무 기반 필터를 대체하는지 병행하는지 결정.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:13.672Z"
+        },
+        {
+          "id": 5,
+          "title": "bbox + select 도구 통합 + 클릭-클릭 생성",
+          "context": "BBoxDrawTool과 BBoxSelectTool을 하나의 통합 도구로 병합. 클릭-클릭 bbox 생성 방식 추가.",
+          "approach": "새 UnifiedBBoxTool 컴포넌트 생성. 빈 영역 mousedown+5px이상 드래그=드래그 모드, 빈 영역 클릭(이동없음)=클릭1→마우스이동(프리뷰)→클릭2=bbox 확정. 기존 bbox 클릭=선택, 선택된 bbox 드래그=이동, 핸들 드래그=리사이즈. ToolPanel에서 'select' 도구 제거, 'bbox' 도구가 선택/이동/리사이즈 모두 처리.",
+          "acceptance": "단일 도구로 bbox 그리기(드래그+클릭-클릭), 선택, 이동, 리사이즈 모두 가능. select 도구 UI에서 제거됨. 클릭-클릭 시 러버밴드 프리뷰 표시. ESC로 클릭-클릭 취소.",
+          "risk": "클릭-클릭 모드에서 첫 클릭과 기존 bbox 선택 클릭의 구분 로직 복잡. 빈 영역 판정이 정확해야 함.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:21.712Z"
+        },
+        {
+          "id": 6,
+          "title": "좌측 패널 3분할 레이아웃",
+          "context": "좌측 패널을 클래스(상) + 인스턴스 리스트(중) + 속성/정보(하)로 3분할 재구성. 기존 ToolPanel을 패널에서 제거.",
+          "approach": "좌측 패널 컴포넌트 재구성. ToolPanel 렌더링 제거 (플로팅 툴바로 이동). ClassPanel은 상단에 유지 (선택 전용, 읽기 전용). 중단에 AnnotationList 컴포넌트 신규 생성 (컴팩트: 색상 dot + 클래스명). 하단에 InspectorPanel 컴포넌트 신규 생성 (컨텍스트 기반). 패널 폭 w-64 → w-48~w-56으로 축소.",
+          "acceptance": "좌측 패널에 3영역 구분. ToolPanel 없음. 클래스 리스트, 인스턴스 리스트, 속성/정보 패널 각각 표시. 패널 폭 축소.",
+          "risk": "3분할 영역 간 높이 배분. 인스턴스가 많을 때 스크롤 처리. 영역 간 리사이즈 필요 여부.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:32.931Z"
+        },
+        {
+          "id": 7,
+          "title": "인스턴스 리스트 + 우클릭 컨텍스트 메뉴",
+          "context": "좌측 패널 중단의 인스턴스 리스트 상세 구현. 다중 선택 + 우클릭 컨텍스트 메뉴로 일괄 작업.",
+          "approach": "AnnotationList 컴포넌트에 클릭 선택, Ctrl+클릭 다중 선택, Shift+클릭 범위 선택 구현. 인스턴스 클릭 시 캔버스에서 해당 bbox 하이라이트. 우클릭 시 ContextMenu (shadcn/ui) 표시: 클래스 변경(서브메뉴), 삭제. 다중 선택 상태에서 우클릭 시 일괄 작업.",
+          "acceptance": "인스턴스 클릭 → 캔버스 bbox 하이라이트. 다중 선택(Ctrl/Shift+클릭) 동작. 우클릭 컨텍스트 메뉴에서 클래스 변경, 삭제 가능. 다중 선택 시 일괄 적용.",
+          "risk": "캔버스 선택 상태와 리스트 선택 상태 동기화 복잡도. labeling-store에서 다중 선택 상태 관리 필요.",
+          "status": "completed",
+          "deps": [
+            6
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:39.852Z"
+        },
+        {
+          "id": 8,
+          "title": "속성/정보 패널 (Inspector)",
+          "context": "좌측 패널 하단의 컨텍스트 기반 속성 패널. 선택 없으면 이미지 정보, 인스턴스 선택 시 해당 속성 표시.",
+          "approach": "InspectorPanel 컴포넌트. selectedAnnotationId 없을 때: 현재 이미지 정보 (파일경로, 해상도, 용량). selectedAnnotationId 있을 때: 클래스(변경 가능 드롭다운), 위치(x,y), 크기(w×h) 읽기 전용 표시. 다중 선택 시: 선택된 N개 인스턴스 요약.",
+          "acceptance": "미선택 → 이미지 경로, 크기, 용량 표시. 인스턴스 선택 → 클래스, 좌표, 크기 표시. 클래스 드롭다운으로 변경 가능.",
+          "risk": "이미지 파일 용량 정보는 현재 API에서 제공하는지 확인 필요. 없으면 백엔드 수정 필요.",
+          "status": "completed",
+          "deps": [
+            6
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:46.152Z"
+        },
+        {
+          "id": 9,
+          "title": "캔버스 플로팅 툴바",
+          "context": "도구 2개 이상일 때 캔버스 좌상단에 플로팅 아이콘 툴바 표시",
+          "approach": "FloatingToolbar 컴포넌트. getAvailableTools로 도구 목록 확인, 2개 이상일 때만 렌더링. 캔버스 영역 내 absolute 포지션 좌상단. 세로 아이콘 배열, 반투명 배경. 도구 1개면 자동 선택되고 툴바 숨김.",
+          "acceptance": "도구 2개 이상 → 캔버스 좌상단에 플로팅 표시. 도구 1개 → 자동 선택, 툴바 안 보임. 기존 ToolPanel 제거됨.",
+          "risk": "플로팅 툴바가 캔버스 좌상단 이미지 영역을 가릴 수 있음. 위치 조정 또는 반투명 처리 필요.",
+          "status": "completed",
+          "deps": [
+            6
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:47:51.705Z"
+        },
+        {
+          "id": 10,
+          "title": "QWEASD 키 체계 구현",
+          "context": "QWEASD 2줄 키 체계 구현. A/S/D=확정 줄, Q/W/E=탐색/반대 줄. 이미지 상태 관리.",
+          "approach": "LabelingPage.tsx 키보드 이벤트 핸들러 재설계. A=확인+저장+이전, S=저장, D=확인+저장+다음, Q=이전(탐색), W=제외토글, E=다음(탐색). 화살표 키는 Q/E와 동일. Q/E 이동 시 미저장 변경사항 있으면 토스트 경고. review_status API 연동 (D/A 시 reviewed, W 시 excluded↔unreviewed 토글). 기존 D키(저장+다음) 로직 대체. KeyboardShortcutsOverlay 업데이트.",
+          "acceptance": "QWEASD 6개 키 모두 동작. D/A 시 review_status=reviewed로 업데이트. W 시 제외 토글. Q/E는 상태 변경 없이 이동. 미저장 경고 토스트. 단축키 도움말 업데이트.",
+          "risk": "기존 단축키와 충돌 확인 필요 (W, E, Q가 다른 기능에 사용되는지). input 포커스 시 키 비활성화 처리.",
+          "status": "completed",
+          "deps": [
+            4
+          ],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:48:05.662Z"
+        },
+        {
+          "id": 11,
+          "title": "캔버스 bbox 우클릭 컨텍스트 메뉴",
+          "context": "캔버스에서 bbox 우클릭 시 컨텍스트 메뉴 표시 (클래스 변경, 삭제)",
+          "approach": "통합 bbox 도구에서 우클릭 이벤트 감지. 클릭 위치에 bbox가 있으면 ContextMenu 표시: 클래스 변경(서브메뉴로 클래스 목록), 삭제. 빈 영역 우클릭은 무시 또는 기본 브라우저 메뉴.",
+          "acceptance": "캔버스 bbox 우클릭 → 컨텍스트 메뉴 표시. 클래스 변경, 삭제 동작. 인스턴스 리스트의 컨텍스트 메뉴와 동일한 기능.",
+          "risk": "Konva Stage의 우클릭 이벤트 처리와 브라우저 기본 컨텍스트 메뉴 충돌. e.preventDefault 필요.",
+          "status": "completed",
+          "deps": [
+            5
+          ],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-07T12:48:10.945Z"
+        },
+        {
+          "id": 12,
+          "title": "클래스 자동 지정 + 버그 수정 + dead code 정리",
+          "context": "라벨링 진입 시 첫 번째 클래스 자동 선택. ZoomControls Maximize 버그 수정. handleCommitAndLeave dead code 정리.",
+          "approach": "(1) labeling-store 또는 LabelingPage에서 클래스 로드 후 activeClassId가 없으면 첫 번째 클래스 자동 설정. (2) ZoomControls의 Maximize 버튼 onClick을 onResetZoom → onFitToScreen(fitToScreen 함수)으로 수정. (3) handleCommitAndLeave에서 미구현 커밋 로직 제거, 필요 시 함수 자체 정리.",
+          "acceptance": "(1) 라벨링 진입 시 1번 클래스가 선택된 상태. (2) Maximize 버튼 클릭 → fit-to-screen 동작. (3) dead code 없음.",
+          "risk": "클래스 자동 지정 시 클래스 목록이 비어있는 태스크 예외 처리 필요.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 6,
+          "owner": "lead",
+          "created_at": "2026-04-07T12:48:17.565Z"
+        },
+        {
+          "id": 13,
+          "title": "get_task_image MultipleResultsFound 버그 수정",
+          "context": "라벨링 페이지 진입 시 같은 이미지가 여러 폴더에 존재하면 scalar_one_or_none()에서 MultipleResultsFound 발생",
+          "approach": "annotation.py의 get_task_image에서 scalar_one_or_none() → scalars().first()로 변경",
+          "acceptance": "같은 이미지가 여러 폴더에 있어도 라벨링 페이지 진입 시 에러 없음",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-07T13:13:57.946Z"
+        },
+        {
+          "id": 14,
+          "title": "어노테이션 API를 task_image_id 기반으로 전환",
+          "context": "현재 annotation API가 image_id(이미지 PK)로 조회하지만, 같은 이미지가 여러 폴더에 있을 수 있으므로 task_image_id(task_image PK)로 전환 필요",
+          "approach": "Backend: 라우터 URL을 task_image_id 기반으로 변경, get_task_image 서비스를 PK 조회로 단순화. Frontend: annotationsApi 호출부에서 image.id → taskImage.id로 변경",
+          "acceptance": "어노테이션 CRUD가 task_image_id 기반으로 동작. 같은 이미지가 다른 폴더에 있어도 각각 독립적 어노테이션 관리",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-07T13:15:58.727Z"
+        },
+        {
+          "id": 15,
+          "title": "P0 긴급 버그 수정: Space 키 + 저장 실패 피드백",
+          "context": "Space 키가 detection 모드에서도 classification annotation 생성(데이터 오염). 저장 실패 시 console.error만 호출(사용자 피드백 없음).",
+          "approach": "LabelingPage.tsx: (1) Space 핸들러(321행 근처)에 tool 체크 추가 — tool !== \"classification\"이면 return. (2) saveCurrentAnnotations catch 블록에서 console.error → toast.error 교체.",
+          "acceptance": "detection 모드에서 Space 키 눌러도 classification annotation 미생성. 저장 실패 시 화면에 toast 에러 표시.",
+          "risk": "없음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "lead",
+          "created_at": "2026-04-07T13:42:31.799Z"
+        },
+        {
+          "id": 16,
+          "title": "커서 정책 수정: 미선택 bbox pointer, 선택된 bbox move",
+          "context": "UnifiedBBoxTool에서 미선택 bbox 호버 시 move 커서가 이동 가능 어포던스를 거짓으로 제공",
+          "approach": "UnifiedBBoxTool.tsx 160행 onMouseEnter에서 'move' → isSelected ? 'move' : 'pointer'로 변경.",
+          "acceptance": "미선택 bbox 호버 시 pointer 커서. 선택된 bbox 호버 시 move 커서. 리사이즈 핸들은 기존 방향별 커서 유지.",
+          "risk": "없음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "lead",
+          "created_at": "2026-04-07T13:42:36.261Z"
+        },
+        {
+          "id": 17,
+          "title": "라벨 동기화: Group 레벨 드래그로 클래스명 라벨 실시간 추적",
+          "context": "bbox Rect만 draggable이라 드래그 중 라벨(클래스명)이 원래 위치에 정지. dragEnd 후에야 갱신.",
+          "approach": "UnifiedBBoxTool.tsx SelectableBBox에서 draggable을 Rect → Group으로 이동. Group 드래그 시 모든 자식(bbox Rect + 라벨 Rect + Text)이 함께 이동. onDragEnd에서 Group position을 반영. Transformer는 Rect에 연결 유지하되 onTransform에서 라벨 위치도 갱신.",
+          "acceptance": "bbox 드래그 중 클래스명 라벨이 실시간으로 따라옴. 리사이즈 중에도 라벨 위치 동기화.",
+          "risk": "Transformer가 Group이 아닌 Rect에 연결되므로 리사이즈 시 라벨 동기화 별도 처리 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T13:42:43.408Z"
+        },
+        {
+          "id": 18,
+          "title": "폴더 트리 syncSelectedPath 연동",
+          "context": "FileTreeView가 초기 마운트 시만 selectedPath 사용, 이후 변경 무시. 이미지 전환 시 폴더 트리에 현재 파일 미반영.",
+          "approach": "FileTreeView에 syncSelectedPath?: boolean prop 추가. true이면 selectedPath 변경 시 해당 경로까지 자동 펼침(auto-expand) + 해당 항목으로 스크롤. LabelingPage에서 syncSelectedPath={true}로 전달.",
+          "acceptance": "A/D/Q/E로 이미지 전환 시 우측 폴더 트리에서 현재 파일 하이라이트 반영. 다른 폴더의 파일로 이동 시 해당 폴더 자동 펼침.",
+          "risk": "FileTreeView 범용 컴포넌트 수정이므로 태스크 상세 페이지 등 다른 사용처에 영향 없는지 확인 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-07T13:42:49.876Z"
+        },
+        {
+          "id": 19,
+          "title": "단축키 도움말 task_type별 필터링",
+          "context": "KeyboardShortcutsOverlay에 taskType prop 없음. Classification 카테고리가 detection task에서도 표시.",
+          "approach": "KeyboardShortcutsOverlay에 taskType prop 추가. SHORTCUTS 카테고리에 taskTypes 필드 추가. 렌더링 시 현재 task_type에 해당하는 카테고리만 표시. LabelingPage에서 taskType={task?.task_type} 전달.",
+          "acceptance": "detection task에서 Classification 단축키 미표시. classification task에서 bbox 관련 단축키 미표시.",
+          "risk": "없음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "lead",
+          "created_at": "2026-04-07T13:42:54.492Z"
+        },
+        {
+          "id": 20,
+          "title": "좌측 패널 공간 + InspectorPanel 정보 개선",
+          "context": "패널 폭 부족, ClassPanel이 InspectorPanel 밀어냄, 인스턴스 항목 옹졸, Inspector에 불필요 타입 표시 + 정규화 좌표",
+          "approach": "LabelingPage aside w-52→w-60. ClassPanel 래퍼에 max-h-[40%] overflow-y-auto. InspectorPanel 래퍼에 overflow-y-auto. AnnotationList 항목: px-3 py-1.5 text-sm, dot h-3 w-3, 번호를 우측 정렬(justify-between). InspectorPanel: 단일 도구 task에서 타입 행 숨김(taskType prop 추가). 좌표/크기를 정규화→픽셀 단위 표시(이미지 해상도 곱연산).",
+          "acceptance": "패널 폭 240px. 클래스 많아도 InspectorPanel 항상 보임. 인스턴스 항목이 ClassPanel과 동일 크기감. 번호 우측. bbox 타입 미표시(detection). 좌표 픽셀 단위.",
+          "risk": "패널 확장 시 캔버스 32px 감소",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-07T13:43:01.159Z"
+        },
+        {
+          "id": 21,
+          "title": "이미지 로드 실패 UI + 컨텍스트 메뉴 스타일 통일",
+          "context": "이미지 로드 실패 시 빈 화면. 캔버스 컨텍스트 메뉴가 bg-neutral-800 하드코딩으로 shadcn 테마와 불일치.",
+          "approach": "LabelingCanvas에서 loadFailed 시 에러 메시지 + 재시도 버튼 표시. 캔버스 컨텍스트 메뉴의 bg-neutral-800 → bg-popover text-popover-foreground border 등 shadcn 테마 변수 적용.",
+          "acceptance": "이미지 로드 실패 시 에러 메시지 표시. 캔버스/인스턴스 컨텍스트 메뉴 시각적 일관성.",
+          "risk": "없음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 7,
+          "owner": "lead",
+          "created_at": "2026-04-07T13:43:04.748Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-07T14:33:09.166Z",
+      "branch": "feature/labeling",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "파일 트리 연동 완전 수정 — 초기 선택, A/D 동기화, 가상 렌더링",
+          "context": "라벨링 페이지 우측 폴더 트리 문제: (1) 라벨링 시작 시 첫 이미지가 트리에서 미선택 (2) A/D 이동 시 트리 순서와 불일치하거나 한 단계씩만 펼침 (3) imageId 쿼리로 진입 시 해당 파일 미선택 (4) 많은 목록에서 심한 렉 — 가상 렌더링 동작 확인 필요",
+          "approach": "FileTreeView.tsx의 syncSelectedPath 로직 재검토 및 수정. 초기 로드 시 selectedPath까지 전체 경로 auto-expand. selectedPath 변경 시 즉시 전체 경로 펼침 (한 단계가 아닌 전체). 가상 렌더링 원인 분석.",
+          "acceptance": "(1) 라벨링 시작 시 트리에 첫 이미지 선택+경로 펼침 (2) A/D로 이동 시 트리 하이라이트 즉시 동기화 (3) imageId 진입 시 해당 파일 선택+펼침 (4) 5000+ 파일에서 렉 없음",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-07T14:29:05.357Z"
+        }
+      ]
     }
   ]
 }

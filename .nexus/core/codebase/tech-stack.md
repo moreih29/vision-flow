@@ -10,6 +10,7 @@
 | Vite | 8.0.0 | 빌드/번들러 (dev :5273) |
 | Tailwind CSS | 4.2.2 | 스타일링 |
 | shadcn/ui + Base UI | - | 컴포넌트 라이브러리 |
+| Plus Jakarta Sans | Variable | 서체 (@fontsource-variable) |
 | Zustand | 5.0.12 | 클라이언트 상태 관리 |
 | TanStack React Query | 5.91.2 | 서버 상태 관리 |
 | Axios | 1.13.6 | HTTP 클라이언트 |
@@ -17,6 +18,7 @@
 | React Hook Form + Zod | 7.71.2 / 4.3.6 | 폼 + 검증 |
 | Sonner | 2.0.7 | 토스트 알림 |
 | Lucide React | 0.577.0 | 아이콘 |
+| tw-animate-css | - | Tailwind 애니메이션 유틸리티 |
 
 ## Backend
 | 기술 | 버전 | 용도 |

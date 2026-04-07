@@ -388,6 +388,174 @@
           "created_at": "2026-04-07T06:47:53.643Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-07T10:20:17.143Z",
+      "branch": "fix/merge-design-overhaul",
+      "plan": {
+        "id": 1,
+        "topic": "origin/main 머지 충돌 해결 계획",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Nexus Knowledge 파일 3개 (modify/delete) — 리모트 채택 or 로컬 유지",
+            "status": "decided",
+            "decision": "리모트 채택 (삭제). .nexus/core/로 경로 이관 완료된 상태이므로 구 경로 파일 삭제. 버전 관리 관련 지식은 머지 후 nx-sync로 새 경로에 반영."
+          },
+          {
+            "id": 2,
+            "title": "네비게이션 패턴 — PageBreadcrumb (로컬) vs ArrowLeft+Skeleton (리모트)",
+            "status": "decided",
+            "decision": "로컬 채택 (PageBreadcrumb). 경로 계층 표시, 재사용성, 확장성 우위. 로딩 상태는 \"...\" 대신 Skeleton 적용으로 개선 예정."
+          },
+          {
+            "id": 3,
+            "title": "TaskClassPanel — ClassRow 컴포넌트 추출 (로컬) vs 인라인 JSX+디자인 (리모트)",
+            "status": "decided",
+            "decision": "로컬 채택 (ClassRow 컴포넌트 추출 + onUpdateClassColor 기능 유지). ClassRow 내부 스타일에 리모트의 hover/transition 디자인 반영."
+          },
+          {
+            "id": 4,
+            "title": "VersionPanel — 새 버전 관리 로직 (로컬) vs 메뉴 디자인 변경 (리모트)",
+            "status": "decided",
+            "decision": "로컬 채택 (snapshotsWithGap, versionLabel, isHead 등 버전 관리 로직 유지). 리모트의 MoreVertical 메뉴 버튼 hover/opacity 전환 스타일만 반영."
+          },
+          {
+            "id": 5,
+            "title": "TaskDetailPage 키보드 관리 — useEffect 내부 선언 (로컬) vs useKeyboardManager 훅 (리모트)",
+            "status": "decided",
+            "decision": "리모트 채택 (useKeyboardManager 훅). 선언적 배열 구조가 구조적으로 우위. 로컬의 effectiveViewerMode/poolPanelOpen 상태를 훅 내 변수와 enabled 필드에 통합."
+          },
+          {
+            "id": 6,
+            "title": "TaskDetailPage Pool 패널 — poolPanelOpen 토글 (로컬) vs 항상 표시 (리모트)",
+            "status": "decided",
+            "decision": "로컬 채택 (poolPanelOpen 토글 조건부 렌더링). Pool 불필요 시 화면 공간 확보 가능. 리모트의 \"Data Pool\"/\"Task\" 라벨 텍스트 디자인 반영."
+          },
+          {
+            "id": 7,
+            "title": "TaskDetailPage 복원 오버레이/max-width — isRestoring UI (로컬) vs max-w-full (리모트)",
+            "status": "decided",
+            "decision": "로컬의 isRestoring 복원 오버레이 유지 (기능적 필수) + 리모트의 max-w-full 채택 (이미지 뷰어 특성상 전체 너비가 적합)."
+          },
+          {
+            "id": 8,
+            "title": "UploadProgressBar — pct 변수 (로컬) vs 제거 (리모트)",
+            "status": "decided",
+            "decision": "로컬 채택 (pct 변수 유지). 리모트에서 실수로 누락된 것 — 제거 시 런타임 크래시 발생."
+          }
+        ],
+        "research_summary": "git fetch 후 dry-run merge 수행 결과: 로컬 4커밋(feat/versioning-labeling-ux)과 리모트 5커밋(design/ux-philosophy)이 공통 조상 0a95526에서 갈라짐. 충돌 파일 9개 — nexus knowledge 3개(modify/delete), 코드 6개(content conflict). 로컬은 Git-like 버전 관리/dirty detection/stash-restore 기능 추가, 리모트는 UI/UX 디자인 오버홀(테마, 인터랙션, 브랜딩). 양쪽이 동일 컴포넌트의 UI를 동시에 수정하여 충돌 발생. TaskDetailPage가 6곳으로 가장 큰 충돌.",
+        "created_at": "2026-04-07T10:02:54.590Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "머지 실행 및 Nexus Knowledge 충돌 해결",
+          "context": "git merge origin/main 실행 후, .claude/nexus/knowledge/ 3개 파일의 modify/delete 충돌을 리모트(삭제) 쪽으로 해결",
+          "approach": "git merge origin/main → git rm으로 3개 파일 삭제하여 충돌 해결",
+          "acceptance": "3개 knowledge 파일이 삭제되고 충돌 마커 없음",
+          "risk": "낮음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:06:35.324Z"
+        },
+        {
+          "id": 2,
+          "title": "UploadProgressBar 충돌 해결",
+          "context": "pct 변수 누락 시 런타임 크래시. 로컬 채택.",
+          "approach": "로컬(HEAD) 쪽 코드 유지, 충돌 마커 제거",
+          "acceptance": "pct 변수 존재, 충돌 마커 없음, 컴파일 에러 없음",
+          "risk": "낮음",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 8,
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:06:38.183Z"
+        },
+        {
+          "id": 3,
+          "title": "ProjectDetailPage / TaskDetailHeader 네비게이션 충돌 해결",
+          "context": "두 파일 모두 PageBreadcrumb(로컬) vs ArrowLeft+Skeleton(리모트) 패턴 충돌. 로컬 PageBreadcrumb 채택 + 로딩 시 Skeleton 개선",
+          "approach": "로컬(HEAD) 쪽 PageBreadcrumb 유지, 충돌 마커 제거. 추후 Breadcrumb 내부 로딩 상태에 Skeleton 적용 검토.",
+          "acceptance": "두 파일에서 PageBreadcrumb 사용, 충돌 마커 없음",
+          "risk": "낮음",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:06:42.198Z"
+        },
+        {
+          "id": 4,
+          "title": "TaskClassPanel 충돌 해결",
+          "context": "로컬 ClassRow 컴포넌트 추출 유지 + 리모트의 hover/transition 디자인 반영",
+          "approach": "로컬(HEAD) 쪽 ClassRow props 패턴 유지, 충돌 마커 제거. ClassRow 내부 스타일에 리모트의 group-hover opacity 전환 적용.",
+          "acceptance": "ClassRow 컴포넌트 + onUpdateClassColor 기능 유지, 리모트 디자인 반영, 충돌 마커 없음",
+          "risk": "ClassRow 컴포넌트 내부 코드 확인 필요",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:06:45.734Z"
+        },
+        {
+          "id": 5,
+          "title": "VersionPanel 충돌 해결",
+          "context": "로컬의 snapshotsWithGap/versionLabel/isHead 버전 관리 로직 유지 + 리모트 MoreVertical 메뉴 hover 스타일 반영",
+          "approach": "로컬(HEAD) 쪽 버전 관리 로직 유지, 충돌 마커 제거. 메뉴 버튼 스타일에 리모트의 opacity-0 group-hover:opacity-100 transition 적용.",
+          "acceptance": "버전 관리 로직 동작, 메뉴 버튼 hover 스타일 반영, 충돌 마커 없음",
+          "risk": "낮음",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:06:49.291Z"
+        },
+        {
+          "id": 6,
+          "title": "TaskDetailPage 충돌 해결 (6곳 통합)",
+          "context": "가장 큰 충돌. 키보드 관리(리모트 useKeyboardManager 훅 채택 + effectiveViewerMode 통합), Pool 패널(로컬 poolPanelOpen 토글 + 리모트 라벨), 복원 오버레이(로컬 isRestoring 유지), max-width(리모트 max-w-full 채택)",
+          "approach": "6개 충돌 구간 순서대로 해결: (1) 키보드 변수 선언 → 리모트 컴포넌트 레벨 채택, effectiveViewerMode로 변수명 교체 (2) useKeyboardManager 배열 → 리모트 채택 (3) main max-width → max-w-full + isRestoring 오버레이 추가 (4) Pool 패널 → poolPanelOpen 조건부 렌더링 + 라벨 추가 (5) viewerMode → effectiveViewerMode 교체 (6) Task 섹션 → poolPanelOpen 조건부 스타일 유지",
+          "acceptance": "6곳 충돌 마커 모두 제거, useKeyboardManager 훅 사용, poolPanelOpen 토글 동작, isRestoring 오버레이 표시, max-w-full 적용, 컴파일 에러 없음",
+          "risk": "가장 복잡한 충돌 — 6곳 통합 시 로직 불일치 가능성. 머지 후 수동 테스트 필수.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:06:59.390Z"
+        },
+        {
+          "id": 7,
+          "title": "머지 완료 검증 — 빌드 및 타입 체크",
+          "context": "모든 충돌 해결 후 프론트엔드 빌드/타입 체크로 정합성 확인",
+          "approach": "cd frontend && npx tsc --noEmit && npm run build",
+          "acceptance": "타입 에러 0, 빌드 성공",
+          "risk": "자동 머지된 파일에서 import 누락이나 타입 불일치 가능",
+          "status": "completed",
+          "deps": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "owner": "engineer",
+          "created_at": "2026-04-07T10:07:02.265Z"
+        }
+      ]
     }
   ]
 }

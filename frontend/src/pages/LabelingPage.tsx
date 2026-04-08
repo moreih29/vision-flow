@@ -99,27 +99,32 @@ export default function LabelingPage() {
       ]);
       setTask(taskRes.data);
       setClasses(classesRes.data);
-      // 폴더 트리 순서와 일치하도록 정렬:
-      // 같은 폴더의 파일끼리 그룹 → 폴더 경로 세그먼트별 비교 → 파일명 비교
+      // 트리 DFS 순서와 일치하도록 정렬: 각 레벨에서 하위 폴더 → 파일 순
       const sorted = [...imagesRes].sort((a, b) => {
-        const segsA = a.folder_path ? a.folder_path.split("/") : [];
-        const segsB = b.folder_path ? b.folder_path.split("/") : [];
-        // 세그먼트별 비교 (트리 계층 순서 보장)
-        const minLen = Math.min(segsA.length, segsB.length);
-        for (let i = 0; i < minLen; i++) {
-          const cmp = segsA[i].localeCompare(segsB[i]);
+        const partsA = [
+          ...(a.folder_path ? a.folder_path.split("/").filter(Boolean) : []),
+          a.image.original_filename,
+        ];
+        const partsB = [
+          ...(b.folder_path ? b.folder_path.split("/").filter(Boolean) : []),
+          b.image.original_filename,
+        ];
+        const maxLen = Math.max(partsA.length, partsB.length);
+        for (let i = 0; i < maxLen; i++) {
+          const isFileA = i === partsA.length - 1;
+          const isFileB = i === partsB.length - 1;
+          if (!isFileA && isFileB) return -1;
+          if (isFileA && !isFileB) return 1;
+          const cmp = partsA[i].localeCompare(partsB[i], undefined, {
+            numeric: true,
+          });
           if (cmp !== 0) return cmp;
         }
-        // 짧은 경로(상위 폴더)의 파일이 먼저 (트리에서 파일이 하위 폴더 앞)
-        if (segsA.length !== segsB.length) return segsA.length - segsB.length;
-        // 같은 폴더 내에서 파일명 비교
-        return a.image.original_filename.localeCompare(
-          b.image.original_filename,
-        );
+        return 0;
       });
       setImages(sorted);
       if (initialImageId != null) {
-        const idx = imagesRes.findIndex((ti) => ti.image.id === initialImageId);
+        const idx = sorted.findIndex((ti) => ti.image.id === initialImageId);
         if (idx >= 0) setCurrentImageIndex(idx);
       }
     } catch {

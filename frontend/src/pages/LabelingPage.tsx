@@ -708,6 +708,10 @@ export default function LabelingPage() {
           defaultSize="18%"
           minSize="12%"
           className="flex flex-col bg-background select-none border-r"
+          onClick={(e: React.MouseEvent) => {
+            if (!(e.target as HTMLElement).closest("button"))
+              setSelectedAnnotationId(null);
+          }}
         >
           <Group orientation="vertical" className="flex-1">
             {/* 클래스 목록 */}

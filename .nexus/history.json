@@ -1012,6 +1012,49 @@
           "created_at": "2026-04-08T00:36:08.485Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-08T04:35:27.792Z",
+      "branch": "fix/labeling-nav-order-mismatch",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "어노테이션 속성 클래스 선택에서 \"미지정\" 옵션 제거",
+          "context": "InspectorPanel.tsx:93-95의 SelectItem value=\"__none__\" 제거. SelectValue placeholder(88행)도 조정.",
+          "approach": "SelectItem __none__ 제거. 클래스 미지정 상태일 때 SelectValue는 첫 번째 클래스를 기본 표시하거나, placeholder로 표시. handleClassChange에서 __none__ 분기 제거.",
+          "acceptance": "드롭다운에 (미지정) 옵션이 없음. 기존 어노테이션의 클래스 미지정 상태는 유지되되, 사용자가 새로 미지정으로 변경하는 것은 불가.",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-08T04:32:57.323Z"
+        },
+        {
+          "id": 2,
+          "title": "react-resizable-panels 설치",
+          "context": "드래그 리사이즈를 위한 라이브러리 설치. 프로젝트에 resizable 관련 라이브러리 없음.",
+          "approach": "npm install react-resizable-panels. shadcn/ui 래퍼 없이 직접 사용.",
+          "acceptance": "라이브러리 설치 완료, import 가능.",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-08T04:32:59.997Z"
+        },
+        {
+          "id": 3,
+          "title": "페이지 레이아웃 resizable panels 리팩토링 + 텍스트 변경",
+          "context": "LabelingPage.tsx의 전체 레이아웃을 react-resizable-panels로 변환. 동시에 \"라벨 클래스\" → \"클래스\" 텍스트 변경. 현재: 좌측 w-60 고정 / 중앙 flex-1 / 우측 w-56 고정. 좌측 내부: max-h-[40%] / flex-1 / max-h-[35%].",
+          "approach": "1) 가로 PanelGroup: 좌측(기본 15%) | 중앙(기본 70%) | 우측(기본 15%). 2) 좌측 내부 세로 PanelGroup: 클래스(기본 25%) | 인스턴스(기본 35%) | 속성(기본 40%). 3) 각 패널에 minSize 설정. 4) PanelResizeHandle 사이에 드래그 핸들 배치. 5) \"라벨 클래스\" → \"클래스\" 텍스트 변경. 6) 각 섹션 overflow-y-auto 유지.",
+          "acceptance": "좌측 내부 3섹션과 좌/중앙/우 패널 모두 드래그로 리사이즈 가능. 각 섹션 내용이 넘치면 스크롤. \"라벨 클래스\"가 \"클래스\"로 표시.",
+          "risk": "react-resizable-panels의 PanelGroup 중첩(가로 안에 세로) 시 레이아웃 깨짐 가능성. 우측 사이드바 조건부 렌더링(folderTreeOpen)과 PanelGroup 호환 확인 필요.",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "owner": "engineer",
+          "created_at": "2026-04-08T04:33:08.624Z"
+        }
+      ]
     }
   ]
 }

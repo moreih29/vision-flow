@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, FolderTree, Keyboard } from "lucide-react";
@@ -701,55 +702,86 @@ export default function LabelingPage() {
       </header>
 
       {/* 본문 */}
-      <div className="flex flex-1 overflow-hidden">
+      <Group orientation="horizontal" className="flex-1 overflow-hidden">
         {/* 좌측 패널 */}
-        <aside className="flex w-60 shrink-0 flex-col border-r bg-background select-none">
-          {/* 라벨 클래스 목록 */}
-          <div className="max-h-[40%] overflow-y-auto border-b p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              라벨 클래스
-            </p>
-            <ClassPanel
-              classes={classes}
-              annotations={annotations}
-              loading={loading}
-              onClassifyImage={
-                tool === "classification" ? handleClassifyImage : undefined
-              }
-            />
-          </div>
+        <Panel
+          defaultSize="18%"
+          minSize="12%"
+          className="flex flex-col bg-background select-none border-r"
+        >
+          <Group orientation="vertical" className="flex-1">
+            {/* 클래스 목록 */}
+            <Panel
+              defaultSize="38%"
+              minSize="10%"
+              className="overflow-y-auto border-b p-3"
+            >
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                클래스
+              </p>
+              <ClassPanel
+                classes={classes}
+                annotations={annotations}
+                loading={loading}
+                onClassifyImage={
+                  tool === "classification" ? handleClassifyImage : undefined
+                }
+              />
+            </Panel>
 
-          {/* 인스턴스 리스트 */}
-          <div className="flex-1 overflow-y-auto border-b py-2">
-            <p className="mb-1 px-3 text-xs font-medium text-muted-foreground">
-              인스턴스
-            </p>
-            <AnnotationList annotations={annotations} labelClasses={classes} />
-          </div>
+            <Separator className="h-1 bg-border hover:bg-primary/50 transition-colors" />
 
-          {/* 속성 / 정보 패널 */}
-          <div className="shrink-0 overflow-y-auto border-t max-h-[35%]">
-            <InspectorPanel
-              selectedAnnotationId={selectedAnnotationId}
-              annotations={annotations}
-              labelClasses={classes}
-              currentImage={currentImage}
-              taskType={task?.task_type}
-              imageSize={
-                currentImage?.image.width != null &&
-                currentImage?.image.height != null
-                  ? {
-                      width: currentImage.image.width,
-                      height: currentImage.image.height,
-                    }
-                  : undefined
-              }
-            />
-          </div>
-        </aside>
+            {/* 인스턴스 리스트 */}
+            <Panel
+              defaultSize="38%"
+              minSize="10%"
+              className="overflow-y-auto border-b py-2"
+            >
+              <p className="mb-1 px-3 text-xs font-medium text-muted-foreground">
+                인스턴스
+              </p>
+              <AnnotationList
+                annotations={annotations}
+                labelClasses={classes}
+              />
+            </Panel>
+
+            <Separator className="h-1 bg-border hover:bg-primary/50 transition-colors" />
+
+            {/* 속성 / 정보 패널 */}
+            <Panel
+              defaultSize="24%"
+              minSize="10%"
+              className="overflow-y-auto border-t"
+            >
+              <InspectorPanel
+                selectedAnnotationId={selectedAnnotationId}
+                annotations={annotations}
+                labelClasses={classes}
+                currentImage={currentImage}
+                taskType={task?.task_type}
+                imageSize={
+                  currentImage?.image.width != null &&
+                  currentImage?.image.height != null
+                    ? {
+                        width: currentImage.image.width,
+                        height: currentImage.image.height,
+                      }
+                    : undefined
+                }
+              />
+            </Panel>
+          </Group>
+        </Panel>
+
+        <Separator className="w-1 bg-border hover:bg-primary/50 transition-colors" />
 
         {/* 중앙 캔버스 영역 */}
-        <main className="relative flex-1 overflow-hidden bg-neutral-800">
+        <Panel
+          defaultSize={folderTreeOpen ? "64%" : "82%"}
+          minSize="30%"
+          className="relative overflow-hidden bg-neutral-800"
+        >
           {!loading && totalImages === 0 ? (
             <div className="flex h-full items-center justify-center">
               <div className="flex flex-col items-center gap-2 text-neutral-400">
@@ -770,25 +802,32 @@ export default function LabelingPage() {
               <FloatingToolbar taskType={task?.task_type ?? null} />
             </>
           )}
-        </main>
+        </Panel>
 
         {/* 우측 폴더 트리 패널 */}
         {folderTreeOpen && (
-          <aside className="flex w-56 shrink-0 flex-col border-l bg-background select-none overflow-hidden">
-            <FileTreeView
-              fetchFolderContents={fetchFolderContents}
-              fetchAllFolders={fetchAllFolders}
-              rootLabel="전체"
-              rootCount={totalImages}
-              selectedPath={currentFilePath ?? currentFolderPath ?? ""}
-              syncSelectedPath
-              readOnly
-              onSelectPath={handleFolderSelect}
-              onFileClick={handleFileClick}
-            />
-          </aside>
+          <>
+            <Separator className="w-1 bg-border hover:bg-primary/50 transition-colors" />
+            <Panel
+              defaultSize="18%"
+              minSize="12%"
+              className="flex flex-col border-l bg-background select-none overflow-hidden"
+            >
+              <FileTreeView
+                fetchFolderContents={fetchFolderContents}
+                fetchAllFolders={fetchAllFolders}
+                rootLabel="전체"
+                rootCount={totalImages}
+                selectedPath={currentFilePath ?? currentFolderPath ?? ""}
+                syncSelectedPath
+                readOnly
+                onSelectPath={handleFolderSelect}
+                onFileClick={handleFileClick}
+              />
+            </Panel>
+          </>
         )}
-      </div>
+      </Group>
     </div>
   );
 }

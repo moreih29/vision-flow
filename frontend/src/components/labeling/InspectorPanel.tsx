@@ -90,9 +90,6 @@ export default function InspectorPanel({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">
-                  <span className="text-muted-foreground">(미지정)</span>
-                </SelectItem>
                 {labelClasses.map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>
                     <span className="flex items-center gap-1.5">

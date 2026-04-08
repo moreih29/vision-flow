@@ -958,6 +958,103 @@
           "created_at": "2026-04-07T14:29:05.357Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-08T00:38:27.801Z",
+      "branch": "fix/labeling-nav-order-mismatch",
+      "plan": {
+        "id": 4,
+        "topic": "라벨링 페이지: 파일 트리 순서 vs A/D 네비게이션 순서 불일치",
+        "issues": [
+          {
+            "id": 1,
+            "title": "트리 시각적 순서와 A/D 순회 순서의 구조적 불일치 (folders-first vs depth-first)",
+            "status": "decided",
+            "decision": "B: A/D 네비게이션 순서를 트리 시각적 순서(폴더-먼저 DFS)에 맞춤. 트리 sortNodes는 유지, LabelingPage의 images 정렬 함수를 트리 DFS 순서로 재구현. initialImageId 인덱스 버그(unsorted→sorted 배열 불일치)도 함께 단순 수정."
+          },
+          {
+            "id": 2,
+            "title": "숫자 정렬 옵션 불일치 (numeric: true vs plain localeCompare)",
+            "status": "decided",
+            "decision": "A: A/D 정렬의 localeCompare에 { numeric: true } 옵션 추가. 트리(FileTreeView)와 동일 방식 통일. 안건 1의 DFS 정렬 재구현 시 함께 적용."
+          }
+        ],
+        "research_summary": "## 리서치 요약\n\n### 두 개의 독립적인 정렬 시스템 존재\n\n**A/D 네비게이션 순서** (LabelingPage.tsx:104-119):\n- `images` 배열을 flat하게 정렬한 뒤 인덱스 ±1로 이동\n- 정렬: 폴더 경로 세그먼트별 localeCompare → 짧은 경로 우선 → 같은 폴더 내 파일명 localeCompare\n- `{ numeric: true }` 옵션 미사용\n\n**파일 트리 표시 순서** (FileTreeView.tsx:52-60):\n- `sortNodes()` 함수: 각 레벨에서 폴더를 먼저, 파일을 나중에 배치\n- 폴더/파일 각각 `localeCompare(b, undefined, { numeric: true })` 사용\n\n### 발견된 불일치 2가지\n\n**1. 구조적 순서 차이**\n예시 구조: `folder1/a.jpg, folder1/b.jpg, folder2/c.jpg, x.jpg, y.jpg`\n- 트리 시각 순서 (위→아래): `folder1/a.jpg → folder1/b.jpg → folder2/c.jpg → x.jpg → y.jpg`\n- A/D 순서: `x.jpg → y.jpg → folder1/a.jpg → folder1/b.jpg → folder2/c.jpg`\n- 원인: 트리는 각 레벨에서 \"폴더 먼저, 파일 나중\" (depth-first), A/D는 \"짧은 경로 먼저\" (루트 파일이 모든 폴더 파일보다 앞)\n\n**2. 숫자 정렬 차이**\n- 트리: `{ numeric: true }` → \"file2\" < \"file10\" (자연 정렬)\n- A/D: plain localeCompare → \"file10\" < \"file2\" (사전식)\n\n### 코드 주석의 의도\nLabelingPage.tsx:102에 \"폴더 트리 순서와 일치하도록 정렬\"이라는 주석이 있으나, 실제 구현은 트리 순서와 일치하지 않음.\n\n### 백엔드 정렬\n- 폴더 API: Python natsort (자연 정렬)\n- 트리 컴포넌트: localeCompare + numeric (유사하지만 동일하지 않음)\n- A/D 정렬: plain localeCompare (둘 다와 다름)",
+        "created_at": "2026-04-08T00:29:49.494Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "LabelingPage images 정렬 함수를 트리 DFS 순서로 재구현",
+          "context": "LabelingPage.tsx:104-119의 sort 함수가 트리 순서와 불일치. 현재: 짧은 경로 우선 + plain localeCompare. 목표: 폴더-먼저 DFS + numeric localeCompare.",
+          "approach": "LabelingPage.tsx fetchAll()의 sort 함수를 트리 DFS 순회 순서로 재작성. 각 폴더 레벨에서 하위 폴더 이미지가 같은 레벨 파일보다 먼저 오도록 구현. 모든 localeCompare에 { numeric: true } 옵션 적용 (안건2 동시 해결).",
+          "acceptance": "트리에서 위→아래로 보이는 파일 순서와 A/D로 순회하는 순서가 완전히 일치. 숫자 포함 파일명(img1, img2, img10)이 자연 정렬됨.",
+          "risk": "트리의 sortNodes는 각 레벨별로 동작하지만 flat 배열 정렬은 전체를 한번에 처리해야 하므로 로직이 다소 복잡해질 수 있음.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "lead",
+          "created_at": "2026-04-08T00:36:06.119Z"
+        },
+        {
+          "id": 2,
+          "title": "initialImageId 인덱스 버그 수정",
+          "context": "LabelingPage.tsx:122에서 imagesRes(정렬 전 배열)의 인덱스를 sorted 배열의 인덱스로 사용하는 버그.",
+          "approach": "imagesRes.findIndex를 sorted.findIndex로 변경. 한 줄 수정.",
+          "acceptance": "initialImageId로 진입 시 정확한 이미지가 표시됨.",
+          "risk": "없음.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "lead",
+          "created_at": "2026-04-08T00:36:08.485Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-08T04:35:27.792Z",
+      "branch": "fix/labeling-nav-order-mismatch",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "어노테이션 속성 클래스 선택에서 \"미지정\" 옵션 제거",
+          "context": "InspectorPanel.tsx:93-95의 SelectItem value=\"__none__\" 제거. SelectValue placeholder(88행)도 조정.",
+          "approach": "SelectItem __none__ 제거. 클래스 미지정 상태일 때 SelectValue는 첫 번째 클래스를 기본 표시하거나, placeholder로 표시. handleClassChange에서 __none__ 분기 제거.",
+          "acceptance": "드롭다운에 (미지정) 옵션이 없음. 기존 어노테이션의 클래스 미지정 상태는 유지되되, 사용자가 새로 미지정으로 변경하는 것은 불가.",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-08T04:32:57.323Z"
+        },
+        {
+          "id": 2,
+          "title": "react-resizable-panels 설치",
+          "context": "드래그 리사이즈를 위한 라이브러리 설치. 프로젝트에 resizable 관련 라이브러리 없음.",
+          "approach": "npm install react-resizable-panels. shadcn/ui 래퍼 없이 직접 사용.",
+          "acceptance": "라이브러리 설치 완료, import 가능.",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-08T04:32:59.997Z"
+        },
+        {
+          "id": 3,
+          "title": "페이지 레이아웃 resizable panels 리팩토링 + 텍스트 변경",
+          "context": "LabelingPage.tsx의 전체 레이아웃을 react-resizable-panels로 변환. 동시에 \"라벨 클래스\" → \"클래스\" 텍스트 변경. 현재: 좌측 w-60 고정 / 중앙 flex-1 / 우측 w-56 고정. 좌측 내부: max-h-[40%] / flex-1 / max-h-[35%].",
+          "approach": "1) 가로 PanelGroup: 좌측(기본 15%) | 중앙(기본 70%) | 우측(기본 15%). 2) 좌측 내부 세로 PanelGroup: 클래스(기본 25%) | 인스턴스(기본 35%) | 속성(기본 40%). 3) 각 패널에 minSize 설정. 4) PanelResizeHandle 사이에 드래그 핸들 배치. 5) \"라벨 클래스\" → \"클래스\" 텍스트 변경. 6) 각 섹션 overflow-y-auto 유지.",
+          "acceptance": "좌측 내부 3섹션과 좌/중앙/우 패널 모두 드래그로 리사이즈 가능. 각 섹션 내용이 넘치면 스크롤. \"라벨 클래스\"가 \"클래스\"로 표시.",
+          "risk": "react-resizable-panels의 PanelGroup 중첩(가로 안에 세로) 시 레이아웃 깨짐 가능성. 우측 사이드바 조건부 렌더링(folderTreeOpen)과 PanelGroup 호환 확인 필요.",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "owner": "engineer",
+          "created_at": "2026-04-08T04:33:08.624Z"
+        }
+      ]
     }
   ]
 }

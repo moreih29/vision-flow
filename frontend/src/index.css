@@ -44,6 +44,14 @@
   --warning-foreground: oklch(0.205 0 0);
   --info: oklch(0.65 0.15 240);
   --info-foreground: oklch(0.985 0 0);
+  --dirty: oklch(0.72 0.16 75);
+  --dirty-foreground: oklch(0.205 0 0);
+  --dirty-subtle: oklch(0.88 0.04 290);
+  --dirty-subtle-foreground: oklch(0.35 0.04 290);
+  --canvas-bg: oklch(0.28 0 0);
+  --canvas-foreground: oklch(0.92 0 0);
+  --reviewed: oklch(0.6 0.18 145);
+  --reviewed-foreground: oklch(0.985 0 0);
 }
 
 .dark {
@@ -84,6 +92,14 @@
   --warning-foreground: oklch(0.145 0 0);
   --info: oklch(0.7 0.15 240);
   --info-foreground: oklch(0.145 0 0);
+  --dirty: oklch(0.78 0.17 75);
+  --dirty-foreground: oklch(0.145 0 0);
+  --dirty-subtle: oklch(0.32 0.04 290);
+  --dirty-subtle-foreground: oklch(0.82 0.04 290);
+  --canvas-bg: oklch(0.14 0 0);
+  --canvas-foreground: oklch(0.92 0 0);
+  --reviewed: oklch(0.65 0.18 145);
+  --reviewed-foreground: oklch(0.145 0 0);
 }
 
 @theme inline {
@@ -125,6 +141,14 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-dirty: var(--dirty);
+  --color-dirty-foreground: var(--dirty-foreground);
+  --color-dirty-subtle: var(--dirty-subtle);
+  --color-dirty-subtle-foreground: var(--dirty-subtle-foreground);
+  --color-canvas-bg: var(--canvas-bg);
+  --color-canvas-foreground: var(--canvas-foreground);
+  --color-reviewed: var(--reviewed);
+  --color-reviewed-foreground: var(--reviewed-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -171,4 +195,35 @@
 }
 .dark ::-webkit-scrollbar-thumb:hover {
   background: oklch(0.7 0 0 / 45%);
+}
+
+/* Typography roles */
+@layer utilities {
+  .text-title {
+    @apply text-base font-semibold;
+  }
+  .text-body {
+    @apply text-sm;
+  }
+  .text-caption {
+    @apply text-xs text-muted-foreground;
+  }
+  .text-code {
+    @apply text-xs font-mono;
+  }
+}
+
+/* 키 pulse 애니메이션 (Fast feedback 원칙) */
+@keyframes pulse-key {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+}
+.animate-pulse-key {
+  animation: pulse-key 200ms ease-in-out;
 }

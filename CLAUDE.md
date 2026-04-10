@@ -11,4 +11,5 @@
 - Python 품질 툴: Ruff (린트) + Pyrefly (타입 체크, mypy 아님), 라인 길이 120
 - 개발 실행: `cd docker && docker compose -f docker-compose.dev.yml up -d` → backend 8100 (uvicorn), frontend 5273 (vite), ai-worker celery
 - 핵심 도메인: Task 단위 이미지 라벨링 → Git-like 스냅샷 버전 관리 (major.minor, 3-hash dirty detection, stash/restore) → 학습/추론
+- Frontend 색상: semantic token만 사용 (`bg-blue-100` 등 유틸 직접 사용 금지)
 <!-- PROJECT:END -->

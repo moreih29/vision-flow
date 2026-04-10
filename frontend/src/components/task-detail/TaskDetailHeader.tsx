@@ -1,19 +1,12 @@
 import { AlertTriangle, ArrowRight, Database, Images } from "lucide-react";
 import { useParams } from "react-router-dom";
-import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageBreadcrumb } from "@/components/layout";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useProject } from "@/hooks/use-projects";
 import { useVersionStatus, useRestoreSnapshot } from "@/hooks/use-snapshots";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { VersionPanel } from "./VersionPanel";
 import { ClassManagePopover } from "./ClassManagePopover";
 import type { Task } from "@/types/task";
 import type { ChangeCounts } from "@/types/snapshot";
@@ -40,6 +33,10 @@ interface TaskDetailHeaderProps {
   onLabelingClick?: () => void;
   onRestoreSuccess?: () => void;
   isRestoring?: boolean;
+  /** 우측 버전 rail 열림 상태 */
+  versionRailOpen?: boolean;
+  /** 우측 버전 rail 토글 */
+  onToggleVersionRail?: () => void;
 }
 
 export function TaskDetailHeader({
@@ -50,17 +47,18 @@ export function TaskDetailHeader({
   onLabelingClick,
   onRestoreSuccess,
   isRestoring = false,
+  versionRailOpen = false,
+  onToggleVersionRail,
 }: TaskDetailHeaderProps) {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
   const projectId = Number(id);
   const taskIdNum = Number(taskId);
 
   const { data: project, isLoading: projectLoading } = useProject(projectId);
-  const { data: versionStatus } = useVersionStatus(taskIdNum);
+  const { data: versionStatus, isLoading: versionLoading } =
+    useVersionStatus(taskIdNum);
   const restoreMutation = useRestoreSnapshot(taskIdNum);
   const { confirmDialog, confirm } = useConfirmDialog();
-
-  const [versionPopoverOpen, setVersionPopoverOpen] = useState(false);
 
   const hasImages = (task?.image_count ?? 0) > 0;
   const isDirty = versionStatus?.is_dirty ?? false;
@@ -120,41 +118,33 @@ export function TaskDetailHeader({
                   {task.image_count}개
                 </span>
                 <ClassManagePopover taskId={taskIdNum} disabled={isRestoring} />
-                {/* 버전 Popover */}
-                <Popover
-                  open={versionPopoverOpen}
-                  onOpenChange={setVersionPopoverOpen}
+                {/* 버전 pill — 클릭 시 우측 rail 토글 */}
+                <button
+                  type="button"
+                  disabled={isRestoring}
+                  onClick={onToggleVersionRail}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer ${
+                    versionRailOpen
+                      ? "border-primary bg-primary/10 text-primary"
+                      : isDirty
+                        ? "border-amber-400 text-amber-600 dark:border-amber-500 dark:text-amber-400"
+                        : "border-border text-muted-foreground hover:bg-accent"
+                  }${isRestoring ? " pointer-events-none opacity-50" : ""}`}
+                  title="버전 관리 (V)"
                 >
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={isRestoring}
-                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer ${
-                        isDirty
-                          ? "border-amber-400 text-amber-600 dark:border-amber-500 dark:text-amber-400"
-                          : "border-border text-muted-foreground hover:bg-accent"
-                      }${isRestoring ? " pointer-events-none opacity-50" : ""}`}
-                      title="버전 관리"
-                    >
-                      {currentVersion
-                        ? isDirty
-                          ? `${currentVersion}*`
-                          : currentVersion
-                        : "버전"}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[360px] p-3 max-h-[50vh] overflow-y-auto"
-                    align="start"
-                    side="bottom"
-                    sideOffset={4}
-                  >
-                    <VersionPanel
-                      taskId={taskIdNum}
-                      onRestoreSuccess={onRestoreSuccess}
-                    />
-                  </PopoverContent>
-                </Popover>
+                  {versionLoading ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse" />
+                  ) : isDirty ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  )}
+                  {currentVersion
+                    ? isDirty
+                      ? `${currentVersion}*`
+                      : currentVersion
+                    : "버전"}
+                </button>
               </div>
             </div>
           )}
@@ -192,25 +182,25 @@ export function TaskDetailHeader({
       </div>
 
       {isDirty && (
-        <div className="border-b bg-amber-50 dark:bg-amber-950/30">
+        <div className="border-b bg-[var(--dirty-subtle)] dark:bg-[var(--dirty-subtle)]">
           <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span className="flex-1 text-sm text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--dirty-subtle-foreground)]" />
+            <span className="flex-1 text-sm text-[var(--dirty-subtle-foreground)]">
               {buildDirtySummary(versionStatus?.counts)}
             </span>
             <button
               type="button"
               disabled={isRestoring}
-              className="h-auto p-0 text-sm text-amber-700 underline dark:text-amber-300 hover:no-underline disabled:pointer-events-none disabled:opacity-50"
-              onClick={() => setVersionPopoverOpen(true)}
+              className="h-auto p-0 text-sm text-[var(--dirty-subtle-foreground)] underline hover:no-underline disabled:pointer-events-none disabled:opacity-50"
+              onClick={onToggleVersionRail}
             >
-              버전 생성
+              버전 확정
             </button>
             {versionStatus?.current_snapshot_id && (
               <button
                 type="button"
                 disabled={isRestoring}
-                className="h-auto p-0 text-sm text-amber-700/70 underline dark:text-amber-300/70 hover:no-underline disabled:pointer-events-none disabled:opacity-50"
+                className="h-auto p-0 text-sm text-[var(--dirty-subtle-foreground)]/70 underline hover:no-underline disabled:pointer-events-none disabled:opacity-50"
                 onClick={handleDiscardChanges}
               >
                 변경사항 버리기

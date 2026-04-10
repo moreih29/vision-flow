@@ -243,17 +243,17 @@ export default function LabelingCanvas({
     <div ref={containerRef} className="relative h-full w-full">
       {imageLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-canvas-foreground/70" />
         </div>
       )}
 
       {loadFailed === imageUrl && imageUrl && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-canvas-foreground/70">
             이미지를 불러올 수 없습니다
           </p>
           <button
-            className="rounded-md border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition-colors"
+            className="rounded-md border border-canvas-foreground/20 px-3 py-1.5 text-xs text-canvas-foreground hover:bg-canvas-bg transition-colors"
             onClick={() => {
               setLoadFailed(null);
               setLoadedImage(null);
@@ -345,7 +345,7 @@ export default function LabelingCanvas({
           {/* 클래스 변경 */}
           <div className="group relative">
             <button
-              className="flex w-full items-center justify-between px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-700"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-sm text-canvas-foreground hover:bg-canvas-bg"
               onPointerEnter={() =>
                 setContextMenu((prev) =>
                   prev ? { ...prev, submenuOpen: true } : prev,
@@ -353,7 +353,7 @@ export default function LabelingCanvas({
               }
             >
               <span>클래스 변경</span>
-              <span className="ml-4 text-neutral-400">&#9658;</span>
+              <span className="ml-4 text-canvas-foreground/70">&#9658;</span>
             </button>
             {contextMenu.submenuOpen && (
               <div
@@ -367,7 +367,7 @@ export default function LabelingCanvas({
                 {labelClasses.map((cls) => (
                   <button
                     key={cls.id}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-700"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-canvas-foreground hover:bg-canvas-bg"
                     onClick={() => handleChangeClass(cls.id)}
                   >
                     <span
@@ -378,7 +378,7 @@ export default function LabelingCanvas({
                   </button>
                 ))}
                 {labelClasses.length === 0 && (
-                  <span className="block px-3 py-1.5 text-sm text-neutral-500">
+                  <span className="block px-3 py-1.5 text-sm text-canvas-foreground/50">
                     클래스 없음
                   </span>
                 )}
@@ -386,11 +386,11 @@ export default function LabelingCanvas({
             )}
           </div>
 
-          <div className="my-1 border-t border-neutral-700" />
+          <div className="my-1 border-t border-canvas-foreground/20" />
 
           {/* 삭제 */}
           <button
-            className="flex w-full items-center px-3 py-1.5 text-sm text-red-400 hover:bg-neutral-700"
+            className="flex w-full items-center px-3 py-1.5 text-sm text-red-400 hover:bg-canvas-bg"
             onClick={handleDeleteFromMenu}
           >
             삭제

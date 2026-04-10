@@ -1055,6 +1055,218 @@
           "created_at": "2026-04-08T04:33:08.624Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-10T05:43:30.305Z",
+      "branch": "docs/design-philosophy",
+      "plan": {
+        "id": 4,
+        "topic": "Vision Flow UI/UX 디자인 철학 수립",
+        "issues": [
+          {
+            "id": 1,
+            "title": "디자인 북극성: 타겟 사용자·포지셔닝·핵심 원칙 수립",
+            "status": "decided",
+            "decision": "Option B 채택 — Git-first Labeling Platform. 북극성 선언: \"Vision Flow는 데이터셋을 코드처럼 진지하게 다루는 Vision AI 팀을 위한, 라벨링·버전 관리·학습 파이프라인이 한 몸인 플랫폼이다.\" 5개 핵심 원칙: (1) Keyboard first, (2) Version in sight, (3) Fast feedback, (4) One state, one look, (5) Collaboration is asynchronous (Git 스타일 비동기 분할-병합). 2개 Anti-원칙: 비전문가 온보딩 추구 안 함, 실시간 동시 편집 인터페이스에 베팅 안 함 (다인 비동기 협업은 1급 시민). 이유: Designer와 Strategist가 독립 수렴, Git-like 자산이 \"기능이 아니라 의견\" 수준의 설계 품질, 현 코드베이스가 이미 UI 비중 2(강력한 조연) 방향에 근접하여 남은 작업이 재설계가 아닌 정합화.",
+            "how_agents": [
+              "designer",
+              "strategist"
+            ],
+            "how_summary": {
+              "designer": "18+ 키바인딩, VersionPanel commit graph 은유, v1.3* 별표 dirty 표기 등 Git-first DNA가 이미 코드에 박혀 있음을 확인. 페르소나 2명(선우=하루 수백장 라벨러, 지원=버전 리드)과 6개 원칙 후보 제시. 불일관의 주원인은 의견 부재이지 기술 부채가 아님. Keyboard+Version in sight+Fast feedback+One state를 핵심 압축 권고.",
+              "strategist": "class_schema_hash=major 같은 구현 세부가 '기능이 아니라 의견' — 포지셔닝으로 번역할 자격이 있음. 라벨링+내장 버전 관리 시장 공백 확인 (DVC는 라벨링 없음, CVAT는 버전 의미론 없음). Option B(Git-first) + UI 비중 2(강력한 조연) + α 시작/β 대기 단일 추천. 함정: 파이프라인 과약속(사용자 명확화로 소거), Git 메타포 과노출, 한국어를 주어로 삼기."
+            }
+          },
+          {
+            "id": 2,
+            "title": "버전 관리 UX의 추상화 수준: 노출 ↔ 시각화 ↔ 은폐",
+            "status": "decided",
+            "decision": "경로 2 + Option B 채택 — Semantic Visualization (Git 시각 은유 + 한국어 의미 용어). 단 **미래 백엔드 상태(불변 스냅샷)를 전제**하고 설계하며, 백엔드 수정(2.9 해시 재계산 제거, 2.1 partial restore 정책, 2.2 LabelClass id 유지, 2.5 advisory lock)은 **본 plan에서 분리하여 별도 [plan] 세션**에서 다룬다.\n\n[용어 치환 규칙]\n- HEAD → \"현재\" 배지 + dot\n- snapshot/commit 동사 → \"버전 확정\"으로 통일 (TaskDetailHeader:207 \"버전 생성\" 수정)\n- stash → \"임시 저장\" 유지\n- dirty → `v1.3*` 별표 + tooltip\n- major/minor → 노출 + \"클래스 스키마 변경 시 major 증가\" 설명 tooltip\n- hash → 완전 은폐 (debug drawer only)\n- restore → \"되돌아가기\"(동사) / \"복원\"(명사)\n- 🚫 현 시점 도입 금지: hash, commit(명사), merge, branch (백엔드 불변성 확보 후 재검토 가능)\n\n[시각 축] B1 commit graph 방향 유지 + \"Compact commit lane\"으로 정련. major 경계 gap 명시화, restored_from 엣지 시각화, popover 확장 아이콘 추가.\n\n[액션 축]\n- ✅ diff: **지금 분기** — SnapshotDiff 타입 반 준비됨. Restore 다이얼로그에 영향 미리보기(diff 기반) 포함.\n- ⏳ branch/merge: 다음 분기 (Collaboration is asynchronous 원칙 완성 시)\n- 🚫 cherry-pick/rebase/squash: 제외\n\n[에지 케이스 UX] 2.8 stash 덮어쓰기 경고, 2.10 HEAD 삭제 뉘앙스 정정, 2.7 로딩 3-상태 처리. 2.1/2.9는 백엔드 수정 후 사라질 예정이므로 임시 처리만.\n\n[북극성 한 줄 — 3용도]\n- 내부 표어: \"Git 옆 사람도 읽을 수 있는 Git\"\n- 문서 카피: \"Git처럼 믿을 수 있고, Git보다 읽기 쉬운 버전 관리\"\n- 판단 기준: \"라벨링 중인 사람의 눈으로, 버전 관리하는 사람의 확신으로\"\n\n[파생] 백엔드 수정 4건은 별도 [plan] 세션으로 예약. 본 plan의 철학 문서(.nexus/context/)가 그 세션의 입력이 됨.\n\n[핵심 재프레임] Lead의 이전 단순화 \"A는 기술적으로 불가능\"은 부정확했음. 정확히는 \"현 백엔드에서는 A가 거짓말이 된다\". 사용자 질문으로 드러난 진실: 7개 누수 중 6개는 구현/UI 부실, 단 하나(2.9 해시 재계산)만 구조적 결함 — 그것도 2.1(이미지 참조 모델)의 대증요법. 경로 2 선택으로 이 결함을 제거하면 A도 기술적으로 가능하지만, **페르소나 우선순위(선우 우선)**를 이유로 B를 유지.",
+            "how_agents": [
+              "designer",
+              "architect"
+            ],
+            "how_summary": {
+              "designer": "용어 치환표 제안 (HEAD→현재, 버전 생성→확정 통일, hash 은폐), 시각축 B1 유지 + Compact commit lane 정련, diff 우선순위 '지금', 마이너 UX 레드플래그(stash amber 색상, 다이얼로그 버튼 위치, v1.3* vs HEAD 배지 중복) 발견, 한 줄 북극성 후보 3개",
+              "architect": "7개 누수 지점 구체 식별 (2.1~2.10), 2.9만이 구조적 결함이며 나머지는 구현/UI 부실. 현 코드는 '시각화 수준'에 가장 부합. Git 용어 선별 금지 리스트(hash/commit/merge/branch) + 백엔드 부채 목록 4건 도출. 'Version in sight' 원칙과 에지 케이스 조화 규칙 제안."
+            }
+          },
+          {
+            "id": 3,
+            "title": "작업 공간 모델: 파이프라인 관리와 라벨링의 UI 분리 & 정보 밀도",
+            "status": "decided",
+            "decision": "[모드 모델] 단일 우주 + 캔버스 영역만 예외. \"탐색 모드 vs 집중 모드\" 이분법 용어 사용 금지, \"작업 밀도 축\"으로 이야기.\n\n[Layout primitive 3개] AppLayout(nav 유지) → BrowseLayout(Projects) / DetailLayout(ProjectDetail, DataPool, TaskDetail — 좌 rail + 중앙 main) / WorkspaceLayout(Labeling — 전체폭 + resizable panels + tone=\"dark\" 슬롯 허용). 각 layout이 max-width와 padding을 강제 → 현 축 엇갈림 버그(TaskDetailHeader:100/166/196의 max-w-7xl vs TaskDetailPage:1334의 w-full max-w-full)가 구조적으로 차단됨.\n\n[정보 밀도] 탐색 3페이지 py-6 통일 (현 py-4/py-8 난립 해소). LabelingPage 우측 FileTree 기본 접힘 + InspectorPanel 기본 접힘 (localStorage로 사용자별 복원).\n\n[전환 감각] 캔버스 배경만 어두워짐(CSS var --canvas-bg로 격리), chrome(header·sidebar·sub-bars)은 사용자 테마 일관. 순간이동 아닌 \"조명 변화\". bg-neutral-* 하드코딩(LabelingPage:787, FilmStrip:45, LabelingCanvas:256/348/370/393) 전부 제거 대상.\n\n[TaskDetailPage 재설계] \"Right Version Rail\" 방향 채택 — VersionPanel을 Popover에서 우측 고정 rail로 이동, metaBar에 version pill 상시 표시. Issue #2의 \"Version in sight\" 원칙의 공간 구현. V 키로 toggle (Keyboard first와 연결). 라우트 분리(/tasks/:taskId, /pool, /label)는 tasks.json에서 scope 결정.\n\n[Collaboration 공간 표현] **철학만 선언**: \"할당은 공간 언어로 표현한다 — 실시간 presence 없이 비동기 분할/병합/blame이 공간에 드러난다\". 아이디어 후보: 영역 색 코딩, 진입 배너, blame 아바타, 영역 토글. 구현(assignment 모델 스키마 + UI 구체화)은 **별도 [plan] 세션**으로 분리.\n\n[WorkspaceLayout tone=\"dark\" 슬롯] 허용. \"One state, one look\"의 타협 지점 — 캔버스 픽셀 작업의 기능적 정당성(이미지 대비, 시선 피로) + CSS variable 격리로 하드코딩 아닌 규약화.\n\n[북극성 한 줄]\n- 선언문: \"같은 chrome 위에 세 개의 작업 밀도 — 훑기, 정하기, 몰입하기\"\n- 리뷰 체크: \"이건 chrome이야 canvas야?\"\n\n[파생 plan 예약] 본 plan에서 분리되어 별도 [plan] 세션으로 갈 항목이 2개:\n1. Issue #2 파생: 백엔드 불변 스냅샷 수정 (해시 재계산 제거, partial restore 정책, LabelClass id 유지, advisory lock)\n2. Issue #3 파생: Collaboration 공간 표현 구현 (assignment 모델 스키마 + 영역 색 코딩/blame/진입 배너 UI)",
+            "how_agents": [
+              "designer"
+            ],
+            "how_summary": {
+              "designer": "현 5개 페이지의 layout 계약 제각각 실측(TaskDetailHeader max-w-7xl vs main w-full 축 엇갈림 버그 발견), 'Browse/Detail/Workspace' 3-layer primitive 구조 제안 (pseudo-code 수준), LabelingPage 우측 트리 기본 접힘 + bg-neutral-* 하드코딩 제거 권고, 'Right Version Rail' 로 TaskDetailPage 재설계 판정, Collaboration 아이디어 4개(영역 색 코딩 최우선), 북극성 3후보 + 추천(선언문+리뷰 체크 계층적 사용)."
+            }
+          },
+          {
+            "id": 4,
+            "title": "상호작용 우선순위: 키보드/마우스 균형과 단축키 발견성 전략",
+            "status": "decided",
+            "decision": "Option B 채택 — Inline Hint + Drawer Cheatsheet.\n\n[힌트 노출 방식] 모든 interactive element 옆에 mini `<Kbd>` 힌트 항상 표시 (1-2자 mono). 키보드 내비 사용자(선우)도 발견 가능하게.\n\n[Cheatsheet 형태] `KeyboardShortcutsOverlay`를 Dialog → **우하단 Drawer (shadcn Sheet)**로 리팩터. `?` 키 토글. 캔버스를 덮지 않아 라벨링 리듬 유지. Drawer 열림 시 검색 input 자동 포커스, Esc 닫힘.\n\n[부속 결정]\n1. `<Kbd>` 컴포넌트 신설 (`components/ui/kbd.tsx`) — shadcn 스타일, mono font, CSS var 색상\n2. 힌트 범위: 단축키 매핑된 element만 (규약: \"단축키 있으면 반드시 `<Kbd>` 표시\")\n3. 카테고리 3-tier: 글로벌(`?` `Ctrl+S` `V` `T`) / 페이지별(QWEASD, AD, 1-9 라벨링 전용) / 컨텍스트(선택된 annotation: Delete, Enter)\n4. 커스터마이징: **제공 안 함** — 내부 팀, 공통 근육이 더 가치\n5. 마우스/터치 온리 사용자: **2등 시민 선언** (Anti \"비전문가 온보딩 X\"와 일관)\n6. 피드백 모션: 키 눌림 시 버튼 **짧은 pulse** (200ms CSS @keyframes). framer-motion 의존성 도입 회피\n\n[북극성 한 줄]\n- 선언: \"키보드는 눈에 보여야 배울 수 있다 — 단축키는 UI의 chrome에 각인된다\"\n- 리뷰 체크: \"이 interactive element가 단축키를 가지고 있다면 그 힌트가 옆에 보이는가?\"\n\n[파생 task 예약] `<Kbd>` 컴포넌트 신설, KeyboardShortcutsOverlay Dialog → Sheet 리팩터, FloatingToolbar/ImageNavigator/ClassPanel/VersionPanel 등에 힌트 일괄 추가, 키 pulse CSS 유틸, 단축키 카테고리 타입 정의."
+          },
+          {
+            "id": 5,
+            "title": "디자인 토큰 & 시스템 강도: 색상/타이포/간격/모션 규약화 수준",
+            "status": "decided",
+            "decision": "Option B 채택 — Strict Tokens + Semi-strict Migration.\n\n[토큰 체계]\nSemantic token 확장: --dirty (warning 계열), --dirty-subtle (stash 배너 안도 톤), --canvas-bg (LabelingCanvas 전용 dark), --reviewed (리뷰 완료), --assigned-me (Collaboration 예정). 유틸 색상(bg-blue-100, text-amber-600 등) 직접 사용 금지 → semantic 토큰만 사용. Tailwind @theme에 bg-dirty, text-dirty-foreground 등 유틸로 노출.\n\n[Scale 통일]\n- Spacing: 1/2/3/4/6/8 (4/8/12/16/24/32px) 허용. 0.5/1.5는 특수 컴포넌트 내부만\n- Rounded: 3단계 (sm/md/full) — md/lg/xl/2xl 난립 제거\n- Icon: 3단계 (h-3.5/h-4/h-5)\n- Shadow: 3단계 (sm/md/lg)\n\n[Typography role] 4개 semantic class: text-title/text-body/text-caption/text-code. domain 코드에서 role 우선, primitive(text-xs/sm/base) 보조.\n\n[Loading 통일] Skeleton(shape 있는 콘텐츠) + inline shimmer(짧은 액션) 2종. Loader2 border-spinner는 풀스크린 초기만.\n\n[상태 표현] 공용 컴포넌트: <StatusBadge state=\"dirty|reviewed|labeling|draft\"> / <SelectionRing>. domain에서 색상 직접 조립 금지.\n\n[모션 정책] CSS @keyframes 중심 4종만 (fade/slide/pulse/scale). framer-motion 최소 도입(불가피한 경우만). 신규 모션 리뷰 검토.\n\n[강제 수준] 신규 코드 즉시 적용, 기존 코드는 파생 task와 묶어 점진 migration. ESLint rule은 추후 필요시 업그레이드 가능 (B→C). CLAUDE.md에 \"semantic token 외 색상 직접 사용 금지\" 한 줄 추가.\n\n[문서] .nexus/context/design-system.md 신설 — 리뷰어 기준 문서.\n\n[북극성 한 줄]\n- 선언: \"Vision Flow는 한 가지 언어로 말한다. 방언을 허용하지 않는다\"\n- 리뷰 체크: \"이 색/간격/모양이 토큰을 통과했는가, 아니면 고유 방언인가?\""
+          }
+        ],
+        "research_summary": "[현재 상태 — Frontend Audit] CSS 변수/shadcn UI 프리미티브는 잘 정의되어 있으나 도메인 컴포넌트에서 하드코딩 빈발(bg-blue-100, bg-neutral-900, 앰버 직접 지정 등). 페이지별 padding 불일치(px-4/px-6 혼재), 동일 역할 컴포넌트의 다른 구현(Button variant 혼용, rounded-md/lg/xl 난립, 배지 3종, 선택 상태 표현 3가지). 라벨링 단축키(QWEASD, A/D)가 도구 옆 힌트 없이 KeyboardShortcutsOverlay Dialog에만 노출. framer-motion 없음, 모션은 hover translate 수준. 로딩 표현도 skeleton/Loader2/border-spinner 혼재.\n\n[경쟁사 인사이트] 라벨링 플랫폼 스펙트럼 — Professional dense(CVAT, Encord, Supervisely, wandb): dark 테마, 다중 패널 동시 노출, 키보드 중심 워크플로우, 진입장벽 인정. Clean intuitive(V7 Darwin, Label Studio, Roboflow): 밝은 톤+패널 접기, 비개발자 친화, AI 어시스트(SAM2) 강조. 공통 패턴: (1) named snapshots, (2) 단축키 이중 노출 — 상급자 hover 힌트 + 초보자 문서, (3) 다크 기본이 ML 툴의 사실상 표준.\n\nGit-like UX 추상화 스펙트럼: DVC Studio(commit/branch/실험 전부 노출, ML 엔지니어 타겟) → GitKraken(Git 개념 유지하되 color-coded graph 시각화) → Figma(Git 용어 완전 은폐, \"History/Named version/Restore\"만 노출, non-destructive restore). Figma 성공 요인: 복원이 파괴적이지 않아 실수 공포 제거, 자동저장 기본, naming은 선택적. 추상화 누수는 \"사용자가 내부 모델을 알아야 해결 가능한 오류 상태\"에서 발생.\n\n[프로젝트 맥락] 한국어 UI, 팀 내부 도구(엔지니어/연구자 타겟), 핵심 차별점은 Git-like 스냅샷 버전 관리(major.minor, class_schema/image_set/annotation 3-hash dirty detection, stash/restore, HEAD 추적). 스택: React 19 + shadcn/ui base-nova + Tailwind CSS 4 (oklch CSS vars) + react-konva 라벨링 캔버스 + Plus Jakarta Sans.",
+        "created_at": "2026-04-10T01:58:07.469Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "디자인 철학 종합 문서 작성 (design-philosophy.md)",
+          "context": "5개 이슈(북극성, 버전 UX, 작업 공간, 상호작용, 토큰)의 결정 사항을 하나의 종합 철학 문서로 작성. .nexus/context/design-philosophy.md에 작성. 북극성 선언, 5원칙, 2 Anti, 각 이슈별 핵심 결정(용어 치환 규칙, 3 layout primitive, 단축키 정책, 토큰 강도), 별도 plan으로 분리된 항목 목록을 포함.",
+          "approach": "plan.json의 5개 결정사항 + nx_plan_decide summary를 재구성하여 .nexus/context/ 형식에 맞는 추상 수준의 문서 작성. 코드 레벨 디테일 제외, 원칙/방향/규약 수준.",
+          "acceptance": ".nexus/context/design-philosophy.md가 존재하고, 5개 이슈의 핵심 결정 + 북극성 선언 + 각 이슈별 한 줄 북극성 + 별도 plan 예약 목록이 포함됨",
+          "risk": "plan 결정이 너무 상세해서 문서가 architecture.md/versioning.md와 중복될 수 있음 — 추상 수준 유지 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "writer",
+          "created_at": "2026-04-10T04:15:23.065Z"
+        },
+        {
+          "id": 2,
+          "title": "디자인 시스템 규약 문서 작성 (design-system.md)",
+          "context": "Issue #5 결정의 구체 규약을 .nexus/context/design-system.md에 작성. Semantic token 목록, spacing/rounded/icon/shadow scale, typography role, loading 패턴, 상태 표현 컴포넌트, 모션 정책, 하드코딩 금지 규약을 포함. 리뷰어가 코드 리뷰 시 참조하는 기준 문서.",
+          "approach": "Issue #5의 14개 부속 결정을 \"토큰 정의 / Scale 규약 / 컴포넌트 규약 / 정책\" 4섹션으로 구조화. 각 규약에 \"왜 이 규약인가\"의 Issue 참조를 포함.",
+          "acceptance": "design-system.md가 존재하고, semantic token 전 목록 + scale 규약 + 컴포넌트 목록 + 금지 사항이 명시됨. 리뷰어가 \"이 코드가 규약에 맞는가?\"를 이 문서만으로 판단 가능",
+          "risk": "규약이 너무 엄격하면 이후 수정이 필요할 수 있음 — \"이유\" 섹션을 포함하여 왜 그런 결정인지 추적 가능하게",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "writer",
+          "created_at": "2026-04-10T04:15:32.061Z"
+        },
+        {
+          "id": 3,
+          "title": "CLAUDE.md Essentials 업데이트",
+          "context": "Issue #5 결정: \"semantic token 외 색상 직접 사용 금지\"를 CLAUDE.md의 Essentials 섹션에 추가. 에이전트가 코드 작성 시 반드시 참조하는 규약.",
+          "approach": "CLAUDE.md의 <!-- PROJECT:START/END --> 내 Essentials에 한 줄 추가. 기존 7줄 + 1줄 = 8줄 (10줄 제한 내).",
+          "acceptance": "CLAUDE.md Essentials에 \"색상: semantic token만 사용 (bg-blue-100 등 유틸 직접 사용 금지)\" 또는 동등한 한 줄이 포함됨",
+          "risk": "Essentials 10줄 제한에 근접 — 추후 항목 추가 시 우선순위 조정 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "lead",
+          "created_at": "2026-04-10T04:15:38.428Z"
+        },
+        {
+          "id": 4,
+          "title": "디자인 철학/시스템 문서 검증",
+          "context": "T1(design-philosophy.md)과 T2(design-system.md)의 정확성, 일관성, 완전성 검증. plan 결정과 문서 내용의 정합, 문법/포맷 확인.",
+          "approach": "plan.json의 5개 결정 요약과 문서 내용을 대조. 누락된 결정이 없는지, 결정 간 모순이 없는지 확인.",
+          "acceptance": "문서가 plan 결정과 정합하고, 이슈 간 모순 없음이 확인됨",
+          "risk": "리뷰어가 plan 맥락을 모르면 판단 어려울 수 있음 — plan.json 참조 필요",
+          "status": "completed",
+          "deps": [
+            1,
+            2
+          ],
+          "plan_issue": 1,
+          "owner": "reviewer",
+          "created_at": "2026-04-10T04:15:44.152Z"
+        },
+        {
+          "id": 5,
+          "title": "Semantic token 확장 + 공용 컴포넌트 신설",
+          "context": "Issue #5 결정 기반. index.css에 --dirty/--dirty-subtle/--canvas-bg/--reviewed/--assigned-me 토큰 추가. Tailwind @theme에 bg-dirty 등 유틸 노출. <StatusBadge>, <SelectionRing>, <Kbd> 3개 공용 컴포넌트 신설. Typography role 4개 class 도입. 키 pulse CSS @keyframes 추가.",
+          "approach": "1) index.css 라이트/다크 섹션에 oklch 토큰 추가, 2) tailwind config 또는 @theme에 semantic 유틸 등록, 3) components/ui/ 아래 3개 컴포넌트 작성 (shadcn 스타일, CVA variant 정의), 4) index.css에 text-title/body/caption/code @apply 정의, 5) CSS @keyframes pulse-key 추가",
+          "acceptance": "토큰이 index.css에 정의되고, 3개 컴포넌트가 렌더 가능하며, typography class가 적용 가능하고, pulse 애니메이션이 동작함",
+          "risk": "oklch 토큰의 라이트/다크 값 밸런스. StatusBadge의 state variant가 너무 많아지면 관리 어려움",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-10T04:15:53.640Z"
+        },
+        {
+          "id": 6,
+          "title": "Layout primitive 3개 도입 + 기존 페이지 migration",
+          "context": "Issue #3 결정: BrowseLayout(Projects), DetailLayout(ProjectDetail/DataPool/TaskDetail), WorkspaceLayout(Labeling). 각 layout이 max-width와 padding을 강제하여 축 엇갈림 버그 구조적 차단. TaskDetailPage의 max-w-7xl vs w-full 축 엇갈림 동시 수정.",
+          "approach": "1) components/layout/ 아래 3개 layout 컴포넌트 작성 (Designer pseudo-code 참고), 2) 5개 페이지를 각 layout으로 migration, 3) 기존 페이지별 header 중복 구현 제거, 4) WorkspaceLayout에 tone=\"dark\" 슬롯(--canvas-bg 기반)",
+          "acceptance": "5개 페이지 모두 새 layout 사용, 축 엇갈림 제거 확인, max-width/padding 일관, 기존 동작 유지",
+          "risk": "1785줄 TaskDetailPage migration이 가장 큰 scope. 단계적 접근 권장 — layout wrapper만 먼저, 내부 리팩터링은 별도",
+          "status": "completed",
+          "deps": [
+            5
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-10T04:16:02.288Z"
+        },
+        {
+          "id": 7,
+          "title": "버전 UX 개선 일괄",
+          "context": "Issue #2, #3 결정 기반. 용어 통일(\"버전 생성\"→\"버전 확정\", HEAD→\"현재\"), VersionPanel Popover→Right Version Rail 이동, Restore 다이얼로그에 diff 미리보기 + stash 덮어쓰기 경고 + HEAD 삭제 뉘앙스 정정, stash 배너 amber→--dirty-subtle, \"버리고 복원\" 버튼 위치 교체, get_version_status 로딩 3-상태 처리.",
+          "approach": "1) 용어: TaskDetailHeader:207 + VersionPanel의 문구 통일, HEAD 배지 한국어화, 2) Right Version Rail: VersionPanel을 Popover에서 DetailLayout 우측 rail 슬롯으로 이동, V키 토글, 3) Restore 다이얼로그: diff_snapshots API 호출 + 영향 표시 + 기존 stash 존재 경고 + 삭제 뉘앙스 문구 수정, 4) stash 톤: --dirty-subtle 토큰 적용, 5) 버튼 위치: 안전한 선택 오른쪽, 6) 로딩: ?? false를 3-상태(loading/dirty/clean)로",
+          "acceptance": "모든 UI에서 용어가 통일되고, VersionPanel이 고정 rail로 동작하며, restore 다이얼로그에 diff 미리보기 + 경고가 표시되고, stash 배너가 안도 톤이며, 로딩 상태가 명확히 구분됨",
+          "risk": "Right Version Rail 이동은 TaskDetailPage 구조 변경을 동반 — Layout primitive(T6)와 동시 또는 순차 진행. diff 미리보기는 diff_snapshots API가 count 요약 수준이라 사용자 기대 대비 빈약할 수 있음",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-10T04:16:15.552Z"
+        },
+        {
+          "id": 8,
+          "title": "단축키 UX 개선",
+          "context": "Issue #4 결정: KeyboardShortcutsOverlay Dialog→Sheet(Drawer) 리팩터. FloatingToolbar, ImageNavigator, ClassPanel, VersionPanel 등 interactive element에 <Kbd> 힌트 일괄 추가. Cheatsheet Drawer에서 검색 input 자동 포커스, Esc 닫힘.",
+          "approach": "1) KeyboardShortcutsOverlay를 shadcn Sheet 기반으로 리팩터 (우하단 slide-in), 2) 단축키 매핑 데이터를 const로 추출 (현재 useEffect 내 하드코딩), 3) FloatingToolbar/ImageNavigator/ClassPanel/VersionPanel에 <Kbd> 힌트 추가, 4) Drawer 열림 시 검색 input focus + Esc 닫기",
+          "acceptance": "? 키로 Drawer가 열리고 캔버스를 덮지 않으며, 주요 버튼 옆에 단축키 힌트가 보이고, Esc로 닫힘",
+          "risk": "Drawer가 LabelingPage의 resizable panels와 시각적으로 충돌할 수 있음 — z-index 관리 필요. 단축키 매핑 추출 시 기존 동작 regression 주의",
+          "status": "completed",
+          "deps": [
+            5
+          ],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-10T04:16:24.592Z"
+        },
+        {
+          "id": 9,
+          "title": "기존 코드 하드코딩 제거 + LabelingPage migration",
+          "context": "Issue #3, #5 파생. LabelingPage bg-neutral-* 하드코딩 → --canvas-bg CSS var로 교체. LabelingPage 우측 FileTree 기본 접힘(folderTreeOpen 초기값 false). 기존 코드의 색상/rounded/spacing 비표준 값 migration: bg-blue-100→bg-info, amber→bg-dirty, rounded-xl/2xl→rounded-md, p-3/p-5→p-2/p-4 등.",
+          "approach": "1) LabelingPage/LabelingCanvas/FilmStrip의 bg-neutral-* 전부 --canvas-bg 또는 CSS var로 교체, 2) folderTreeOpen useState(true)→useState(false) + localStorage 복원, 3) grep으로 하드코딩 색상 전수 탐색 → semantic 토큰으로 치환, 4) rounded/spacing 비표준 값 정리",
+          "acceptance": "bg-neutral-* 하드코딩 0개, 색상이 모두 semantic 토큰 기반, FileTree 기본 접힘, rounded가 sm/md/full 3단계로 통일, spacing 비표준 값 제거",
+          "risk": "대량 파일 수정으로 regression 위험. 특히 LabelingPage의 Konva Canvas 관련 inline style은 CSS var 적용이 제한적일 수 있음",
+          "status": "completed",
+          "deps": [
+            5,
+            6
+          ],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-10T04:16:35.556Z"
+        },
+        {
+          "id": 10,
+          "title": "디자인 철학 구현 검증",
+          "context": "모든 구현 task 완료 후, 5개 원칙 + 2 Anti + 이슈별 결정이 실제 UI에 반영되었는지 종합 검증. design-philosophy.md와 design-system.md를 기준으로 실제 UI가 일관한지 확인.",
+          "approach": "1) 페이지별 스크린샷 비교 (before/after), 2) 5개 원칙 각각에 대해 체크리스트 검증 (예: Keyboard first — 주요 버튼에 <Kbd> 힌트 있는가?), 3) design-system.md의 규약 대조 (semantic 토큰만 사용되는가? rounded 3단계 지켜지는가?), 4) 선우/지원 페르소나 시나리오 walk-through",
+          "acceptance": "5개 원칙 × 체크리스트 전항 통과, design-system.md 규약 위반 0건, 페르소나 시나리오에서 치명적 UX 문제 없음",
+          "risk": "검증 범위가 넓어 시간 소요. 우선순위: 원칙 위반 > 규약 위반 > 시각 일관성",
+          "status": "completed",
+          "deps": [
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "plan_issue": 1,
+          "owner": "tester",
+          "created_at": "2026-04-10T04:16:44.113Z"
+        }
+      ]
     }
   ]
 }

@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Project } from "@/types/project";
+import BrowseLayout from "@/components/layout/BrowseLayout";
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -94,21 +95,23 @@ export default function ProjectsPage() {
     });
   }
 
-  return (
-    <div>
-      <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">내 프로젝트</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              이미지 데이터셋을 관리하세요
-            </p>
-          </div>
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />새 프로젝트
-          </Button>
-        </div>
+  const pageHeader = (
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-2xl font-semibold">내 프로젝트</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          이미지 데이터셋을 관리하세요
+        </p>
+      </div>
+      <Button onClick={() => setDialogOpen(true)}>
+        <Plus className="mr-2 h-4 w-4" />새 프로젝트
+      </Button>
+    </div>
+  );
 
+  return (
+    <>
+      <BrowseLayout header={pageHeader}>
         {isError && (
           <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             프로젝트 목록을 불러오지 못했습니다.
@@ -184,7 +187,7 @@ export default function ProjectsPage() {
             ))}
           </div>
         )}
-      </main>
+      </BrowseLayout>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -234,6 +237,6 @@ export default function ProjectsPage() {
         </DialogContent>
       </Dialog>
       {confirmDialog}
-    </div>
+    </>
   );
 }

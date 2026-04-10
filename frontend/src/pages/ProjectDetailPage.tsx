@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Database, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageBreadcrumb } from "@/components/layout";
+import { PageBreadcrumb, DetailLayout } from "@/components/layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
@@ -60,39 +60,39 @@ export default function ProjectDetailPage() {
     }
   }
 
-  return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4">
-          <PageBreadcrumb
-            items={[
-              { label: "프로젝트 목록", href: "/projects" },
-              { label: isLoading ? "..." : (project?.name ?? "") },
-            ]}
-          />
-          {!isLoading && (
-            <div className="flex items-center gap-2">
-              {project?.description && (
-                <span className="text-sm text-muted-foreground hidden sm:inline">
-                  {project.description}
-                </span>
-              )}
-              <Button variant="ghost" size="icon" onClick={openEditDialog}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </div>
+  const headerSlot = (
+    <div className="flex items-center gap-4">
+      <PageBreadcrumb
+        items={[
+          { label: "프로젝트 목록", href: "/projects" },
+          { label: isLoading ? "..." : (project?.name ?? "") },
+        ]}
+      />
+      {!isLoading && (
+        <div className="flex items-center gap-2">
+          {project?.description && (
+            <span className="text-sm text-muted-foreground hidden sm:inline">
+              {project.description}
+            </span>
           )}
-          {isLoading && <Skeleton className="h-5 w-48" />}
+          <Button variant="ghost" size="icon" onClick={openEditDialog}>
+            <Pencil className="h-4 w-4" />
+          </Button>
         </div>
-      </header>
+      )}
+      {isLoading && <Skeleton className="h-5 w-48" />}
+    </div>
+  );
 
-      <main className="px-6 py-4 flex-1 flex flex-col overflow-hidden min-h-0 gap-6">
-        {isError && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            프로젝트를 불러오지 못했습니다.
-          </div>
-        )}
+  return (
+    <DetailLayout header={headerSlot}>
+      {isError && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          프로젝트를 불러오지 못했습니다.
+        </div>
+      )}
 
+      <div className="flex flex-col gap-6">
         {/* 데이터풀 요약 카드 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -129,10 +129,8 @@ export default function ProjectDetailPage() {
         </Card>
 
         {/* 태스크 목록 */}
-        <div className="flex-1 min-h-0 overflow-auto">
-          <TasksTab projectId={projectId} />
-        </div>
-      </main>
+        <TasksTab projectId={projectId} />
+      </div>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
@@ -179,6 +177,6 @@ export default function ProjectDetailPage() {
         </DialogContent>
       </Dialog>
       {confirmDialog}
-    </div>
+    </DetailLayout>
   );
 }

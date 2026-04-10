@@ -1,0 +1,2 @@
+- [철학-구현 plan 분리](feedback_philosophy_implementation_split.md) — 상위 철학 plan과 하위 구현 plan을 별도 세션으로 분리, context 문서는 "왜/무엇"만 다룸
+- [후속 plan 예약 목록 (2026-04-10, 4건)](project_followup_plans_2026_04.md) — TaskDetailPage 완전 분할 / 백엔드 불변 스냅샷 / Collaboration 공간 표현 / LabelingPage 단축키 UX 마무리. 각각 독립 [plan] 세션 예정

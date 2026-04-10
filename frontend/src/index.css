@@ -52,6 +52,10 @@
   --canvas-foreground: oklch(0.92 0 0);
   --reviewed: oklch(0.6 0.18 145);
   --reviewed-foreground: oklch(0.985 0 0);
+  --mode-pool: oklch(0.62 0.16 240);
+  --mode-pool-foreground: oklch(0.985 0 0);
+  --mode-task: oklch(0.58 0.16 155);
+  --mode-task-foreground: oklch(0.985 0 0);
 }
 
 .dark {
@@ -100,6 +104,10 @@
   --canvas-foreground: oklch(0.92 0 0);
   --reviewed: oklch(0.65 0.18 145);
   --reviewed-foreground: oklch(0.145 0 0);
+  --mode-pool: oklch(0.68 0.16 240);
+  --mode-pool-foreground: oklch(0.145 0 0);
+  --mode-task: oklch(0.66 0.16 155);
+  --mode-task-foreground: oklch(0.145 0 0);
 }
 
 @theme inline {
@@ -149,6 +157,10 @@
   --color-canvas-foreground: var(--canvas-foreground);
   --color-reviewed: var(--reviewed);
   --color-reviewed-foreground: var(--reviewed-foreground);
+  --color-mode-pool: var(--mode-pool);
+  --color-mode-pool-foreground: var(--mode-pool-foreground);
+  --color-mode-task: var(--mode-task);
+  --color-mode-task-foreground: var(--mode-task-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

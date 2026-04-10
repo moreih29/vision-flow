@@ -1267,6 +1267,104 @@
           "created_at": "2026-04-10T04:16:44.113Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-10T06:49:01.881Z",
+      "branch": "refactor/task-detail-page",
+      "plan": {
+        "id": 4,
+        "topic": "TaskDetailPage 재구조화",
+        "issues": [
+          {
+            "id": 1,
+            "title": "리팩터 scope 결정: Layout 적용 방식 + 파일 분할 범위 (최소/중/대규모)",
+            "status": "decided",
+            "decision": "Option C+ 채택 — Full Refactor with Opus engineer + 3-Phase 분할.\n\n[이유]\n사용자 지적으로 \"context 한계\"는 자연법칙이 아닌 리소스 선택 문제임이 드러남. Opus 4.6의 1M context(현 세션이 사용 중)로 engineer를 spawn하면 sonnet 200K 한계를 5배 확장 가능. \"한 번 실패 + 재시도 반복\"의 누적 비용이 \"1회 Opus 투자\"보다 크다고 판단. TaskDetailPage는 1785줄로 다른 페이지(Projects 239, Labeling 837) 대비 outlier이므로 이 한 파일만 특별 취급이 합리적.\n\n[Scope]\n- Phase 1 (Opus engineer 1회): DetailLayout 적용 + TaskDetailHeader 3중 bar 분해 + slot 분배 (header/metaBar/actionBar/statusBanner/sidebar/versionRail/children) + VersionPanel Right Rail 이동 + 축 엇갈림 수정 + V 키 토글\n- Phase 2 (Opus engineer 1회): 파일 분할 — TaskDetailToolbar, TaskDetailSidebar, TaskViewerSection, PoolViewerSection (Issue #2 결정에 따라 구조 달라짐) 생성 + 관련 로직/핸들러 이동\n- Phase 3 (Opus engineer 1회): 훅 추출(useTaskDetailState), 키보드 핸들러 분리(taskDetailKeyboardHandlers), 하드코딩 13곳 semantic 토큰 치환, 빌드/타입 체크 통과\n\n[주의점]\n- 1M context도 무한이 아니므로 Phase 분할은 유지 (단일 응답 복잡도 상한 때문)\n- 각 Phase 완료 시 Lead가 결과 검증 + 다음 Phase 프롬프트 작성\n- 한 Phase 실패해도 이전 Phase 결과는 보존\n- Agent tool의 model=\"opus\" 파라미터로 명시적 override\n\n[예상 결과]\n- TaskDetailPage.tsx: 1785줄 → ~500줄 (레이아웃 조합만)\n- 신규 6-7개 파일로 로직 분리\n- 철학 원칙 완전 충족 (Version in sight, One state one look 등)"
+          },
+          {
+            "id": 2,
+            "title": "Pool 모드 UI 재구성: 현 좌측 토글 vs 우측 패널 vs 라우트 분리",
+            "status": "decided",
+            "decision": "Option A' 채택 — UX 유지 + 코드 분할.\n\n[UX 유지]\n- 좌측: Task 트리 + Pool 트리 (poolPanelOpen 토글, 현 UX 그대로)\n- 중앙: 활성 viewer (Task 또는 Pool)\n- D&D 유지 (Pool에서 Task로 드래그)\n- \"눈으로 확인\" 가치 보존 (Pool 뷰어 유지)\n- Pool/Task 동시 가시 유지\n\n[코드 분할]\n현 복잡도 원인은 UX가 아니라 코드 구성. viewerMode 이중 상태의 26개 ternary 분기를 섹션 분리로 해소.\n\n**Before:**\n```tsx\nconst activeItems = effectiveViewerMode === \"pool\" ? poolItems : items;\n// ... 26개의 active prefix ternary\n```\n\n**After:**\n```tsx\n{effectiveViewerMode === \"pool\" \n  ? <PoolViewerSection taskId dataStore onAddSuccess />\n  : <TaskViewerSection taskId />\n}\n```\n\n각 섹션이 자신의 state/훅/핸들러를 캡슐화. 부모는 어느 섹션이 활성인지 하나만 관리.\n\n[파일 분할 결과]\n- TaskDetailPage.tsx: ~500줄 (레이아웃 조합만)\n- TaskViewerSection.tsx: ~400줄 (task 전용 ContentArea + 핸들러 + 훅)\n- PoolViewerSection.tsx: ~300줄 (pool 전용 ContentArea + 핸들러 + 훅)\n- TaskDetailSidebar.tsx: ~150줄 (좌측 트리 2개 조합)\n- TaskDetailToolbar.tsx: ~120줄 (현 Lines 1192-1308)\n합계: 1470줄 분산 (현 1785줄 대비 ~315줄 감소, 주로 ternary/중복 로직 제거)\n\n[D 철회 이유]\nD(다이얼로그 대체)는 Pool+Viewer 동시 가시와 D&D의 실질적 가치를 희생함. 복잡도 해소는 코드 레벨 문제이므로 UX 레벨 변경으로 해결할 것이 아님. 사용자 지적이 정확했음.\n\n[Issue #4 영향]\nPool/Task 색상 구분(blue/emerald)은 여전히 기능적으로 유효. 단 semantic 토큰으로 치환 필요 (신규 토큰 --pool-mode/--task-mode 도입 또는 --info/--success 재활용)."
+          },
+          {
+            "id": 3,
+            "title": "TaskDetailHeader 3중 bar 분해 → DetailLayout slot 매핑 전략",
+            "status": "decided",
+            "decision": "Option B 채택 — TaskDetailHeader 4개 컴포넌트로 분해.\n\n[구성]\nTaskDetailHeader.tsx 파일 제거. src/components/task-detail/ 아래 4개 컴포넌트 신설:\n1. TaskHeaderContent (header slot) — PageBreadcrumb + task 이름 + loading skeleton\n2. TaskMetaBar (metaBar slot) — 타입 배지 + 이미지수/클래스수/버전 pill (\"Version in sight\" 상시 표시)\n3. TaskActionBar (actionBar slot) — \"데이터 추가\" 토글 + \"라벨링 시작\" 버튼\n4. TaskDirtyBanner (statusBanner slot) — isDirty 변경 요약 + \"변경사항 버리기\" + \"버전 확정\". clean 상태에서 null 반환\n\n[부속 결정]\n1. 파일 처리: TaskDetailHeader.tsx 제거 (barrel 유지 안 함)\n2. Props: task 객체 통째 대신 각 컴포넌트가 실제 사용하는 개별 필드만\n3. Loading skeleton: TaskHeaderContent 내부에서 처리\n4. DirtyBanner clean 상태: null 반환 (DetailLayout statusBanner slot이 falsy 시 렌더 안 함)\n5. versionRail 토글: TaskDetailPage가 관리 (versionRailOpen state + V 키 핸들러), open 시에만 VersionPanel 주입\n6. 테스트: 기존 테스트 있으면 4개 컴포넌트로 분산\n\n[이유]\nA(통째 유지)는 TaskDetailHeader가 자체 3중 sticky bar + max-w-7xl을 쌓아 DetailLayout과 이중 레이아웃이 되어 축 엇갈림 버그 재발 위험. C(직접 JSX)는 TaskDetailPage 500줄 목표와 충돌. B는 C+ Phase 1의 \"DetailLayout slot 분배\" 의도의 정확한 구현이며, 각 컴포넌트의 단일 책임 + props 최소화 + 축 엇갈림 구조적 차단이 동시 달성됨.\n\n[TaskDetailPage 측 사용 예]\n<DetailLayout\n  header={<TaskHeaderContent task={task} loading={loading} projectId={projectId} />}\n  metaBar={<TaskMetaBar task={task} versionStatus={versionStatus} />}\n  actionBar={<TaskActionBar poolPanelOpen onTogglePoolPanel onLabelingClick />}\n  statusBanner={<TaskDirtyBanner versionStatus isDirty onDiscardChanges onCommitVersion />}\n  sidebar={<TaskDetailSidebar ... />}\n  versionRail={versionRailOpen ? <VersionPanel taskId={taskId} /> : null}\n>\n  {effectiveViewerMode === \"pool\" ? <PoolViewerSection /> : <TaskViewerSection />}\n</DetailLayout>"
+          },
+          {
+            "id": 4,
+            "title": "하드코딩 13곳 semantic 토큰 치환 + 미완 항목 정리",
+            "status": "decided",
+            "decision": "Lead 권장안 전체 채택.\n\n[A. Pool/Task 모드 색상 토큰] 신규 토큰 4개 추가:\n- --mode-pool / --mode-pool-foreground\n- --mode-task / --mode-task-foreground\n이유: --info/--success 재활용은 semantic 혼선 발생 (info=정보 메시지, success=성공 상태).\n\n[B. Pool/Task 모드 표시 컴포넌트] 신규 <ModeBadge mode=\"pool|task\"> 컴포넌트 신설 (components/ui/mode-badge.tsx).\n이유: StatusBadge는 dirty/reviewed 같은 \"작업 상태\"용이라 \"모드 구분\"과 역할 혼선. 별도 컴포넌트가 semantic 분리 명확.\n\n[C. Dirty/Clean 처리] 기존 토큰 재활용, 신규 토큰 없음:\n- isDirty pill: border-amber-400 text-amber-600 → border-dirty text-dirty\n- Dirty dot: bg-amber-500 → bg-dirty\n- Clean dot: bg-green-500 → bg-success (\"저장 완료/문제 없음\" 의미)\n\n[D. 미완 항목 포함] TaskDetailPage 범위로 한정:\n- ✅ TaskActionBar 버튼에 <Kbd> 힌트 추가 (단축키 있을 경우 확인)\n- ✅ MetaBar/DirtyBanner 하드코딩 제거 (Issue #3 컴포넌트 분해 시 자연 처리)\n- ❌ KeyboardShortcutsOverlay Dialog→Sheet, keyboard-shortcuts.ts 추출, ImageNavigator/ClassPanel <Kbd> — LabelingPage 전용, 범위 외\n- ❌ Restore 다이얼로그 diff 미리보기 — 별도 follow-up\n\n[E. Migration 범위] TaskDetailPage 내 전수 정리. 다른 파일 번짐 금지.\n\n[Phase 3 구현 항목]\n- index.css에 --mode-pool/--mode-task 토큰 4개 추가 (라이트/다크 oklch)\n- components/ui/mode-badge.tsx 신설 (CVA + 2-variant)\n- TaskDetailPage의 10곳 blue-*/emerald-* → ModeBadge 또는 토큰 클래스\n- TaskDirtyBanner/TaskMetaBar의 3곳 amber/green → --dirty/--success"
+          }
+        ],
+        "research_summary": "[현 구조 — Explore 실측]\nTaskDetailPage.tsx는 1785줄. 핵심 복잡도는 **viewer mode (task/pool) 2중 상태**로, 좌측 사이드바에 2개 트리(poolPanelOpen 토글), 중앙 ContentArea가 activeItems 기반으로 렌더. 10개 커스텀 훅 의존(task/pool 각각의 폴더/선택/D&D/벌크), 26개 조건부 렌더. 키보드 핸들러 70줄. TaskDetailHeader는 3중 sticky bar(header + actionBar + statusBanner) 구조.\n\n[DetailLayout 매핑 가능성]\nExplore 분석 결과 충돌 최소. 매핑안:\n- header ← TaskDetailHeader의 PageBreadcrumb + 메타바 부분\n- metaBar ← 타입 배지 + 이미지수/클래스수/버전 pill\n- actionBar ← \"데이터 추가\" + \"라벨링 시작\" 버튼 행\n- statusBanner ← isDirty 배너\n- sidebar ← 좌측 트리 2개 (Task + Pool)\n- versionRail ← 신규 — VersionPanel을 Popover에서 이동\n- children ← Toolbar + ContentArea\n주요 충돌 지점: Toolbar가 현재 ContentArea 내부에 있음(유지), max-width 일관성(layout이 강제하면 해결).\n\n[Pool 모드 라우트 분리 검토]\nPool 콘텐츠 조회/선택/D&D는 Low 난이도로 독립 가능, Task 추가 워크플로우(현재 Task ID 기반으로 Pool→Task 이미지 추가)가 Medium 난이도. **Explore 권고는 \"우측 패널화\"** — Pool을 별도 라우트로 분리하면 \"이미지 추가\" 워크플로우가 여러 페이지 왕복이 되어 선우(라벨러)의 리듬을 방해. 우측 패널화는 versionRail과 유사한 패턴으로 일관성 있음.\n\n[하드코딩 잔여 13곳]\nTaskDetailPage.tsx 10곳:\n- Toolbar의 blue-*/emerald-* 모드 구분 (6곳: lines 1198, 1200, 1203, 1213, 1217, 1229, 1233)\n- Pool/Task 트리 active border (3곳: 1359, 1400, 1440-1441)\nTaskDetailHeader.tsx 3곳:\n- 버전 pill isDirty amber border/text (line 130)\n- Dirty indicator dot bg-amber-500 (line 138)\n- Clean indicator dot bg-green-500 (line 140)\n모두 semantic 토큰(--dirty, --reviewed, --info, --success 등)으로 치환 가능.\n\n[이전 plan 미완성 후속 항목 — 이번 plan 범위 외로 분리 예정]\n이전 디자인 철학 plan의 follow-up 중 TaskDetailPage와 직결된 것만:\n- VersionPanel의 HEAD→\"현재\", dirty-subtle, 버튼 위치, 3-상태 로딩, HEAD 삭제 뉘앙스 → 이미 완료됨\n- TaskDetailPage에 DetailLayout 적용 → 본 plan의 Issue #1에서 다룸\n- VersionPanel을 Popover에서 Right Version Rail로 이동 → 본 plan의 Issue #3에서 다룸\n- 한편 TaskDetailPage 범위 밖: KeyboardShortcutsOverlay Dialog→Sheet, keyboard-shortcuts.ts 추출, ImageNavigator/ClassPanel Kbd 힌트, Restore 다이얼로그 diff 미리보기 → 별도 plan으로\n\n[분할 후보]\nExplore가 제안한 7개 파일 분할:\n- TaskDetailPage.tsx (500줄, 레이아웃 조합만)\n- TaskViewerSection.tsx (400줄)\n- PoolViewerSection.tsx (300줄)\n- TaskDetailSidebar.tsx (150줄)\n- TaskDetailToolbar.tsx (120줄)\n- useTaskDetailState.ts (200줄 훅)\n- taskDetailKeyboardHandlers.ts (300줄)\n\n[입력 문서]\n- .nexus/context/design-philosophy.md: 5원칙 + 2 Anti + TaskDetailPage 방향(\"Right Version Rail\")\n- .nexus/context/design-system.md: 토큰/scale/컴포넌트 규약\n- 이전 plan history: Issue #3에서 \"DetailLayout 적용 + Right Version Rail\" 결정됨\n- 이전 plan acceptance 검증: TaskDetailPage만 DetailLayout import 후 JSX 미사용으로 CRITICAL 판정",
+        "created_at": "2026-04-10T05:51:53.492Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Phase 1: DetailLayout 적용 + TaskDetailHeader 4개 컴포넌트 분해 + Right Version Rail",
+          "context": "C+ 3-Phase 중 첫 번째. 구조 변경 집중. TaskDetailPage(1785줄)에 DetailLayout을 실제 적용하고, TaskDetailHeader의 3중 sticky bar를 4개 컴포넌트로 분해하여 각 slot에 분배한다. VersionPanel을 기존 Popover에서 DetailLayout의 versionRail slot으로 이동. 이 Phase에서 파일 분할(ViewerSection 등)은 하지 않음 — pool/task 로직은 기존 그대로 TaskDetailPage에 유지. Opus 1M engineer 필수.",
+          "approach": "Opus engineer로 spawn (model=\"opus\"). 1) TaskDetailPage.tsx를 DetailLayout wrapper로 감싸기. 기존 내부 로직/state/handler는 그대로 유지. 2) components/task-detail/ 아래 4개 신규 컴포넌트 작성: TaskHeaderContent(header slot, PageBreadcrumb+task이름+loading skeleton), TaskMetaBar(metaBar slot, 타입 배지+이미지수/클래스수+버전 pill), TaskActionBar(actionBar slot, 데이터 추가 토글+라벨링 시작), TaskDirtyBanner(statusBanner slot, isDirty 변경 요약+버튼들, clean 시 null). 각 컴포넌트는 task 객체 전체 대신 실제 사용하는 개별 필드만 받음. 3) 기존 TaskDetailHeader.tsx 파일 제거. 4) VersionPanel을 TaskDetailPage의 DetailLayout versionRail slot에 주입. versionRailOpen state + localStorage + V 키 토글 추가. 5) 축 엇갈림 수정: TaskDetailHeader의 max-w-7xl 래핑은 컴포넌트 분해로 자연 제거되고 DetailLayout이 강제.",
+          "acceptance": "TaskDetailPage.tsx가 DetailLayout을 실제 JSX에서 사용함 (import만이 아니라). 4개 신규 컴포넌트(TaskHeaderContent, TaskMetaBar, TaskActionBar, TaskDirtyBanner) 존재 + 각 slot에 주입됨. TaskDetailHeader.tsx 파일 삭제됨. VersionPanel이 versionRail slot에서 렌더되고 V 키로 토글 가능. 축 엇갈림(max-w-7xl vs w-full max-w-full) 버그 해소 확인. 기존 기능(라우팅, 데이터 페칭, pool/task 토글, 드래그 드롭) 모두 동작. TypeScript 빌드 에러 없음 (기존 에러 제외).",
+          "risk": "Phase 1은 구조 변경이라 regression 위험 중. TaskDetailHeader 해체 시 기존 Popover VersionPanel 연결이 끊기는 순간 주의. 기존 props(poolPanelOpen, onTogglePoolPanel 등)가 TaskDetailPage → TaskActionBar로 정확히 전달되어야 함. Phase 2 전에 수동 동작 확인 권장.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-10T06:24:18.894Z"
+        },
+        {
+          "id": 2,
+          "title": "Phase 2: 파일 분할 — TaskViewerSection + PoolViewerSection + Sidebar + Toolbar",
+          "context": "C+ 3-Phase 중 두 번째. Phase 1에서 구조가 정리된 TaskDetailPage를 파일 분할. 핵심 목표는 viewerMode 이중 상태(26개 ternary)를 섹션 컴포넌트 분리로 해소. Pool/Task 각 뷰어 섹션이 자신의 state/핸들러/훅을 캡슐화. Opus 1M engineer 필수 (대량 파일 이동 + handler 재배선).",
+          "approach": "Opus engineer로 spawn (model=\"opus\"). 1) src/components/task-detail/ 아래 4개 신규 컴포넌트: TaskDetailSidebar(좌측 Task 트리 + Pool 트리 토글 조합), TaskDetailToolbar(현 Lines 1192-1308, breadcrumb+뷰 모드 토글+pool 추가 버튼), TaskViewerSection(task 전용 ContentArea+handlers+task 관련 훅 5개 캡슐화), PoolViewerSection(pool 전용 ContentArea+handlers+pool 관련 훅 5개 캡슐화). 2) TaskDetailPage의 activeItems/activeSelectedKeys/activeHandleItemClick 등 26개 ternary 제거. 부모 레벨에서는 `{effectiveViewerMode === \"pool\" ? <PoolViewerSection {...} /> : <TaskViewerSection {...} />}` 한 줄. 3) D&D handler는 부모 레벨에 유지 (pool→task 드래그는 교차 섹션이므로). 4) 각 Section의 props 인터페이스는 필요 최소 (taskId, dataStore, onAddSuccess 등). 5) Phase 1에서 만든 layout/header 컴포넌트와 충돌 없도록 확인.",
+          "acceptance": "TaskDetailPage.tsx가 500-700줄 수준으로 감소. TaskDetailSidebar/TaskDetailToolbar/TaskViewerSection/PoolViewerSection 4개 파일 존재. 각 파일 크기 300-450줄 수준. activeItems/activeSelectedKeys 등 \"active\" prefix ternary 완전 제거. Pool/Task 동시 가시 유지, D&D 유지, 기존 UX 변화 없음. TypeScript 빌드 에러 없음.",
+          "risk": "대량 파일 이동 + handler 재배선 = regression 위험 높음. 특히 (1) 다중 선택 상태가 섹션 간 전환 시 보존/리셋 정책 명확화 필요, (2) useRef로 저장된 handler ref들(bulkRemoveMutation 등)의 생명주기, (3) 키보드 핸들러가 섹션별 분기를 알아야 하는지. Opus 1M context라도 복잡한 작업이므로 실패 시 Phase 1 결과는 유지.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-10T06:24:38.736Z"
+        },
+        {
+          "id": 3,
+          "title": "Phase 3: 훅 추출 + ModeBadge 신설 + 하드코딩 13곳 정리",
+          "context": "C+ 3-Phase 중 마지막. Phase 2까지로 구조와 파일 분할이 완성된 상태에서 훅 추출, 신규 토큰/컴포넌트 도입, 하드코딩 제거. Opus engineer 권장이지만 sonnet으로도 가능할 정도로 scope 축소됨 (변경 범위 명확).",
+          "approach": "Opus 또는 sonnet engineer. 1) useTaskDetailState 훅 추출 — TaskDetailPage의 상태 선언 + useEffect들을 src/hooks/use-task-detail-state.ts로 이동. 2) taskDetailKeyboardHandlers 추출 — useKeyboardManager에 전달하는 핸들러 배열을 src/handlers/task-detail-keyboard.ts 또는 커스텀 훅으로. 3) index.css에 --mode-pool/--mode-pool-foreground/--mode-task/--mode-task-foreground 토큰 추가 (라이트/다크 oklch). Tailwind @theme에 bg-mode-pool 등 유틸 노출. 4) src/components/ui/mode-badge.tsx 신설 — CVA + 2-variant(\"pool\" | \"task\"), 내부에서 신규 토큰 사용, dot indicator 포함. 5) TaskDetailPage/TaskDetailToolbar/TaskDetailSidebar의 10곳 blue-*/emerald-* 하드코딩 치환: ModeBadge 사용 가능한 곳은 ModeBadge로, 직접 색상은 bg-mode-pool/text-mode-pool 등으로. 6) TaskMetaBar/TaskDirtyBanner의 3곳 amber/green 치환: border-amber-400→border-dirty, bg-amber-500→bg-dirty, bg-green-500→bg-success. 7) TaskActionBar 버튼에 단축키 매핑이 있다면 <Kbd> 힌트 추가 (확인). 8) 빌드/타입 체크 통과.",
+          "acceptance": "TaskDetailPage 내 bg-blue-*, bg-amber-*, bg-emerald-*, text-blue-*, text-amber-*, text-emerald-*, bg-green-*, border-blue-*, border-emerald-*, border-amber-* 등 유틸 색상 직접 사용 0건. ModeBadge 컴포넌트 존재 + Pool/Task 모드 구분 UI에서 사용됨. 신규 토큰 4개가 index.css에 정의됨 (라이트/다크 모두). useTaskDetailState 훅 추출됨. 키보드 핸들러 분리됨. TaskDetailPage 최종 ~500줄 달성. 전체 기능 동작 확인. TypeScript 빌드 에러 없음.",
+          "risk": "훅 추출 시 useState/useEffect 순서 변경으로 인한 side effect 주의. 특히 dataStore 로드, Task 로드 같은 초기화 effect의 deps. 토큰 추가는 기존 라이트/다크 토큰 계열과의 조화 필요. ModeBadge 도입 후 기존 하드코딩 사례 전수 검토 — 누락 주의.",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-10T06:24:57.550Z"
+        },
+        {
+          "id": 4,
+          "title": "전체 재구조화 검증",
+          "context": "3개 Phase 완료 후 종합 검증. design-philosophy.md + design-system.md 기준으로 정합 확인. 특히 1) TaskDetailPage 실제 라인 수 + 분할된 파일 구조, 2) 유틸 색상 0건 보장, 3) viewerMode ternary 해소 확인, 4) Pool/Task 동시 가시 + D&D 동작, 5) V 키 Version Rail 토글, 6) 축 엇갈림 해소.",
+          "approach": "Tester agent. 1) grep으로 bg-blue-*/bg-amber-*/bg-emerald-* 등 하드코딩 잔여 검색. 2) wc -l 로 TaskDetailPage.tsx 라인 수 측정 (500줄 근접 확인). 3) 신규 파일 존재 확인: TaskHeaderContent, TaskMetaBar, TaskActionBar, TaskDirtyBanner, TaskDetailSidebar, TaskDetailToolbar, TaskViewerSection, PoolViewerSection, ModeBadge, useTaskDetailState. 4) TaskDetailHeader.tsx 삭제 확인. 5) TaskDetailPage에 \"active\" prefix ternary 검색 → 0건. 6) DetailLayout import + JSX 사용 확인. 7) npx tsc --noEmit 빌드 체크 (신규 에러 0건). 8) 가능하면 npm run build 전체 빌드. 9) design-system.md의 리뷰 체크 질문 5개 적용.",
+          "acceptance": "하드코딩 유틸 색상 0건, TaskDetailPage.tsx ≤700줄, 필수 신규 파일 10개 존재, TaskDetailHeader.tsx 삭제됨, active prefix ternary 0건, DetailLayout JSX 사용 확인, TypeScript 빌드 에러 0건 (기존 에러 제외), design-system.md 리뷰 체크 5개 질문 통과.",
+          "risk": "검증 범위가 넓어 한 세션에서 전체 커버 어려울 수 있음. 우선순위: 원칙 위반 > 규약 위반 > 시각 일관성. 실패 항목 발견 시 Phase rework 판단 필요.",
+          "status": "completed",
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "plan_issue": 1,
+          "owner": "tester",
+          "created_at": "2026-04-10T06:25:10.608Z"
+        }
+      ]
     }
   ]
 }

@@ -25,11 +25,17 @@ import type { DataStore } from "@/types/data-store";
 import type { VersionStatus } from "@/types/snapshot";
 import { Button } from "@/components/ui/button";
 import FolderBreadcrumb from "@/components/FolderBreadcrumb";
-import { TaskDetailHeader } from "@/components/task-detail";
+import { DetailLayout } from "@/components/layout";
 import {
-  FileTreeView as FolderTreeView,
-  type FileTreeRef as FolderTreeRef,
-} from "@/components/file-tree";
+  TaskHeaderContent,
+  TaskMetaBar,
+  TaskActionBar,
+  TaskDirtyBanner,
+  TaskDetailSidebar,
+  VersionPanel,
+} from "@/components/task-detail";
+import { useVersionStatus } from "@/hooks/use-snapshots";
+import type { FileTreeRef as FolderTreeRef } from "@/components/file-tree";
 import { ImageGridCard, ImageListRow } from "@/components/data-pool";
 import { ContentArea } from "@/components/content-viewer";
 import { useImageDragDrop } from "@/hooks/use-image-drag-drop";
@@ -45,6 +51,7 @@ import { useTaskFolderOperations } from "@/hooks/use-task-folder-operations";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 
 const VIEW_MODE_KEY = "task_preview_mode";
+const VERSION_RAIL_KEY = "task_version_rail_open";
 
 export default function TaskDetailPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
@@ -55,6 +62,23 @@ export default function TaskDetailPage() {
   const queryClient = useQueryClient();
   const isRestoring =
     useIsMutating({ mutationKey: ["restore-snapshot", taskIdNum] }) > 0;
+
+  // -- Version rail (DetailLayout의 우측 slot 토글) --
+  const [versionRailOpen, setVersionRailOpen] = useState(
+    () => localStorage.getItem(VERSION_RAIL_KEY) === "true",
+  );
+  const toggleVersionRail = useCallback(() => {
+    setVersionRailOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem(VERSION_RAIL_KEY, String(next));
+      return next;
+    });
+  }, []);
+
+  // -- Version status (metaBar / statusBanner에 필요) --
+  const { data: versionStatus, isLoading: versionStatusLoading } =
+    useVersionStatus(taskIdNum);
+  const isDirty = versionStatus?.is_dirty ?? false;
 
   // -- Viewer mode --
   const [viewerMode, setViewerMode] = useState<"task" | "pool">("task");
@@ -1191,16 +1215,16 @@ export default function TaskDetailPage() {
 
   const toolbar = (
     <div
-      className={`mb-4 select-none shrink-0 space-y-1 rounded-md px-2 py-1.5 transition-colors ${viewerMode === "pool" ? "bg-info/5" : ""}`}
+      className={`mb-4 select-none shrink-0 space-y-1 rounded-md px-2 py-1.5 transition-colors ${viewerMode === "pool" ? "bg-mode-pool/5" : ""}`}
     >
       <div className="flex items-center gap-1.5 mb-1">
         {viewerMode === "pool" ? (
-          <Database className="h-3.5 w-3.5 text-blue-500" />
+          <Database className="h-3.5 w-3.5 text-mode-pool" />
         ) : (
-          <ListTodo className="h-3.5 w-3.5 text-emerald-600" />
+          <ListTodo className="h-3.5 w-3.5 text-mode-task" />
         )}
         <span
-          className={`text-xs font-semibold ${viewerMode === "pool" ? "text-blue-500" : "text-emerald-600"}`}
+          className={`text-xs font-semibold ${viewerMode === "pool" ? "text-mode-pool" : "text-mode-task"}`}
         >
           {viewerMode === "pool" ? "Data Pool" : "Task"}
         </span>
@@ -1210,11 +1234,11 @@ export default function TaskDetailPage() {
         onNavigate={(path) => activeNavigate(path ? path + "/" : "")}
         prefix={
           effectiveViewerMode === "pool" ? (
-            <span className="shrink-0 text-blue-500 font-medium">
+            <span className="shrink-0 text-mode-pool font-medium">
               Data Pool
             </span>
           ) : (
-            <span className="shrink-0 text-emerald-600 font-medium">Task</span>
+            <span className="shrink-0 text-mode-task font-medium">Task</span>
           )
         }
       />
@@ -1226,11 +1250,11 @@ export default function TaskDetailPage() {
           {effectiveViewerMode === "pool" &&
             !activeContentsLoading &&
             (poolSelectedCount > 0 ? (
-              <span className="ml-2 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+              <span className="ml-2 bg-mode-pool/15 text-mode-pool px-2 py-0.5 rounded-full text-xs font-medium">
                 {poolSelectedCount}개 선택됨
               </span>
             ) : (
-              <span className="ml-2 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+              <span className="ml-2 bg-mode-pool/10 text-mode-pool px-2 py-0.5 rounded-full text-xs">
                 💡 이미지를 선택하여 추가
               </span>
             ))}
@@ -1318,116 +1342,105 @@ export default function TaskDetailPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
-      <TaskDetailHeader
-        task={task}
-        loading={taskLoading}
-        poolPanelOpen={poolPanelOpen}
-        onTogglePoolPanel={handleTogglePoolPanel}
-        onLabelingClick={() =>
-          navigate(`/projects/${projectId}/tasks/${taskIdNum}/label`)
+    <>
+      <DetailLayout
+        header={
+          <TaskHeaderContent
+            task={task}
+            loading={taskLoading}
+            projectId={projectId}
+          />
         }
-        onRestoreSuccess={handleRestoreSuccess}
-        isRestoring={isRestoring}
-      />
-
-      <main className="relative mx-auto flex w-full max-w-full flex-1 flex-col px-4 py-6 min-h-0 h-0 overflow-hidden">
-        {isRestoring && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
-            <div className="flex items-center gap-2 rounded-md bg-background px-4 py-2 shadow-md border">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <span className="text-sm text-muted-foreground">
-                버전을 복원하는 중...
-              </span>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive select-text">
-            {error}
-          </div>
-        )}
-
-        <div className="flex flex-1 gap-6 min-h-0">
-          {/* 좌측: Task 트리 (항상 표시) + Pool 트리 (토글) */}
-          <div className="w-64 shrink-0 flex flex-col gap-2 min-h-0">
-            {/* Pool 섹션 — poolPanelOpen일 때만 렌더링 */}
-            {poolPanelOpen && (
-              <div
-                className={`flex-1 rounded-lg border flex flex-col min-h-0 ${
-                  effectiveViewerMode === "pool"
-                    ? "border-blue-400 ring-1 ring-blue-400"
-                    : "border-muted opacity-50"
-                }`}
-              >
-                {!dataStore ? (
-                  <p className="py-4 text-center text-xs text-muted-foreground">
-                    Data Pool이 없습니다.
-                  </p>
-                ) : (
-                  <FolderTreeView
-                    ref={poolTreeRef}
-                    readOnly
-                    fetchFolderContents={fetchPoolFolderContents}
-                    fetchAllFolders={fetchPoolAllFolders}
-                    rootLabel="Data Pool"
-                    rootIcon={
-                      <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    }
-                    rootCount={dataStore.image_count ?? 0}
-                    onRefresh={refreshPoolTree}
-                    selectedPath={
-                      effectiveViewerMode === "pool"
-                        ? poolCurrentPath
-                        : undefined
-                    }
-                    onSelectPath={(path) => {
-                      setViewerMode("pool");
-                      handlePoolNavigateFolder(path);
-                    }}
-                    onFileClick={handlePoolFileClick}
-                  />
-                )}
+        metaBar={
+          task ? (
+            <TaskMetaBar
+              task={task}
+              versionStatus={versionStatus}
+              isRestoring={isRestoring}
+              versionRailOpen={versionRailOpen}
+              onToggleVersionRail={toggleVersionRail}
+              versionLoading={versionStatusLoading}
+            />
+          ) : null
+        }
+        actionBar={
+          task ? (
+            <TaskActionBar
+              hasImages={(task.image_count ?? 0) > 0}
+              isRestoring={isRestoring}
+              poolPanelOpen={poolPanelOpen}
+              onTogglePoolPanel={handleTogglePoolPanel}
+              onLabelingClick={() =>
+                navigate(`/projects/${projectId}/tasks/${taskIdNum}/label`)
+              }
+              onToggleVersionRail={toggleVersionRail}
+              versionRailOpen={versionRailOpen}
+            />
+          ) : null
+        }
+        statusBanner={
+          task ? (
+            <TaskDirtyBanner
+              versionStatus={versionStatus}
+              isDirty={isDirty}
+              isRestoring={isRestoring}
+              onDiscardChanges={() => setVersionRailOpen(true)}
+              onCommitVersion={() => setVersionRailOpen(true)}
+            />
+          ) : null
+        }
+        sidebar={
+          <TaskDetailSidebar
+            task={task}
+            dataStore={dataStore}
+            poolPanelOpen={poolPanelOpen}
+            effectiveViewerMode={effectiveViewerMode}
+            currentPath={currentPath}
+            poolCurrentPath={poolCurrentPath}
+            treeRef={treeRef}
+            poolTreeRef={poolTreeRef}
+            fetchTaskFolderContents={fetchTaskFolderContents}
+            fetchTaskAllFolders={fetchTaskAllFolders}
+            fetchPoolFolderContents={fetchPoolFolderContents}
+            fetchPoolAllFolders={fetchPoolAllFolders}
+            refreshAll={refreshAll}
+            refreshPoolTree={refreshPoolTree}
+            onViewerModeChange={setViewerMode}
+            onTaskNavigateFolder={handleNavigateFolder}
+            onPoolNavigateFolder={handlePoolNavigateFolder}
+            onTaskFileClick={handleFileClick}
+            onPoolFileClick={handlePoolFileClick}
+            onDeleteFolder={handleDeleteFolder}
+            onUpdateFolder={handleUpdateFolder}
+            onCreateFolder={handleCreateFolder}
+            onItemDrop={handleItemDrop}
+          />
+        }
+        versionRail={
+          versionRailOpen ? (
+            <VersionPanel
+              taskId={taskIdNum}
+              onRestoreSuccess={handleRestoreSuccess}
+            />
+          ) : null
+        }
+      >
+        <div className="relative flex h-full flex-col min-h-0">
+          {isRestoring && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
+              <div className="flex items-center gap-2 rounded-md bg-background px-4 py-2 shadow-md border">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="text-sm text-muted-foreground">
+                  버전을 복원하는 중...
+                </span>
               </div>
-            )}
-
-            {/* Task 섹션 */}
-            <div
-              className={`rounded-lg border p-2 flex flex-col overflow-hidden min-h-0 flex-1 ${
-                !poolPanelOpen
-                  ? "border"
-                  : effectiveViewerMode === "task"
-                    ? "border-emerald-500 ring-1 ring-emerald-500"
-                    : "border-muted opacity-50"
-              }`}
-            >
-              <FolderTreeView
-                ref={treeRef}
-                fetchFolderContents={fetchTaskFolderContents}
-                fetchAllFolders={fetchTaskAllFolders}
-                rootLabel={task?.name ?? "Task"}
-                rootCount={task?.image_count ?? 0}
-                rootIcon={
-                  <ListTodo className="h-4 w-4 shrink-0 text-muted-foreground" />
-                }
-                selectedPath={currentPath}
-                acceptDropTypes={[
-                  "application/x-task-items",
-                  "application/x-datapool-items",
-                ]}
-                onSelectPath={(path) => {
-                  setViewerMode("task");
-                  handleNavigateFolder(path);
-                }}
-                onFileClick={handleFileClick}
-                onDeleteFolder={handleDeleteFolder}
-                onUpdateFolder={handleUpdateFolder}
-                onCreateFolder={handleCreateFolder}
-                onItemDrop={handleItemDrop}
-                onRefresh={refreshAll}
-              />
             </div>
-          </div>
+          )}
+          {error && (
+            <div className="mb-4 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive select-text">
+              {error}
+            </div>
+          )}
 
           {/* 중앙: 콘텐츠 영역 */}
           <div
@@ -1437,8 +1450,8 @@ export default function TaskDetailPage() {
               !poolPanelOpen
                 ? "border"
                 : effectiveViewerMode === "pool"
-                  ? "border-blue-400"
-                  : "border-emerald-500"
+                  ? "border-mode-pool"
+                  : "border-mode-task"
             } p-2`}
             onMouseDown={() => viewerRef.current?.focus()}
           >
@@ -1733,7 +1746,7 @@ export default function TaskDetailPage() {
             />
           </div>
         </div>
-      </main>
+      </DetailLayout>
 
       {/* 이동 대상 폴더 선택 */}
       <FolderPickerDialog
@@ -1780,6 +1793,6 @@ export default function TaskDetailPage() {
       />
 
       {confirmDialog}
-    </div>
+    </>
   );
 }

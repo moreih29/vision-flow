@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, FolderTree, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WorkspaceLayout } from "@/components/layout";
 import { tasksApi } from "@/api/tasks";
 import { labelClassesApi } from "@/api/label-classes";
 import { annotationsApi } from "@/api/annotations";
@@ -43,7 +44,10 @@ export default function LabelingPage() {
   const [classes, setClasses] = useState<LabelClass[]>([]);
   const [images, setImages] = useState<TaskImageResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [folderTreeOpen, setFolderTreeOpen] = useState(true);
+  const [folderTreeOpen, setFolderTreeOpen] = useState(() => {
+    const saved = localStorage.getItem("folderTreeOpen");
+    return saved !== null ? JSON.parse(saved) : false;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [showShortcutsOverlay, setShowShortcutsOverlay] = useState(false);
 
@@ -80,6 +84,10 @@ export default function LabelingPage() {
   useEffect(() => {
     isDirtyRef.current = isDirty;
   }, [isDirty]);
+
+  useEffect(() => {
+    localStorage.setItem("folderTreeOpen", JSON.stringify(folderTreeOpen));
+  }, [folderTreeOpen]);
 
   useEffect(() => {
     annotationsRef.current = annotations;
@@ -638,70 +646,71 @@ export default function LabelingPage() {
     return <span className="text-xs text-green-500">저장됨</span>;
   }
 
+  const topBarSlot = (
+    <div className="flex w-full items-center px-4 select-none">
+      {/* 좌측: 나가기 버튼 + 네비게이터 */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1.5 px-2 text-sm"
+          onClick={handleBack}
+          disabled={loading}
+          title="태스크로 돌아가기"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="max-w-[140px] truncate">
+            {loading ? "로드 중..." : (task?.name ?? "")}
+          </span>
+        </Button>
+
+        <div className="h-4 w-px bg-border" />
+
+        <ImageNavigator totalImages={totalImages} />
+      </div>
+
+      {/* 중앙: 진행 바 + 필터 */}
+      <div className="flex flex-1 items-center justify-center gap-3">
+        <LabelingProgressBar labeled={labeledCount} total={totalImages} />
+        <div className="h-4 w-px bg-border" />
+        <LabelingFilter />
+      </div>
+
+      {/* 우측: 저장 상태 + 폴더 트리 + 단축키 */}
+      <div className="flex items-center gap-1">
+        <SaveStatus />
+        <div className="mx-1 h-4 w-px bg-border" />
+        <Button
+          variant={folderTreeOpen ? "secondary" : "ghost"}
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setFolderTreeOpen((v) => !v)}
+          title="폴더 트리"
+        >
+          <FolderTree className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setShowShortcutsOverlay((v) => !v)}
+          title="키보드 단축키 (?)"
+        >
+          <Keyboard className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <WorkspaceLayout topBar={topBarSlot} tone="dark">
       <KeyboardShortcutsOverlay
         open={showShortcutsOverlay}
         onOpenChange={setShowShortcutsOverlay}
         taskType={task?.task_type}
       />
 
-      {/* 상단 바 */}
-      <header className="flex h-12 shrink-0 items-center border-b bg-background px-4 select-none">
-        {/* 좌측: 나가기 버튼 + 네비게이터 */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 px-2 text-sm"
-            onClick={handleBack}
-            disabled={loading}
-            title="태스크로 돌아가기"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="max-w-[140px] truncate">
-              {loading ? "로드 중..." : (task?.name ?? "")}
-            </span>
-          </Button>
-
-          <div className="h-4 w-px bg-border" />
-
-          <ImageNavigator totalImages={totalImages} />
-        </div>
-
-        {/* 중앙: 진행 바 + 필터 */}
-        <div className="flex flex-1 items-center justify-center gap-3">
-          <LabelingProgressBar labeled={labeledCount} total={totalImages} />
-          <div className="h-4 w-px bg-border" />
-          <LabelingFilter />
-        </div>
-
-        {/* 우측: 저장 상태 + 폴더 트리 + 단축키 */}
-        <div className="flex items-center gap-1">
-          <SaveStatus />
-          <div className="mx-1 h-4 w-px bg-border" />
-          <Button
-            variant={folderTreeOpen ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setFolderTreeOpen((v) => !v)}
-            title="폴더 트리"
-          >
-            <FolderTree className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setShowShortcutsOverlay((v) => !v)}
-            title="키보드 단축키 (?)"
-          >
-            <Keyboard className="h-4 w-4" />
-          </Button>
-        </div>
-      </header>
-
-      {/* 본문 */}
+      {/* 패널 그룹 */}
       <Group orientation="horizontal" className="flex-1 overflow-hidden">
         {/* 좌측 패널 */}
         <Panel
@@ -784,11 +793,11 @@ export default function LabelingPage() {
         <Panel
           defaultSize={folderTreeOpen ? "64%" : "82%"}
           minSize="30%"
-          className="relative overflow-hidden bg-neutral-800"
+          className="relative overflow-hidden bg-canvas-bg"
         >
           {!loading && totalImages === 0 ? (
             <div className="flex h-full items-center justify-center">
-              <div className="flex flex-col items-center gap-2 text-neutral-400">
+              <div className="flex flex-col items-center gap-2 text-canvas-foreground/70">
                 <p className="text-sm">이미지가 없습니다</p>
                 <p className="text-xs">태스크에 이미지를 추가하세요</p>
               </div>
@@ -832,6 +841,6 @@ export default function LabelingPage() {
           </>
         )}
       </Group>
-    </div>
+    </WorkspaceLayout>
   );
 }

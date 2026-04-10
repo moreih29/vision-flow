@@ -42,7 +42,7 @@ export default function FilmStrip({ images, filteredIndices }: FilmStripProps) {
 
   return (
     <div
-      className="flex h-20 shrink-0 border-t bg-neutral-900 select-none"
+      className="flex h-20 shrink-0 border-t bg-canvas-bg select-none"
       style={{ minHeight: 80 }}
     >
       <div

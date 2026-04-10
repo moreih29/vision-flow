@@ -48,7 +48,8 @@ function versionLabel(snapshot: Snapshot): string {
 
 export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
   const { data: snapshots, isLoading } = useSnapshots(taskId);
-  const { data: versionStatus } = useVersionStatus(taskId);
+  const { data: versionStatus, isLoading: isVersionStatusLoading } =
+    useVersionStatus(taskId);
   const createMutation = useCreateSnapshot(taskId);
   const restoreMutation = useRestoreSnapshot(taskId);
   const deleteMutation = useDeleteSnapshot(taskId);
@@ -63,7 +64,9 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
   const [deleteStashOpen, setDeleteStashOpen] = useState(false);
 
   const { data: stash } = useStash(taskId);
-  const isDirty = versionStatus?.is_dirty ?? false;
+  const isDirty = isVersionStatusLoading
+    ? false
+    : (versionStatus?.is_dirty ?? false);
   const changes = versionStatus?.changes ?? {};
 
   function buildChangeSummary(): string {
@@ -185,29 +188,29 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
     <div className="flex flex-col gap-3 h-full">
       {/* stash 배너 */}
       {stash && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
-          <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-start gap-2 rounded-md border border-dirty-subtle-foreground/20 bg-dirty-subtle px-3 py-2">
+          <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0 text-dirty-subtle-foreground" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+            <p className="text-xs font-medium text-dirty-subtle-foreground">
               임시 저장된 작업이 있습니다
             </p>
-            <p className="text-xs text-amber-700/70 dark:text-amber-400/70">
+            <p className="text-xs text-dirty-subtle-foreground/70">
               {stash.image_count}개 이미지 · {stash.annotation_count}개 라벨
             </p>
           </div>
           <div className="flex shrink-0 gap-1">
             <button
               type="button"
-              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+              className="text-xs text-dirty-subtle-foreground hover:underline"
               onClick={handleRestoreStash}
               disabled={restoreMutation.isPending}
             >
               복원
             </button>
-            <span className="text-amber-400">·</span>
+            <span className="text-dirty-subtle-foreground/50">·</span>
             <button
               type="button"
-              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+              className="text-xs text-dirty-subtle-foreground hover:underline"
               onClick={() => setDeleteStashOpen(true)}
             >
               삭제
@@ -228,6 +231,14 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
           <div className="relative">
             {/* 수직선 */}
             <div className="absolute left-[6px] top-0 bottom-0 w-px bg-border" />
+
+            {/* dirty 상태 로딩 중: 펄스 dot */}
+            {isVersionStatusLoading && (
+              <div className="relative pl-5 pb-3">
+                <div className="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-amber-500 bg-amber-500 animate-pulse" />
+                <p className="text-xs text-muted-foreground">확인 중...</p>
+              </div>
+            )}
 
             {/* dirty일 때: 미확정 커밋 엔트리 */}
             {isDirty && (
@@ -299,7 +310,7 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
                             </span>
                             {isHead && (
                               <span className="text-[10px] bg-primary/10 text-primary px-1.5 rounded leading-4">
-                                HEAD
+                                현재
                               </span>
                             )}
                             <span className="text-xs text-muted-foreground truncate">
@@ -452,19 +463,19 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
             {isDirty ? (
               <>
                 <AlertDialogAction
-                  variant="outline"
+                  variant="destructive"
+                  onClick={handleRestoreDiscard}
+                  disabled={restoreMutation.isPending}
+                >
+                  {restoreMutation.isPending ? "복원 중..." : "버리고 복원"}
+                </AlertDialogAction>
+                <AlertDialogAction
                   onClick={handleRestoreWithStash}
                   disabled={restoreMutation.isPending}
                 >
                   {restoreMutation.isPending
                     ? "처리 중..."
                     : "임시 저장 후 복원"}
-                </AlertDialogAction>
-                <AlertDialogAction
-                  onClick={handleRestoreDiscard}
-                  disabled={restoreMutation.isPending}
-                >
-                  {restoreMutation.isPending ? "복원 중..." : "버리고 복원"}
                 </AlertDialogAction>
               </>
             ) : (
@@ -516,7 +527,8 @@ export function VersionPanel({ taskId, onRestoreSuccess }: VersionPanelProps) {
                 {deleteTarget ? versionLabel(deleteTarget) : ""} —{" "}
                 {deleteTarget?.name}
               </strong>
-              을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              을(를) 삭제하시겠습니까? 데이터는 되돌아가지 않습니다. 이전 버전
+              이름표만 이동합니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,9 +1,10 @@
 # Nexus: whitelist tracked files, ignore everything else
 *
 !.gitignore
-!core/
-!core/**
-!config.json
-!history.json
+!context/
+!context/**
+!memory/
+!memory/**
 !rules/
 !rules/**
+!history.json
